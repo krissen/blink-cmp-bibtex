@@ -11,70 +11,122 @@ local function resolve_option(value, ...)
   return value
 end
 
+local function is_list(value)
+  if value == nil then
+    return false
+  end
+  if vim.islist then
+    return vim.islist(value)
+  end
+  return vim.tbl_islist(value)
+end
+
 local function normalize_list(value)
   if value == nil then
     return {}
   end
-  if vim.tbl_islist(value) then
+  if is_list(value) then
     return value
   end
   return { value }
 end
 
-local function extract_addbibresource_paths(line)
+local bibliography_commands = {
+  addbibresource = true,
+  ['addbibresource*'] = true,
+  addglobalbib = true,
+  addsectionbib = true,
+  bibliography = true,
+  nobibliography = true,
+}
+
+local function trim(value)
+  return (value:gsub('^%s+', ''):gsub('%s+$', ''))
+end
+
+local function split_resources(value)
+  local entries = {}
+  for part in value:gmatch('[^,]+') do
+    local cleaned = trim(part)
+    if cleaned ~= '' then
+      entries[#entries + 1] = cleaned
+    end
+  end
+  if #entries == 0 and value ~= '' then
+    entries[1] = trim(value)
+  end
+  return entries
+end
+
+local function skip_whitespace(str, idx)
+  while idx <= #str and str:sub(idx, idx):match('%s') do
+    idx = idx + 1
+  end
+  return idx
+end
+
+local function read_balanced_block(str, idx)
+  if str:sub(idx, idx) ~= '{' then
+    return nil, idx
+  end
+  local depth = 1
+  local cursor = idx + 1
+  while cursor <= #str and depth > 0 do
+    local ch = str:sub(cursor, cursor)
+    if ch == '{' then
+      depth = depth + 1
+    elseif ch == '}' then
+      depth = depth - 1
+      if depth == 0 then
+        return str:sub(idx + 1, cursor - 1), cursor + 1
+      end
+    elseif ch == '\\' then
+      cursor = cursor + 1
+    end
+    cursor = cursor + 1
+  end
+  return nil, idx
+end
+
+local function skip_optional_arguments(str, idx)
+  local cursor = skip_whitespace(str, idx)
+  while str:sub(cursor, cursor) == '[' do
+    local depth = 1
+    cursor = cursor + 1
+    while cursor <= #str and depth > 0 do
+      local ch = str:sub(cursor, cursor)
+      if ch == '[' then
+        depth = depth + 1
+      elseif ch == ']' then
+        depth = depth - 1
+      end
+      cursor = cursor + 1
+    end
+    cursor = skip_whitespace(str, cursor)
+  end
+  return cursor
+end
+
+local function extract_command_paths(line)
   local results = {}
   local i = 1
-  while true do
-    local start_pos, end_pos = line:find('\\addbibresource', i, true)
+  while i <= #line do
+    local start_pos, end_pos, command = line:find('\\([%a%@]+%*?)', i)
     if not start_pos then
       break
     end
     i = end_pos + 1
-    local cursor = end_pos + 1
-    while cursor <= #line and line:sub(cursor, cursor):match('%s') do
-      cursor = cursor + 1
-    end
-    if line:sub(cursor, cursor) == '[' then
-      local depth = 1
-      cursor = cursor + 1
-      while cursor <= #line and depth > 0 do
-        local ch = line:sub(cursor, cursor)
-        if ch == '[' then
-          depth = depth + 1
-        elseif ch == ']' then
-          depth = depth - 1
-        end
-        cursor = cursor + 1
-      end
-    end
-    while cursor <= #line and line:sub(cursor, cursor):match('%s') do
-      cursor = cursor + 1
-    end
-    if line:sub(cursor, cursor) ~= '{' then
+    if not bibliography_commands[command] then
       goto continue
     end
-    local open = cursor
-    local depth = 1
-    cursor = cursor + 1
-    local closing
-    while cursor <= #line and depth > 0 do
-      local ch = line:sub(cursor, cursor)
-      if ch == '{' then
-        depth = depth + 1
-      elseif ch == '}' then
-        depth = depth - 1
-        if depth == 0 then
-          closing = cursor
-          cursor = cursor + 1
-          break
-        end
-      end
-      cursor = cursor + 1
-    end
-    if closing then
-      local value = line:sub(open + 1, closing - 1)
-      if value and #value > 0 then
-        results[#results + 1] = value
+    local cursor = skip_optional_arguments(line, i)
+    cursor = skip_whitespace(line, cursor)
+    local value
+    value, i = read_balanced_block(line, cursor)
+    if value and #value > 0 then
+      local resources = split_resources(value)
+      for _, resource in ipairs(resources) do
+        results[#results + 1] = resource
       end
     end
     ::continue::
@@ -148,16 +200,35 @@ local function expand_search_path(path, root)
   return resolved
 end
 
+local function ensure_bib_extension(path)
+  if not path or path == '' then
+    return path
+  end
+  if path:find('[%*%?%[]') then
+    return path
+  end
+  if path:match('%.bib$') then
+    return path
+  end
+  local filename = path:match('([^/\\]+)$') or path
+  if filename:find('%.') then
+    return path
+  end
+  return path .. '.bib'
+end
+
 function M.find_bib_files_from_buffer(bufnr)
   local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
   local resources = {}
   for _, line in ipairs(lines) do
-    for _, resource in ipairs(extract_addbibresource_paths(line)) do
-      resources[#resources + 1] = resource
+    for _, resource in ipairs(extract_command_paths(line)) do
+      resources[#resources + 1] = ensure_bib_extension(resource)
     end
   end
   local yaml_resources = find_yaml_bibliography(lines)
-  vim.list_extend(resources, yaml_resources)
+  for _, resource in ipairs(yaml_resources) do
+    resources[#resources + 1] = ensure_bib_extension(resource)
+  end
   return resources
 end
 

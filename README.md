@@ -69,7 +69,10 @@ require("blink-bibtex").setup({
 
 ### Buffer discovery
 
-- `\addbibresource{}` statements are scanned inside TeX buffers.
+- `\addbibresource{}`, `\addglobalbib`, `\addsectionbib` and legacy
+  `\bibliography{}` statements are scanned inside TeX buffers.
+- Missing `.bib` extensions are appended automatically so classic
+  `\bibliography{references}` declarations resolve to `references.bib` on disk.
 - Markdown YAML metadata lines such as `bibliography: references.bib` are
   respected.
 - `opts.search_paths` accepts either file paths or glob patterns relative to the
