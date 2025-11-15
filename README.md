@@ -1,0 +1,104 @@
+# blink-bibtex
+
+BibTeX completion source for [blink.cmp](https://github.com/Saghen/blink.cmp).
+It indexes `\addbibresource` declarations and project BibTeX files to offer
+citation-key completion together with APA-styled previews in LaTeX, Markdown and
+R Markdown buffers.
+
+## Features
+
+- Native blink.cmp source implemented in pure Lua (no `blink.compat`).
+- Discovers `.bib` files from the current buffer, configured search paths or an
+  explicit `files` list.
+- Parses entries lazily and caches the results with modification-time tracking.
+- Supports common citation commands (`\cite`, `\parencite`, `\textcite`,
+  `\smartcite`, `\footcite`, `\nocite`, Pandoc `[@key]`, …) including optional
+  pre/post notes.
+- Generates APA-inspired previews showing author, year, title and container data.
+- Ships with sane defaults yet allows overriding behavior via
+  `require("blink-bibtex").setup()` or provider-level `opts`.
+
+## Installation
+
+Example with [lazy.nvim](https://github.com/folke/lazy.nvim):
+
+```lua
+{
+  "saghen/blink.cmp",
+  dependencies = {
+    "krissen/blink-bibtex",
+  },
+  opts = {
+    sources = {
+      default = function(list)
+        table.insert(list, "bibtex")
+        return list
+      end,
+      providers = {
+        bibtex = {
+          module = "blink-bibtex",
+          name = "BibTeX",
+          min_keyword_length = 2,
+          score_offset = 10,
+          async = true,
+          opts = {
+            -- provider-level overrides (optional)
+          },
+        },
+      },
+    },
+  },
+}
+```
+
+## Configuration
+
+Call `require("blink-bibtex").setup()` early in your config to change defaults.
+Only values you set will override the built-ins.
+
+```lua
+require("blink-bibtex").setup({
+  filetypes = { "tex", "plaintex", "markdown", "rmd" },
+  files = { vim.fn.expand("~/research/global.bib") },
+  search_paths = { "references.bib", "bib/*.bib" },
+  root_markers = { ".git", "texmf.cnf" },
+  citation_commands = { "cite", "parencite", "textcite" },
+  preview_style = "apa",
+})
+```
+
+### Buffer discovery
+
+- `\addbibresource{}` statements are scanned inside TeX buffers.
+- Markdown YAML metadata lines such as `bibliography: references.bib` are
+  respected.
+- `opts.search_paths` accepts either file paths or glob patterns relative to the
+  detected project root (based on `opts.root_markers`).
+- `opts.files` is a list of absolute or `vim.fn.expand`-friendly paths that are
+  always included.
+
+### blink.cmp provider options
+
+Any table supplied as `providers.bibtex.opts` in the blink.cmp configuration is
+merged into the global setup options. This enables per-source overrides for
+`files`, `filetypes`, preview style, etc.
+
+## Usage
+
+Insert a citation command (`\parencite{`, `\textcite[see][42]{`, or Pandoc style
+`[@`) and trigger completion via your blink.cmp mapping. Each item shows:
+
+- `label`: the citation key.
+- `detail`: short APA-like string (`Author (Year) – Title`).
+- `documentation`: multi-line APA preview covering author/editor, year, title,
+  container, publisher and DOI/URL when available.
+
+## Roadmap
+
+- User-facing `:BlinkBibtexHealth` helper.
+- Additional preview styles beyond APA.
+- Smarter detection of bibliography files in mixed-language projects.
+
+## License
+
+MIT © 2025 Kristian Niemi
