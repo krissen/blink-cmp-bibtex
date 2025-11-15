@@ -54,25 +54,36 @@ local function strip_latex(value)
   return trim(value)
 end
 
-local function read_braced_value(str, start)
+local function read_balanced_block(str, start, open_char, close_char)
+  if not open_char or not close_char then
+    return nil, start
+  end
   local depth = 0
   local i = start
   local len = #str
   while i <= len do
     local ch = str:sub(i, i)
-    if ch == '{' then
+    if ch == open_char then
       depth = depth + 1
-    elseif ch == '}' then
+    elseif ch == close_char then
       depth = depth - 1
       if depth == 0 then
-        return str:sub(start + 1, i - 1), i + 1
+        return str:sub(start, i), i + 1
       end
     elseif ch == '\\' then
       i = i + 1
     end
     i = i + 1
   end
-  return str:sub(start + 1), len + 1
+  return str:sub(start), len + 1
+end
+
+local function read_braced_value(str, start)
+  local block, next_index = read_balanced_block(str, start, '{', '}')
+  if not block then
+    return '', next_index
+  end
+  return block:sub(2, -2), next_index
 end
 
 local function read_quoted_value(str, start)
@@ -141,11 +152,34 @@ end
 
 function M.parse(content)
   local entries = {}
-  for entrytype, body in content:gmatch('@(%w+)%s*(%b{})') do
-    local parsed = parse_entry(body)
-    if parsed then
-      parsed.entrytype = entrytype:lower()
-      entries[#entries + 1] = parsed
+  local i = 1
+  local len = #content
+  while i <= len do
+    local entry_start, entry_end, entrytype = content:find('@(%w+)', i)
+    if not entry_start then
+      break
+    end
+    local pos = entry_end + 1
+    while pos <= len and content:sub(pos, pos):match('%s') do
+      pos = pos + 1
+    end
+    local opener = content:sub(pos, pos)
+    local closer = nil
+    if opener == '{' then
+      closer = '}'
+    elseif opener == '(' then
+      closer = ')'
+    end
+    local block, next_index = read_balanced_block(content, pos, opener, closer)
+    if block then
+      local parsed = parse_entry(block)
+      if parsed then
+        parsed.entrytype = entrytype:lower()
+        entries[#entries + 1] = parsed
+      end
+      i = next_index
+    else
+      i = pos + 1
     end
   end
   return entries
