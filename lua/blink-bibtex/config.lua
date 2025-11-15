@@ -12,6 +12,9 @@ local defaults = {
   pandoc_triggers = { "[@", "@" },
   preview_style = "apa",
   max_entries = 4000,
+  debug = false,
+  ---@type fun(level: integer, message: string)|nil
+  log = nil,
 }
 
 local options = vim.deepcopy(defaults)
