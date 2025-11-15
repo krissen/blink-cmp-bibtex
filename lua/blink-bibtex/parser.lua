@@ -1,25 +1,25 @@
 local M = {}
 
 local latex_replacements = {
-  ['\\"a'] = "ä",
-  ['\\"o'] = "ö",
-  ['\\"u'] = "ü",
-  ['\\"A'] = "Ä",
-  ['\\"O'] = "Ö",
-  ['\\"U'] = "Ü",
-  ['\\\'a'] = "á",
-  ['\\\'e'] = "é",
-  ['\\\'i'] = "í",
-  ['\\\'o'] = "ó",
-  ['\\\'u'] = "ú",
-  ['\\\`a'] = "à",
-  ['\\\`e'] = "è",
-  ['\\\^a'] = "â",
-  ['\\~n'] = "ñ",
-  ['\\ss'] = "ß",
-  ['\\"{a}'] = "ä",
-  ['\\"{o}'] = "ö",
-  ['\\"{u}'] = "ü",
+  { [[\"a]], "ä" },
+  { [[\"o]], "ö" },
+  { [[\"u]], "ü" },
+  { [[\"A]], "Ä" },
+  { [[\"O]], "Ö" },
+  { [[\"U]], "Ü" },
+  { [[\'a]], "á" },
+  { [[\'e]], "é" },
+  { [[\'i]], "í" },
+  { [[\'o]], "ó" },
+  { [[\'u]], "ú" },
+  { [[\`a]], "à" },
+  { [[\`e]], "è" },
+  { [[\^a]], "â" },
+  { [[\~n]], "ñ" },
+  { [[\ss]], "ß" },
+  { [[\"{a}]], "ä" },
+  { [[\"{o}]], "ö" },
+  { [[\"{u}]], "ü" },
 }
 
 local latex_wrappers = {
@@ -46,8 +46,8 @@ local function strip_latex(value)
     end
     return inner
   end)
-  for pattern, replacement in pairs(latex_replacements) do
-    value = value:gsub(pattern, replacement)
+  for _, replacement in ipairs(latex_replacements) do
+    value = value:gsub(replacement[1], replacement[2])
   end
   value = value:gsub("\\", "")
   value = value:gsub("%s+", " ")
