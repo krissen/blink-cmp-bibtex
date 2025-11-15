@@ -191,11 +191,11 @@ local function match_pandoc_citation(text)
   if prefix then
     return { prefix = prefix, trigger = 'pandoc' }
   end
-  local boundary = text:match('[^%w@]@([%w:_%-%./]*)$')
+  local boundary = text:match('[^%w@]@([%w:_%-%.,]*)$')
   if boundary then
     return { prefix = boundary, trigger = 'pandoc' }
   end
-  local line_start = text:match('^@([%w:_%-%./]*)$')
+  local line_start = text:match('^@([%w:_%-%.,]*)$')
   if line_start then
     return { prefix = line_start, trigger = 'pandoc' }
   end
