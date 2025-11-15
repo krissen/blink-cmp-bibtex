@@ -229,6 +229,10 @@ function Source.new(opts, provider_config)
   local self = setmetatable({}, Source)
   self.opts = config.extend(opts)
   self.provider_config = provider_config or {}
+  log.debug('blink-bibtex source initialized', {
+    filetypes = self.opts.filetypes,
+    provider = provider_config and provider_config.name or 'bibtex',
+  })
   return self
 end
 
