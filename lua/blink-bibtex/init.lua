@@ -1,6 +1,7 @@
 local config = require('blink-bibtex.config')
 local scan = require('blink-bibtex.scan')
 local cache = require('blink-bibtex.cache')
+local log = require('blink-bibtex.log')
 
 local Source = {}
 Source.__index = Source
@@ -234,28 +235,35 @@ end
 function Source:get_completions(context, callback)
   local bufnr = context.buffer or vim.api.nvim_get_current_buf()
   local ft = vim.bo[bufnr].filetype
+  log.debug('completion requested', { buffer = bufnr, filetype = ft, line = context.line })
   if #self.opts.filetypes > 0 and not vim.tbl_contains(self.opts.filetypes, ft) then
+    log.debug('filetype not enabled, skipping', ft)
     callback()
     return function() end
   end
   local detection = extract_context(context, self.opts)
   if not detection then
+    log.debug('no citation context detected on line', context.line)
     callback()
     return function() end
   end
   local prefix = sanitize_prefix(detection.prefix)
   local paths = scan.resolve_bib_paths(bufnr, self.opts)
   if table_is_empty(paths) then
+    log.debug('no bibliography files associated with buffer', bufnr)
     callback()
     return function() end
   end
+  log.debug('found bibliography paths', paths)
   local cancelled = false
   vim.schedule(function()
     if cancelled then
+      log.debug('completion callback cancelled before execution')
       return
     end
     local entries = cache.collect(paths, self.opts.max_entries)
     local filtered = filter_entries(entries, prefix)
+    log.debug('entries filtered', { total = #entries, matched = #filtered, prefix = prefix })
     local items = {}
     for _, entry in ipairs(filtered) do
       items[#items + 1] = {
@@ -266,6 +274,7 @@ function Source:get_completions(context, callback)
         documentation = format_documentation(entry),
       }
     end
+    log.debug('returning completion items', { count = #items })
     callback({ items = items, is_incomplete_forward = true, is_incomplete_backward = true })
   end)
   return function()

@@ -64,8 +64,17 @@ require("blink-bibtex").setup({
   root_markers = { ".git", "texmf.cnf" },
   citation_commands = { "cite", "parencite", "textcite" },
   preview_style = "apa",
+  debug = false,
 })
 ```
+
+### Debug logging
+
+- Set `debug = true` to emit verbose tracing via `vim.notify`, including detected
+  buffers, resolved bibliography paths and cache activity.
+- Provide a custom `log = function(level, message) ... end` callback to redirect
+  messages to your preferred logger (e.g. `vim.notify_once`, log files, plenary
+  loggers, etc.).
 
 ### Buffer discovery
 
