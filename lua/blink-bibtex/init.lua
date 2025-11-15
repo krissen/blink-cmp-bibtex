@@ -170,7 +170,7 @@ local function match_latex_citation(text, opts)
   end
   skip_optional()
   local command_segment = before:sub(1, cursor)
-  local command = command_segment:match('\\([%a@]+)$')
+  local command, modifier = command_segment:match('\\([%a@]+)(%*?)$')
   if not command then
     return nil
   end
@@ -178,7 +178,7 @@ local function match_latex_citation(text, opts)
     if command == allowed then
       return {
         prefix = prefix,
-        command = command,
+        command = command .. (modifier or ''),
         trigger = 'latex',
       }
     end
