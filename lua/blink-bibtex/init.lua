@@ -5,8 +5,15 @@ local cache = require('blink-bibtex.cache')
 local Source = {}
 Source.__index = Source
 
-local cmp_kinds = require('blink.cmp.types').CompletionItemKind
-local completion_kind = cmp_kinds.Reference or cmp_kinds.Value or cmp_kinds.Text or 1
+local completion_kind = 1
+
+do
+  local ok, cmp_types = pcall(require, 'blink.cmp.types')
+  if ok and cmp_types and cmp_types.CompletionItemKind then
+    local kinds = cmp_types.CompletionItemKind
+    completion_kind = kinds.Reference or kinds.Value or kinds.Text or completion_kind
+  end
+end
 
 local function table_is_empty(tbl)
   if not tbl then
