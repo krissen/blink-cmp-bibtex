@@ -90,6 +90,19 @@ require("blink-bibtex").setup({
   stops the verbose traces but warnings/errors (e.g. parse failures) are still
   surfaced.
 
+### Health checks
+
+- Run `:BlinkBibtexHealth` (or `:checkhealth blink-bibtex`) inside the target
+  buffer to see which filetype is active, which `.bib` files were discovered
+  (including manual `files` / `search_paths`) and how many entries were parsed
+  from each source.
+- Missing files, zero-entry caches, or disabled filetypes are reported as
+  warnings so you can adjust `setup()`/buffer directives without hunting
+  through log output.
+- The health report also reminds you which preview style and logging settings
+  are active, making it easier to confirm whether `debug` or custom log sinks
+  are configured as expected.
+
 ### Buffer discovery
 
 - `\addbibresource{}`, `\addglobalbib`, `\addsectionbib` and legacy
@@ -121,7 +134,6 @@ Insert a citation command (`\parencite{`, `\textcite[see][42]{`, or Pandoc style
 
 ## Roadmap
 
-- User-facing `:BlinkBibtexHealth` helper.
 - Additional preview styles beyond APA.
 - Smarter detection of bibliography files in mixed-language projects.
 

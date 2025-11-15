@@ -28,8 +28,8 @@ nvim-cmp) with a fresh, MIT-licensed codebase that targets blink.cmp directly.
   Markdown, R Markdown, and other explicitly configured filetypes.
 - Provide asynchronous completion so that large BibTeX files do not block the UI.
 - Cache parsed BibTeX files and reload them when the modification time changes.
-- Offer health diagnostics to help users verify configuration problems (future
-  enhancement).
+- Offer health diagnostics (via `:BlinkBibtexHealth` / `:checkhealth
+  blink-bibtex`) to help users verify configuration problems.
 
 ## Non-functional requirements
 
