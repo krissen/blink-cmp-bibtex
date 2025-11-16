@@ -64,44 +64,8 @@ require("blink-bibtex").setup({
   root_markers = { ".git", "texmf.cnf" },
   citation_commands = { "cite", "parencite", "textcite" },
   preview_style = "apa",
-  debug = false,
 })
 ```
-
-### Debug logging
-
-- Set `debug = true` to emit verbose tracing via `vim.notify`, including detected
-  buffers, resolved bibliography paths and cache activity.
-- Provide a custom `log = function(level, message) ... end` callback to redirect
-  messages to your preferred logger (e.g. `vim.notify_once`, log files, plenary
-  loggers, etc.).
-- The callback receives a numeric `level` (matching `vim.log.levels`) and the
-  fully formatted string, so you can forward it to any sink:
-
-  ```lua
-  require("blink-bibtex").setup({
-    debug = true,
-    log = function(level, message)
-      vim.notify(message, level, { title = "blink-bibtex" })
-    end,
-  })
-  ```
-- When `log` is omitted, messages fall back to `vim.notify`. Disabling `debug`
-  stops the verbose traces but warnings/errors (e.g. parse failures) are still
-  surfaced.
-
-### Health checks
-
-- Run `:BlinkBibtexHealth` (or `:checkhealth blink-bibtex`) inside the target
-  buffer to see which filetype is active, which `.bib` files were discovered
-  (including manual `files` / `search_paths`) and how many entries were parsed
-  from each source.
-- Missing files, zero-entry caches, or disabled filetypes are reported as
-  warnings so you can adjust `setup()`/buffer directives without hunting
-  through log output.
-- The health report also reminds you which preview style and logging settings
-  are active, making it easier to confirm whether `debug` or custom log sinks
-  are configured as expected.
 
 ### Buffer discovery
 

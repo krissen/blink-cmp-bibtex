@@ -1,5 +1,3 @@
-local log = require('blink-bibtex.log')
-
 local M = {}
 
 local function resolve_option(value, ...)
@@ -231,7 +229,6 @@ function M.find_bib_files_from_buffer(bufnr)
   for _, resource in ipairs(yaml_resources) do
     resources[#resources + 1] = ensure_bib_extension(resource)
   end
-  log.debug('buffer-declared bibliography resources', { buffer = bufnr, resources = resources })
   return resources
 end
 
@@ -270,13 +267,6 @@ function M.resolve_bib_paths(bufnr, opts)
       add_path(expanded)
     end
   end
-  log.debug('resolved bibliography paths', {
-    buffer = bufnr,
-    resolved = resolved,
-    manual = manual_files,
-    search = search_paths,
-    detected = buffer_files,
-  })
   return resolved
 end
 
