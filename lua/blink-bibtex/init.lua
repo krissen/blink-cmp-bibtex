@@ -53,6 +53,9 @@ end
 --- @param fields table BibTeX entry fields
 --- @return string|nil Formatted author string or nil if not available
 local function format_author_list(fields)
+  if not fields then
+    return nil
+  end
   local author = fields.author
   if (not author or author == '') and fields.editor then
     author = fields.editor
@@ -79,6 +82,9 @@ end
 --- @param fields table BibTeX entry fields
 --- @return string|nil Formatted container string or nil if not available
 local function format_container(fields)
+  if not fields then
+    return nil
+  end
   local journal = fields.journaltitle or fields.journal
   local booktitle = fields.booktitle
   local publisher = fields.publisher
@@ -105,7 +111,22 @@ end
 --- @param entry table The BibTeX entry
 --- @return table Context object with normalized fields
 local function build_entry_context(entry)
-  local fields = entry.fields or {}
+  if not entry or not entry.fields then
+    return {
+      author = nil,
+      year = 'n.d.',
+      title = '[no title]',
+      journal = nil,
+      publisher = nil,
+      volume = nil,
+      number = nil,
+      pages = nil,
+      doi = nil,
+      url = nil,
+      container = nil,
+    }
+  end
+  local fields = entry.fields
   local author = format_author_list(fields)
   local year = fields.year or fields.date or 'n.d.'
   local title = fields.title or fields.booktitle or '[no title]'

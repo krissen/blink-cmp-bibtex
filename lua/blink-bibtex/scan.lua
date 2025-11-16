@@ -316,7 +316,13 @@ end
 --- @param bufnr number Buffer number
 --- @return string[] List of bibliography file names (not full paths)
 function M.find_bib_files_from_buffer(bufnr)
-  local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
+  if not bufnr or not vim.api.nvim_buf_is_valid(bufnr) then
+    return {}
+  end
+  local ok, lines = pcall(vim.api.nvim_buf_get_lines, bufnr, 0, -1, false)
+  if not ok or not lines then
+    return {}
+  end
   local resources = {}
   for _, line in ipairs(lines) do
     for _, resource in ipairs(extract_command_paths(line)) do
