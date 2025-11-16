@@ -5,14 +5,15 @@ It indexes `\addbibresource` declarations and project BibTeX files to offer
 citation-key completion together with APA-styled previews in LaTeX, Markdown and
 R Markdown buffers.
 
-## Background
+## Why this plugin?
 
-`blink-bibtex` exists because [`cmp-bibtex`](https://github.com/texlaborg/cmp-bibtex)
-—the long-standing source for `nvim-cmp`—is GPL-licensed and tied to the
-`cmp` API. Rather than porting that code (which would keep the GPL
-requirements), this project re-implements the feature set from scratch under
-the MIT license and exposes it directly to blink.cmp. The goal is to make the
-transition from cmp to blink seamless for users with citation-heavy workflows.
+`blink-bibtex` was created to bring BibTeX citation completion to [blink.cmp](https://github.com/Saghen/blink.cmp) users. While excellent alternatives exist, they have different trade-offs:
+
+- **[VimTeX](https://github.com/lervag/vimtex)** is the comprehensive LaTeX plugin with built-in completion, syntax highlighting, compilation, and more. It can integrate with blink.cmp through [blink.compat](https://github.com/saghen/blink.compat) using its `omni` source. However, VimTeX is primarily a full-featured LaTeX environment rather than a focused completion source.
+
+- **[cmp-bibtex](https://github.com/texlaborg/cmp-bibtex)** is the established citation source for `nvim-cmp`. It's GPL-licensed and tightly coupled to the `cmp` API, making it unsuitable for direct use with blink.cmp.
+
+`blink-bibtex` fills the gap by providing a native, MIT-licensed completion source designed specifically for blink.cmp. It focuses solely on citation completion with minimal overhead, making the transition from cmp seamless for users with citation-heavy workflows in LaTeX, Markdown, and R Markdown.
 
 ## Features
 
@@ -135,19 +136,25 @@ With that in mind, each completion item exposes:
 - [Development Guide](docs/development.md) – Architecture, coding style, and contribution guidelines
 - [Specification](docs/spec.md) – High-level feature specification and design goals
 
-## Roadmap
+## Alternatives
 
-- Additional preview styles beyond APA and IEEE.
-- Smarter detection of bibliography files in mixed-language projects.
+If `blink-bibtex` doesn't fit your needs, consider these alternatives:
 
-## Related projects
+### VimTeX
 
-- [`cmp-bibtex`](https://github.com/texlaborg/cmp-bibtex) – the inspiration for
-  this plugin's behavior and command coverage.
-- [`blink-cmp-dictionary`](https://github.com/Kaiser-Yang/blink-cmp-dictionary)
-  – reference implementation for blink.cmp provider structure.
-- [`blink-cmp-git`](https://github.com/Kaiser-Yang/blink-cmp-git) – another
-  community source that informed the async completion wiring here.
+[VimTeX](https://github.com/lervag/vimtex) is a comprehensive LaTeX plugin offering completion, syntax highlighting, compilation, PDF viewing, and much more. It provides BibTeX completion through multiple methods:
+
+- **Native completion**: VimTeX has built-in `omni` completion for citations
+- **blink.cmp integration**: Use VimTeX with blink.cmp via [blink.compat](https://github.com/saghen/blink.compat) and its `omni` source ([setup guide](https://cmp.saghen.dev/configuration/sources#vimtex))
+- **Full LaTeX environment**: If you need more than just citations (e.g., compilation, navigation, text objects), VimTeX is the go-to choice
+
+### cmp-bibtex
+
+[cmp-bibtex](https://github.com/texlaborg/cmp-bibtex) is the established BibTeX source for `nvim-cmp`. If you're using `nvim-cmp`, this is the recommended option. Note that it's GPL-licensed and not directly compatible with blink.cmp.
+
+### Other community sources
+
+The blink.cmp ecosystem has various [community sources](https://cmp.saghen.dev/configuration/sources#community-sources) for different completion needs. Check the documentation for the latest list.
 
 ## Contributing
 
