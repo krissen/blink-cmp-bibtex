@@ -134,7 +134,6 @@ With that in mind, each completion item exposes:
 - [API Reference](docs/api.md) – Detailed API documentation for all modules
 - [Development Guide](docs/development.md) – Architecture, coding style, and contribution guidelines
 - [Specification](docs/spec.md) – High-level feature specification and design goals
-- [Changelog](CHANGELOG.md) – Version history and notable changes
 
 ## Roadmap
 

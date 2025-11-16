@@ -311,12 +311,13 @@ end
 
 ## Release Process
 
-1. Update CHANGELOG.md with new version
-2. Update version references in documentation
-3. Create git tag: `git tag -a v1.x.x -m "Release v1.x.x"`
-4. Push tag: `git push origin v1.x.x`
-5. Create GitHub release from tag
-6. Update README.md if installation instructions change
+**Note**: Version management and changelogs are maintained by repository maintainers.
+
+1. Update version references in documentation
+2. Create git tag: `git tag -a v1.x.x -m "Release v1.x.x"`
+3. Push tag: `git push origin v1.x.x`
+4. Create GitHub release from tag
+5. Update README.md if installation instructions change
 
 ## Resources
 

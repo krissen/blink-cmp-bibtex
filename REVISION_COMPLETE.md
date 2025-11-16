@@ -35,7 +35,6 @@ A comprehensive code revision of the blink-bibtex codebase has been successfully
    - ✅ 150+ inline JSDoc comments added
    - ✅ API Reference (docs/api.md) - 300 lines
    - ✅ Development Guide (docs/development.md) - 330 lines
-   - ✅ Changelog (CHANGELOG.md)
    - ✅ Security Review (docs/security-review.md) - 270 lines
    - ✅ Revision Summary (docs/revision-summary.md) - 260 lines
    - ✅ Updated README.md and CONTRIBUTING.md
@@ -111,10 +110,9 @@ All documentation is in English as required:
 2. **docs/api.md** - Complete API reference
 3. **docs/development.md** - Developer guide
 4. **docs/spec.md** - Feature specification
-5. **CHANGELOG.md** - Version history
-6. **CONTRIBUTING.md** - Contribution guidelines
-7. **docs/revision-summary.md** - Detailed revision notes
-8. **docs/security-review.md** - Security analysis
+5. **CONTRIBUTING.md** - Contribution guidelines
+6. **docs/revision-summary.md** - Detailed revision notes
+7. **docs/security-review.md** - Security analysis
 
 ## Commit History
 
