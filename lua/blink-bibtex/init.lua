@@ -81,19 +81,7 @@ local function format_container(fields)
   return publisher or nil
 end
 
-local function format_detail(entry)
-  local fields = entry.fields or {}
-  local author = format_author_list(fields) or 'Unknown'
-  local year = fields.year or fields.date or 'n.d.'
-  local title = fields.title or fields.booktitle or '[no title]'
-  local container = format_container(fields)
-  if container then
-    return string.format('%s (%s) – %s (%s)', author, year, title, container)
-  end
-  return string.format('%s (%s) – %s', author, year, title)
-end
-
-local function format_documentation(entry)
+local function build_entry_context(entry)
   local fields = entry.fields or {}
   local author = format_author_list(fields)
   local year = fields.year or fields.date or 'n.d.'
@@ -105,38 +93,125 @@ local function format_documentation(entry)
   local pages = fields.pages
   local doi = fields.doi
   local url = fields.url
-  local lines = {}
-  if author then
-    table.insert(lines, string.format('%s (%s).', author, year))
-  else
-    table.insert(lines, string.format('(%s).', year))
-  end
-  table.insert(lines, string.format('%s.', title))
-  if journal then
-    local segment = journal
-    if volume then
-      segment = string.format('%s, %s', segment, volume)
-      if number then
-        segment = string.format('%s(%s)', segment, number)
-      end
+  local container = format_container(fields)
+  return {
+    author = author,
+    year = year,
+    title = title,
+    journal = journal,
+    publisher = publisher,
+    volume = volume,
+    number = number,
+    pages = pages,
+    doi = doi,
+    url = url,
+    container = container,
+  }
+end
+
+local preview_styles = {}
+
+preview_styles.apa = {
+  detail = function(ctx)
+    local author = ctx.author or 'Unknown'
+    if ctx.container then
+      return string.format('%s (%s) – %s (%s)', author, ctx.year, ctx.title, ctx.container)
     end
-    if pages then
-      segment = string.format('%s, %s', segment, pages)
-    end
-    table.insert(lines, segment)
-  elseif publisher then
-    if pages then
-      table.insert(lines, string.format('%s, %s', publisher, pages))
+    return string.format('%s (%s) – %s', author, ctx.year, ctx.title)
+  end,
+  documentation = function(ctx)
+    local lines = {}
+    if ctx.author then
+      table.insert(lines, string.format('%s (%s).', ctx.author, ctx.year))
     else
-      table.insert(lines, publisher)
+      table.insert(lines, string.format('(%s).', ctx.year))
     end
-  end
-  if doi then
-    table.insert(lines, string.format('https://doi.org/%s', doi:gsub('^https?://doi.org/', '')))
-  elseif url then
-    table.insert(lines, url)
-  end
-  return table.concat(lines, '\n')
+    table.insert(lines, string.format('%s.', ctx.title))
+    if ctx.journal then
+      local segment = ctx.journal
+      if ctx.volume then
+        segment = string.format('%s, %s', segment, ctx.volume)
+        if ctx.number then
+          segment = string.format('%s(%s)', segment, ctx.number)
+        end
+      end
+      if ctx.pages then
+        segment = string.format('%s, %s', segment, ctx.pages)
+      end
+      table.insert(lines, segment .. '.')
+    elseif ctx.container then
+      table.insert(lines, ctx.container .. '.')
+    elseif ctx.publisher then
+      table.insert(lines, ctx.publisher .. '.')
+    end
+    if ctx.doi then
+      table.insert(lines, 'https://doi.org/' .. ctx.doi:gsub('^https?://doi.org/', ''))
+    elseif ctx.url then
+      table.insert(lines, ctx.url)
+    end
+    return table.concat(lines, '\n')
+  end,
+}
+
+preview_styles.ieee = {
+  detail = function(ctx)
+    local pieces = {}
+    table.insert(pieces, ctx.author or 'Unknown')
+    table.insert(pieces, string.format('"%s,"', ctx.title))
+    if ctx.journal then
+      table.insert(pieces, ctx.journal)
+    elseif ctx.container then
+      table.insert(pieces, ctx.container)
+    end
+    if ctx.volume then
+      local segment = string.format('vol. %s', ctx.volume)
+      if ctx.number then
+        segment = string.format('%s, no. %s', segment, ctx.number)
+      end
+      table.insert(pieces, segment)
+    end
+    if ctx.pages then
+      table.insert(pieces, string.format('pp. %s', ctx.pages))
+    end
+    table.insert(pieces, string.format('%s.', ctx.year))
+    return table.concat(pieces, ' ')
+  end,
+  documentation = function(ctx)
+    local lines = {}
+    local line = {}
+    table.insert(line, ctx.author or 'Unknown')
+    table.insert(line, string.format('"%s,"', ctx.title))
+    if ctx.journal then
+      table.insert(line, ctx.journal)
+    elseif ctx.container then
+      table.insert(line, ctx.container)
+    end
+    if ctx.volume then
+      local vol = string.format('vol. %s', ctx.volume)
+      if ctx.number then
+        vol = string.format('%s, no. %s', vol, ctx.number)
+      end
+      table.insert(line, vol)
+    end
+    if ctx.pages then
+      table.insert(line, string.format('pp. %s', ctx.pages))
+    end
+    table.insert(line, string.format('%s.', ctx.year))
+    table.insert(lines, table.concat(line, ', '))
+    if ctx.publisher then
+      table.insert(lines, ctx.publisher .. '.')
+    end
+    if ctx.doi then
+      table.insert(lines, 'DOI: ' .. ctx.doi)
+    elseif ctx.url then
+      table.insert(lines, 'URL: ' .. ctx.url)
+    end
+    return table.concat(lines, '\n')
+  end,
+}
+
+local function get_preview_style(name)
+  return preview_styles[name] or preview_styles.apa
 end
 
 local function match_latex_citation(text, opts)
@@ -264,13 +339,15 @@ function Source:get_completions(context, callback)
     local entries = cache.collect(paths, self.opts.max_entries)
     local filtered = filter_entries(entries, prefix)
     local items = {}
+    local style = get_preview_style(self.opts.preview_style)
     for _, entry in ipairs(filtered) do
+      local ctx = build_entry_context(entry)
       items[#items + 1] = {
         label = entry.key,
         insertText = entry.key,
         kind = completion_kind,
-        detail = format_detail(entry),
-        documentation = format_documentation(entry),
+        detail = style.detail(ctx),
+        documentation = style.documentation(ctx),
       }
     end
     callback({ items = items, is_incomplete_forward = true, is_incomplete_backward = true })

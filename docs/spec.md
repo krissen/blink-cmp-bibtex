@@ -22,13 +22,15 @@ nvim-cmp) with a fresh, MIT-licensed codebase that targets blink.cmp directly.
   the final key segment only.
 - Provide `pre` and `post` note handling: completion must fire even when there
   are optional arguments between the command and the `{`.
-- Generate APA-inspired previews for each completion item. The preview should
-  include author/editor, publication year, title, and source container
-  (journal/book/publisher). Normalize common LaTeX accent/diacritic commands so
-  that previews render human-friendly UTF-8 (e.g. `{"a}` → `ä`, `\aa` → `å`).
-  The documentation callback should format a multi-line preview (rendered in
-  blink.cmp's documentation pane) while the detail string shows a concise
-  one-liner directly in the completion menu.
+- Generate previews for each completion item using configurable templates.
+  Provide at least APA (default) and IEEE style summaries and allow selecting
+  the style via `opts.preview_style`. The preview should include author/editor,
+  publication year, title, and source container (journal/book/publisher).
+  Normalize common LaTeX accent/diacritic commands so that previews render
+  human-friendly UTF-8 (e.g. `{"a}` → `ä`, `\aa` → `å`). The documentation
+  callback should format a multi-line preview (rendered in blink.cmp's
+  documentation pane) while the detail string shows a concise one-liner directly
+  in the completion menu.
 - Respect filetype restrictions (`opts.filetypes`). Only activate on LaTeX,
   Markdown, R Markdown, and other explicitly configured filetypes.
 - Provide asynchronous completion so that large BibTeX files do not block the UI.

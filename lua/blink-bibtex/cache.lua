@@ -27,13 +27,13 @@ local function load_file(path)
     return {}
   end
   local cached = store[path]
-  local mtime = info.mtime and info.mtime.sec or info.mtime
+  local mtime = info.mtime and (info.mtime.sec or info.mtime) or nil
   if cached and cached.mtime == mtime and cached.size == info.size then
     return cached.entries
   end
   local ok, entries = pcall(parser.parse_file, path)
   if not ok then
-    notify(string.format('blink-bibtex: failed to parse %s: %s', path, entries))
+    notify(string.format('Failed to parse %s: %s', path, entries))
     entries = {}
   end
   store[path] = {

@@ -80,7 +80,7 @@ local function read_balanced_block(str, idx)
       if depth == 0 then
         return str:sub(idx + 1, cursor - 1), cursor + 1
       end
-    elseif ch == '\\' then
+    elseif ch == '\\' and cursor < #str then
       cursor = cursor + 1
     end
     cursor = cursor + 1
@@ -137,19 +137,27 @@ end
 local function find_yaml_bibliography(lines)
   local resources = {}
   local in_front_matter = false
+  local collecting_list = false
   for idx, line in ipairs(lines) do
     if idx == 1 and line:match('^%-%-%-%s*$') then
       in_front_matter = true
     elseif in_front_matter and line:match('^%-%-%-%s*$') then
       break
     elseif in_front_matter then
-      local single = line:match('^bibliography:%s*(.+)$')
-      if single then
-        resources[#resources + 1] = single
+      local inline = line:match('^bibliography:%s*(.+)$')
+      if inline then
+        resources[#resources + 1] = trim(inline)
+        collecting_list = false
+      elseif line:match('^bibliography:%s*$') then
+        collecting_list = true
+      elseif line:match('^%S') and not line:match('^%s') then
+        collecting_list = false
       end
-      local list_item = line:match('^%s*%-%s*(.+%.bib)%s*$')
-      if list_item then
-        resources[#resources + 1] = list_item
+      if collecting_list then
+        local list_item = line:match('^%s*%-%s*(.+)%s*$')
+        if list_item then
+          resources[#resources + 1] = trim(list_item)
+        end
       end
     end
   end
@@ -192,7 +200,8 @@ local function is_absolute(path)
 end
 
 local function find_root(bufname, markers)
-  local dir = bufname ~= '' and vim.fs.dirname(bufname) or vim.loop.cwd()
+  local cwd_fn = (vim.uv and vim.uv.cwd) or vim.loop.cwd
+  local dir = bufname ~= '' and vim.fs.dirname(bufname) or (cwd_fn and cwd_fn() or '')
   if markers and #markers > 0 then
     local found = vim.fs.find(markers, { upward = true, path = dir })[1]
     if found then
@@ -262,7 +271,8 @@ function M.resolve_bib_paths(bufnr, opts)
     buffer_dir = vim.fs.dirname(bufname)
   end
   if not buffer_dir or buffer_dir == '' then
-    buffer_dir = vim.loop.cwd()
+    local cwd_fn = (vim.uv and vim.uv.cwd) or vim.loop.cwd
+    buffer_dir = cwd_fn and cwd_fn() or ''
   end
   local dedup = {}
   local resolved = {}

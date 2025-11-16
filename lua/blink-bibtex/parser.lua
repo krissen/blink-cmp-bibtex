@@ -96,13 +96,13 @@ local function strip_latex(value)
       return match:sub(#wrapper + 2, -2)
     end)
   end
-  value = value:gsub("\\\\([\"'`%^~=%.uvHcrk])%s*%{?(\\?%a)%}?", function(accent, letter)
+  value = value:gsub("\\([\"'`%^~=%.uvHcrk])%s*%{?(\\?%a)%}?", function(accent, letter)
     if letter:sub(1, 1) == '\\' then
       letter = accent_letter_aliases[letter] or letter:sub(2)
     end
     return replace_accent(accent, letter) or letter
   end)
-  value = value:gsub("\\\\(%a+)", function(command)
+  value = value:gsub("\\(%a+)", function(command)
     local replacement = simple_commands[command]
     if replacement then
       return replacement
@@ -113,7 +113,7 @@ local function strip_latex(value)
     return match:sub(2, -2)
   end)
   value = value:gsub("~", " ")
-  value = value:gsub("\\\\", "")
+  value = value:gsub("\\", "")
   value = value:gsub("%s+", " ")
   return trim(value)
 end

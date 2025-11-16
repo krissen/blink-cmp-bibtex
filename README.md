@@ -24,7 +24,8 @@ transition from cmp to blink seamless for users with citation-heavy workflows.
 - Supports common citation commands (`\cite`, `\parencite`, `\textcite`,
   `\smartcite`, `\footcite`, `\nocite`, Pandoc `[@key]`, …) including optional
   pre/post notes.
-- Generates APA-inspired previews showing author, year, title and container data.
+- Generates APA-inspired previews showing author, year, title and container data
+  with selectable templates (APA default, IEEE optional).
 - Ships with sane defaults yet allows overriding behavior via
   `require("blink-bibtex").setup()` or provider-level `opts`.
 
@@ -36,7 +37,7 @@ Example with [lazy.nvim](https://github.com/folke/lazy.nvim):
 {
   "saghen/blink.cmp",
   dependencies = {
-    "krissen/blink-bibtex",
+    "krissen/blink-bibtex", -- replace with your fork if needed
   },
   opts = {
     sources = {
@@ -73,9 +74,20 @@ require("blink-bibtex").setup({
   search_paths = { "references.bib", "bib/*.bib" },
   root_markers = { ".git", "texmf.cnf" },
   citation_commands = { "cite", "parencite", "textcite" },
-  preview_style = "apa",
+  preview_style = "ieee", -- or "apa" (default)
 })
 ```
+
+### Preview styles
+
+`preview_style` picks the formatter for the completion detail and documentation
+pane. The built-in options are:
+
+- `apa` (default) – Author-year summaries with multiline APA documentation.
+- `ieee` – IEEE-inspired strings using quoted titles plus volume/issue metadata.
+
+Custom styles can be added by extending `require("blink-bibtex").setup()` with a
+`preview_style` that matches one of the registered templates.
 
 ### Buffer discovery
 
