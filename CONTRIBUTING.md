@@ -31,7 +31,7 @@ vision outlined in `docs/spec.md`.
    - `README.md` (user-facing instructions) synchronized with implemented behavior
    - `docs/spec.md` (feature specification) aligned with the design
    - `docs/api.md` (API documentation) updated for API changes
-   - `CHANGELOG.md` (changelog) with your changes in the Unreleased section
+   - **Note**: Changelogs are maintained by humans, not automated agents
 6. Open a pull request that describes the motivation, implementation details,
    and any testing performed. Reference related issues when applicable.
 
@@ -55,8 +55,9 @@ All documentation should be written in English. When adding or modifying feature
 1. Update inline code comments (JSDoc-style)
 2. Update `docs/api.md` for API changes
 3. Update `README.md` for user-visible changes
-4. Add entry to `CHANGELOG.md` in the Unreleased section
-5. Update `docs/development.md` if adding architectural patterns
+4. Update `docs/development.md` if adding architectural patterns
+
+**Note**: Changelogs are maintained by repository maintainers, not automated agents.
 
 ## Reporting issues
 

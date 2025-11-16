@@ -39,7 +39,7 @@ The revision focused on:
    
 3. **vim.deepcopy** → Custom `deep_copy()` implementation
    - Better control over copying behavior
-   - No dependency on deprecated function
+   - No dependency on internal or potentially changing Neovim API
    - More explicit about what's being copied
 
 ## Performance Optimizations
@@ -113,11 +113,6 @@ function M.parse(content)
    - Code style guidelines
    - Testing procedures
    - Common pitfalls and best practices
-
-3. **CHANGELOG.md**: Version history
-   - Follows Keep a Changelog format
-   - Documents all changes
-   - Links to releases
 
 **Updated files**:
 - **CONTRIBUTING.md**: References new documentation
@@ -212,7 +207,6 @@ While no automated tests were added (per minimal-change requirement), the docume
 - All functions documented with types
 - External documentation for future contributors
 - Clear architecture documentation
-- Migration path documented in CHANGELOG
 
 ### Code Organization
 
