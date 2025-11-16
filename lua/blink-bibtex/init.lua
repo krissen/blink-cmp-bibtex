@@ -1,10 +1,18 @@
+--- blink-bibtex completion source
+--- Provides BibTeX citation completion for blink.cmp
+--- @module blink-bibtex
+
 local config = require('blink-bibtex.config')
 local scan = require('blink-bibtex.scan')
 local cache = require('blink-bibtex.cache')
 
+--- @class Source
+--- @field opts table Configuration options for this source instance
 local Source = {}
 Source.__index = Source
 
+--- Default completion kind (fallback to 1 if blink.cmp types unavailable)
+--- @type number
 local completion_kind = 1
 
 do
@@ -15,27 +23,39 @@ do
   end
 end
 
+--- Check if a table is empty
+--- @param tbl table|nil The table to check
+--- @return boolean True if the table is nil or empty
 local function table_is_empty(tbl)
   if not tbl then
     return true
   end
-  if vim.tbl_isempty then
-    return vim.tbl_isempty(tbl)
-  end
   return next(tbl) == nil
 end
 
+--- Sanitize a citation key prefix by handling multi-key citations
+--- Extracts the last citation key being typed when multiple keys are separated by commas or semicolons
+--- @param prefix string|nil The raw prefix string
+--- @return string The sanitized prefix for the current key
 local function sanitize_prefix(prefix)
-  prefix = prefix or ''
+  if not prefix or prefix == '' then
+    return ''
+  end
+  -- Normalize semicolons to commas and extract last segment
   local normalized = prefix:gsub(';', ',')
   local segments = vim.split(normalized, ',', { trimempty = false })
   local candidate = segments[#segments] or ''
-  candidate = candidate:gsub('^%s+', '')
-  candidate = candidate:gsub('%s+$', '')
-  return candidate
+  -- Trim whitespace in one operation
+  return candidate:match('^%s*(.-)%s*$') or ''
 end
 
+--- Format author/editor list into a readable string
+--- @param fields table BibTeX entry fields
+--- @return string|nil Formatted author string or nil if not available
 local function format_author_list(fields)
+  if not fields then
+    return nil
+  end
   local author = fields.author
   if (not author or author == '') and fields.editor then
     author = fields.editor
@@ -58,7 +78,13 @@ local function format_author_list(fields)
   return table.concat(names, ', ')
 end
 
+--- Format container information (journal, book, publisher)
+--- @param fields table BibTeX entry fields
+--- @return string|nil Formatted container string or nil if not available
 local function format_container(fields)
+  if not fields then
+    return nil
+  end
   local journal = fields.journaltitle or fields.journal
   local booktitle = fields.booktitle
   local publisher = fields.publisher
@@ -81,8 +107,26 @@ local function format_container(fields)
   return publisher or nil
 end
 
+--- Build a context object from a BibTeX entry for preview formatting
+--- @param entry table The BibTeX entry
+--- @return table Context object with normalized fields
 local function build_entry_context(entry)
-  local fields = entry.fields or {}
+  if not entry or not entry.fields then
+    return {
+      author = nil,
+      year = 'n.d.',
+      title = '[no title]',
+      journal = nil,
+      publisher = nil,
+      volume = nil,
+      number = nil,
+      pages = nil,
+      doi = nil,
+      url = nil,
+      container = nil,
+    }
+  end
+  local fields = entry.fields
   local author = format_author_list(fields)
   local year = fields.year or fields.date or 'n.d.'
   local title = fields.title or fields.booktitle or '[no title]'
@@ -109,6 +153,8 @@ local function build_entry_context(entry)
   }
 end
 
+--- Available preview style templates
+--- @type table<string, {detail: function, documentation: function}>
 local preview_styles = {}
 
 preview_styles.apa = {
@@ -210,10 +256,17 @@ preview_styles.ieee = {
   end,
 }
 
+--- Get a preview style by name, falling back to APA if not found
+--- @param name string The style name
+--- @return table The preview style template
 local function get_preview_style(name)
   return preview_styles[name] or preview_styles.apa
 end
 
+--- Match LaTeX citation commands in text
+--- @param text string The text to search
+--- @param opts table Configuration options with citation_commands
+--- @return table|nil Citation detection result or nil if no match
 local function match_latex_citation(text, opts)
   local brace_start = text:match('()%{[^{}]*$')
   if not brace_start then
@@ -261,6 +314,9 @@ local function match_latex_citation(text, opts)
   return nil
 end
 
+--- Match Pandoc-style citation syntax
+--- @param text string The text to search
+--- @return table|nil Citation detection result or nil if no match
 local function match_pandoc_citation(text)
   local prefix = text:match('%[@([^%]]*)$')
   if prefix then
@@ -277,6 +333,10 @@ local function match_pandoc_citation(text)
   return nil
 end
 
+--- Extract citation context from the current line and cursor position
+--- @param context table Completion context from blink.cmp
+--- @param opts table Configuration options
+--- @return table|nil Detection result with prefix and trigger type
 local function extract_context(context, opts)
   local line = context.line or ''
   local col = context.cursor and context.cursor[2] or #line
@@ -288,6 +348,10 @@ local function extract_context(context, opts)
   return match_pandoc_citation(text)
 end
 
+--- Filter entries by prefix match
+--- @param entries table[] List of BibTeX entries
+--- @param prefix string The prefix to match against
+--- @return table[] Filtered list of entries
 local function filter_entries(entries, prefix)
   local items = {}
   local lowered = prefix:lower()
@@ -299,6 +363,8 @@ local function filter_entries(entries, prefix)
   return items
 end
 
+--- Return an empty completion response
+--- @return table Empty response object
 local function empty_response()
   return {
     items = {},
@@ -307,12 +373,19 @@ local function empty_response()
   }
 end
 
+--- Create a new source instance
+--- @param opts table|nil Optional configuration overrides
+--- @return Source A new source instance
 function Source.new(opts)
   local self = setmetatable({}, Source)
   self.opts = config.extend(opts)
   return self
 end
 
+--- Get completion items for the current context
+--- @param context table Completion context from blink.cmp
+--- @param callback function Callback to invoke with completion results
+--- @return function Cancellation function
 function Source:get_completions(context, callback)
   local bufnr = context.bufnr or vim.api.nvim_get_current_buf()
   local ft = vim.bo[bufnr].filetype
@@ -357,10 +430,14 @@ function Source:get_completions(context, callback)
   end
 end
 
+--- Resolve additional details for a completion item
+--- @param item table The completion item to resolve
+--- @param callback function Callback to invoke with resolved item
 function Source:resolve(item, callback)
   callback(item)
 end
 
+--- Setup function exposed for user configuration
 Source.setup = config.setup
 
 return Source
