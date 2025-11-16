@@ -10,7 +10,8 @@ R Markdown buffers.
 - Native blink.cmp source implemented in pure Lua (no `blink.compat`).
 - Discovers `.bib` files from the current buffer, configured search paths or an
   explicit `files` list.
-- Parses entries lazily and caches the results with modification-time tracking.
+- Parses entries lazily, normalizes common LaTeX accents (e.g. `{"a}`, `\aa`)
+  and caches the results with modification-time tracking.
 - Supports common citation commands (`\cite`, `\parencite`, `\textcite`,
   `\smartcite`, `\footcite`, `\nocite`, Pandoc `[@key]`, …) including optional
   pre/post notes.
@@ -92,7 +93,15 @@ merged into the global setup options. This enables per-source overrides for
 ## Usage
 
 Insert a citation command (`\parencite{`, `\textcite[see][42]{`, or Pandoc style
-`[@`) and trigger completion via your blink.cmp mapping. Each item shows:
+`[@`) and trigger completion via your blink.cmp mapping. blink.cmp renders two
+panes for each item:
+
+- The completion row itself ("detail" column) contains the key plus a concise
+  APA-style summary (`Author (Year) – Title`).
+- The documentation pane (typically shown below or beside the menu) expands the
+  same entry with publisher/journal, place, DOI/URL, etc.
+
+With that in mind, each completion item exposes:
 
 - `label`: the citation key.
 - `detail`: short APA-like string (`Author (Year) – Title`).

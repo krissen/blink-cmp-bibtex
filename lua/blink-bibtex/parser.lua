@@ -1,33 +1,90 @@
 local M = {}
 
-local latex_replacements = {
-  { [[\"a]], "ä" },
-  { [[\"o]], "ö" },
-  { [[\"u]], "ü" },
-  { [[\"A]], "Ä" },
-  { [[\"O]], "Ö" },
-  { [[\"U]], "Ü" },
-  { [[\'a]], "á" },
-  { [[\'e]], "é" },
-  { [[\'i]], "í" },
-  { [[\'o]], "ó" },
-  { [[\'u]], "ú" },
-  { [[\`a]], "à" },
-  { [[\`e]], "è" },
-  { [[\^a]], "â" },
-  { [[\~n]], "ñ" },
-  { [[\ss]], "ß" },
-  { [[\"{a}]], "ä" },
-  { [[\"{o}]], "ö" },
-  { [[\"{u}]], "ü" },
+local latex_wrappers = {
+  "\\textit",
+  "\\emph",
+  "\\textbf",
+  "\\textsc",
 }
 
-local latex_wrappers = {
-  "\\textit", "\\emph", "\\textbf", "\\textsc",
+local accent_map = {
+  ['"'] = {
+    a = 'ä', A = 'Ä', e = 'ë', E = 'Ë', i = 'ï', I = 'Ï', o = 'ö', O = 'Ö', u = 'ü', U = 'Ü', y = 'ÿ', Y = 'Ÿ',
+  },
+  ["'"] = {
+    a = 'á', A = 'Á', e = 'é', E = 'É', i = 'í', I = 'Í', o = 'ó', O = 'Ó', u = 'ú', U = 'Ú', y = 'ý', Y = 'Ý',
+    c = 'ć', C = 'Ć', n = 'ń', N = 'Ń', s = 'ś', S = 'Ś', z = 'ź', Z = 'Ź',
+  },
+  ['`'] = {
+    a = 'à', A = 'À', e = 'è', E = 'È', i = 'ì', I = 'Ì', o = 'ò', O = 'Ò', u = 'ù', U = 'Ù',
+  },
+  ['^'] = {
+    a = 'â', A = 'Â', e = 'ê', E = 'Ê', i = 'î', I = 'Î', o = 'ô', O = 'Ô', u = 'û', U = 'Û', c = 'ĉ', C = 'Ĉ',
+  },
+  ['~'] = {
+    a = 'ã', A = 'Ã', n = 'ñ', N = 'Ñ', o = 'õ', O = 'Õ',
+  },
+  ['='] = {
+    a = 'ā', A = 'Ā', e = 'ē', E = 'Ē', i = 'ī', I = 'Ī', o = 'ō', O = 'Ō', u = 'ū', U = 'Ū',
+  },
+  ['.'] = {
+    c = 'ċ', C = 'Ċ', e = 'ė', E = 'Ė', z = 'ż', Z = 'Ż',
+  },
+  ['u'] = {
+    a = 'ă', A = 'Ă', e = 'ĕ', E = 'Ĕ', g = 'ğ', G = 'Ğ', i = 'ĭ', I = 'Ĭ', o = 'ŏ', O = 'Ŏ', u = 'ŭ', U = 'Ŭ',
+  },
+  ['v'] = {
+    c = 'č', C = 'Č', s = 'š', S = 'Š', z = 'ž', Z = 'Ž', r = 'ř', R = 'Ř', n = 'ň', N = 'Ň', e = 'ě', E = 'Ě',
+  },
+  ['H'] = {
+    o = 'ő', O = 'Ő', u = 'ű', U = 'Ű',
+  },
+  ['c'] = {
+    c = 'ç', C = 'Ç', s = 'ş', S = 'Ş', t = 'ţ', T = 'Ţ',
+  },
+  ['k'] = {
+    a = 'ą', A = 'Ą', e = 'ę', E = 'Ę',
+  },
+  ['r'] = {
+    a = 'å', A = 'Å', u = 'ů', U = 'Ů',
+  },
+}
+
+local simple_commands = {
+  aa = 'å',
+  AA = 'Å',
+  ae = 'æ',
+  AE = 'Æ',
+  oe = 'œ',
+  OE = 'Œ',
+  ss = 'ß',
+  o = 'ø',
+  O = 'Ø',
+  l = 'ł',
+  L = 'Ł',
+  dh = 'ð',
+  DH = 'Ð',
+  th = 'þ',
+  TH = 'Þ',
+  i = 'i',
+  j = 'j',
+}
+
+local accent_letter_aliases = {
+  ['\\i'] = 'i',
+  ['\\j'] = 'j',
 }
 
 local function trim(value)
   return (value:gsub("^%s+", ""):gsub("%s+$", ""))
+end
+
+local function replace_accent(accent, letter)
+  local map = accent_map[accent]
+  if not map then
+    return nil
+  end
+  return map[letter]
 end
 
 local function strip_latex(value)
@@ -39,17 +96,24 @@ local function strip_latex(value)
       return match:sub(#wrapper + 2, -2)
     end)
   end
-  value = value:gsub("%b{}", function(match)
-    local inner = match:sub(2, -2)
-    if inner:find("[{}]") then
-      return inner
+  value = value:gsub("\\\\([\"'`%^~=%.uvHcrk])%s*%{?(\\?%a)%}?", function(accent, letter)
+    if letter:sub(1, 1) == '\\' then
+      letter = accent_letter_aliases[letter] or letter:sub(2)
     end
-    return inner
+    return replace_accent(accent, letter) or letter
   end)
-  for _, replacement in ipairs(latex_replacements) do
-    value = value:gsub(replacement[1], replacement[2])
-  end
-  value = value:gsub("\\", "")
+  value = value:gsub("\\\\(%a+)", function(command)
+    local replacement = simple_commands[command]
+    if replacement then
+      return replacement
+    end
+    return ''
+  end)
+  value = value:gsub("%b{}", function(match)
+    return match:sub(2, -2)
+  end)
+  value = value:gsub("~", " ")
+  value = value:gsub("\\\\", "")
   value = value:gsub("%s+", " ")
   return trim(value)
 end
