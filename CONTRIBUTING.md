@@ -1,6 +1,6 @@
-# Contributing to blink-bibtex
+# Contributing to blink-cmp-bibtex
 
-Thanks for helping improve blink-bibtex! This document captures the project
+Thanks for helping improve blink-cmp-bibtex! This document captures the project
 expectations so every change stays consistent with the MIT-licensed, blink-first
 vision outlined in `docs/spec.md`.
 
@@ -23,7 +23,7 @@ vision outlined in `docs/spec.md`.
    conventions (tabs vs spaces, trailing whitespace) intact.
 4. Manually test in Neovim when touching the completion source:
    ```sh
-   nvim --headless -u NONE -c "set rtp+=." -c "lua require('blink-bibtex')" -c q
+   nvim --headless -u NONE -c "set rtp+=." -c "lua require('blink-cmp-bibtex')" -c q
    ```
    Add citation commands in `.tex`/`.md` buffers and ensure completions and APA
    previews appear as described in the README.
@@ -37,7 +37,7 @@ vision outlined in `docs/spec.md`.
 
 ## Coding guidelines
 
-- All Lua code lives under `lua/blink-bibtex/` and follows the module layout in
+- All Lua code lives under `lua/blink-cmp-bibtex/` and follows the module layout in
   the spec (`config.lua`, `parser.lua`, `scan.lua`, `cache.lua`, `init.lua`).
 - Use JSDoc-style comments for all functions with `@param`, `@return`, and
   description annotations.

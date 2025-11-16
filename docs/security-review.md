@@ -2,7 +2,7 @@
 
 ## Overview
 
-A comprehensive security review was performed on the blink-bibtex codebase following the code revision. This document summarizes the security analysis and findings.
+A comprehensive security review was performed on the blink-cmp-bibtex codebase following the code revision. This document summarizes the security analysis and findings.
 
 ## Security Review Date
 
@@ -10,7 +10,7 @@ A comprehensive security review was performed on the blink-bibtex codebase follo
 
 ## Scope
 
-- All Lua source files in `lua/blink-bibtex/`
+- All Lua source files in `lua/blink-cmp-bibtex/`
 - Plugin initialization code
 - File operations
 - User input handling
@@ -46,7 +46,7 @@ A comprehensive security review was performed on the blink-bibtex codebase follo
 
 ✅ **PASS** - Safe file handling
 
-**Checked**: `lua/blink-bibtex/parser.lua:296`
+**Checked**: `lua/blink-cmp-bibtex/parser.lua:296`
 ```lua
 local fd, err = io.open(path, 'r')
 if not fd then
@@ -244,7 +244,7 @@ end
 
 **Overall Security Assessment**: ✅ **SECURE**
 
-The blink-bibtex codebase follows security best practices and contains no identified vulnerabilities. The plugin:
+The blink-cmp-bibtex codebase follows security best practices and contains no identified vulnerabilities. The plugin:
 
 - Does not execute system commands
 - Does not write files

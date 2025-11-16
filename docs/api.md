@@ -1,8 +1,8 @@
 # API Documentation
 
-This document provides detailed API documentation for `blink-bibtex` modules.
+This document provides detailed API documentation for `blink-cmp-bibtex` modules.
 
-## Module: blink-bibtex
+## Module: blink-cmp-bibtex
 
 Main entry point for the BibTeX completion source.
 
@@ -18,7 +18,7 @@ Create a new source instance.
 
 **Example:**
 ```lua
-local source = require('blink-bibtex').new({
+local source = require('blink-cmp-bibtex').new({
   filetypes = { "tex", "markdown" }
 })
 ```
@@ -71,16 +71,16 @@ Configure global default settings.
 
 **Example:**
 ```lua
-require('blink-bibtex').setup({
+require('blink-cmp-bibtex').setup({
   filetypes = { "tex", "markdown" },
   preview_style = "ieee",
   search_paths = { "references.bib", "bib/*.bib" }
 })
 ```
 
-## Module: blink-bibtex.config
+## Module: blink-cmp-bibtex.config
 
-Configuration management for blink-bibtex.
+Configuration management for blink-cmp-bibtex.
 
 ### `config.setup(opts)`
 
@@ -116,7 +116,7 @@ Get the default configuration.
 **Returns:**
 - `table`: Default configuration options
 
-## Module: blink-bibtex.cache
+## Module: blink-cmp-bibtex.cache
 
 Cache management for parsed BibTeX entries.
 
@@ -142,7 +142,7 @@ Invalidate cache for a specific file path.
 **Parameters:**
 - `path` (string): The file path to invalidate
 
-## Module: blink-bibtex.parser
+## Module: blink-cmp-bibtex.parser
 
 BibTeX file parser.
 
@@ -161,7 +161,7 @@ Parse BibTeX content into a list of entries.
 
 **Example:**
 ```lua
-local parser = require('blink-bibtex.parser')
+local parser = require('blink-cmp-bibtex.parser')
 local entries = parser.parse([[
 @article{key2023,
   author = {Doe, John},
@@ -184,7 +184,7 @@ Parse a BibTeX file and return all entries.
 **Errors:**
 - Throws an error if the file cannot be opened
 
-## Module: blink-bibtex.scan
+## Module: blink-cmp-bibtex.scan
 
 BibTeX file discovery and path resolution.
 
@@ -200,7 +200,7 @@ Find BibTeX files referenced in a buffer.
 
 **Example:**
 ```lua
-local scan = require('blink-bibtex.scan')
+local scan = require('blink-cmp-bibtex.scan')
 local files = scan.find_bib_files_from_buffer(0)  -- Current buffer
 ```
 

@@ -1,10 +1,10 @@
---- blink-bibtex completion source
+--- blink-cmp-bibtex completion source
 --- Provides BibTeX citation completion for blink.cmp
---- @module blink-bibtex
+--- @module blink-cmp-bibtex
 
-local config = require('blink-bibtex.config')
-local scan = require('blink-bibtex.scan')
-local cache = require('blink-bibtex.cache')
+local config = require('blink-cmp-bibtex.config')
+local scan = require('blink-cmp-bibtex.scan')
+local cache = require('blink-cmp-bibtex.cache')
 
 --- @class Source
 --- @field opts table Configuration options for this source instance

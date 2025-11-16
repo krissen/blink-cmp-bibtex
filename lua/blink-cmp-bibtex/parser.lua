@@ -1,6 +1,6 @@
 --- BibTeX parser module
 --- Parses BibTeX files and normalizes LaTeX commands to UTF-8
---- @module blink-bibtex.parser
+--- @module blink-cmp-bibtex.parser
 
 local M = {}
 
