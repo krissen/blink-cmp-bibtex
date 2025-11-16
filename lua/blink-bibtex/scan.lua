@@ -156,6 +156,24 @@ local function find_yaml_bibliography(lines)
   return resources
 end
 
+local path_separator = package.config:sub(1, 1)
+
+local function joinpath(base, relative)
+  if base == nil or base == '' then
+    return relative
+  end
+  if relative == nil or relative == '' then
+    return base
+  end
+  if vim.fs and vim.fs.joinpath then
+    return vim.fs.joinpath(base, relative)
+  end
+  if base:sub(-1) == path_separator then
+    return base .. relative
+  end
+  return base .. path_separator .. relative
+end
+
 local function normalize_path(path)
   if not path or path == '' then
     return nil
@@ -239,9 +257,16 @@ function M.resolve_bib_paths(bufnr, opts)
   local buffer_files = M.find_bib_files_from_buffer(bufnr)
   local bufname = vim.api.nvim_buf_get_name(bufnr)
   local root = find_root(bufname, opts.root_markers or {})
+  local buffer_dir = nil
+  if bufname and bufname ~= '' then
+    buffer_dir = vim.fs.dirname(bufname)
+  end
+  if not buffer_dir or buffer_dir == '' then
+    buffer_dir = vim.loop.cwd()
+  end
   local dedup = {}
   local resolved = {}
-  local function add_path(path)
+  local function add_path(path, base_dir)
     if not path or path == '' then
       return
     end
@@ -249,7 +274,8 @@ function M.resolve_bib_paths(bufnr, opts)
     if is_absolute(path) then
       expanded = normalize_path(path)
     else
-      expanded = normalize_path(table.concat({ root, path }, '/'))
+      local anchor = base_dir or root or buffer_dir
+      expanded = normalize_path(joinpath(anchor, path))
     end
     if expanded and not dedup[expanded] then
       dedup[expanded] = true
@@ -257,7 +283,7 @@ function M.resolve_bib_paths(bufnr, opts)
     end
   end
   for _, path in ipairs(buffer_files) do
-    add_path(path)
+    add_path(path, buffer_dir)
   end
   for _, path in ipairs(manual_files) do
     add_path(path)

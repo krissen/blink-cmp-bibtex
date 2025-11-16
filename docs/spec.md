@@ -13,6 +13,8 @@ nvim-cmp) with a fresh, MIT-licensed codebase that targets blink.cmp directly.
   - YAML metadata in Markdown (e.g. `bibliography: references.bib`).
   - Glob search relative to the project root (`opts.search_paths`).
   - Manually supplied file list via `opts.files`.
+  - Resolve buffer-discovered paths relative to the buffer's directory, with the
+    project root serving as a fallback when needed.
 - Support all citation-style commands typically covered by `cmp-bibtex`,
   including `\cite`, `\parencite`, `\footcite`, `\textcite`, `\smartcite`,
   `\nocite`, Pandoc style citations (`[@key]`), and square-bracket variants.

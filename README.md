@@ -73,6 +73,9 @@ require("blink-bibtex").setup({
   `\bibliography{}` statements are scanned inside TeX buffers.
 - Missing `.bib` extensions are appended automatically so classic
   `\bibliography{references}` declarations resolve to `references.bib` on disk.
+- Buffer-local paths resolve relative to the current file's directory (with the
+  project root as a fallback) so chapter subdirectories can reference sibling
+  bibliographies.
 - Markdown YAML metadata lines such as `bibliography: references.bib` are
   respected.
 - `opts.search_paths` accepts either file paths or glob patterns relative to the
