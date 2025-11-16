@@ -85,7 +85,7 @@ local accent_letter_aliases = {
 --- @param value string The string to trim
 --- @return string The trimmed string
 local function trim(value)
-  return (value:gsub("^%s+", ""):gsub("%s+$", ""))
+  return value:match('^%s*(.-)%s*$') or ''
 end
 
 --- Replace a LaTeX accent with its UTF-8 equivalent
@@ -291,8 +291,12 @@ end
 --- Parse a BibTeX file and return all entries
 --- @param path string The file path to parse
 --- @return table[] List of parsed entries
+--- @error Throws an error if the file cannot be opened
 function M.parse_file(path)
-  local fd = assert(io.open(path, 'r'))
+  local fd, err = io.open(path, 'r')
+  if not fd then
+    error(string.format('Cannot open file %s: %s', path, err or 'unknown error'))
+  end
   local content = fd:read('*a')
   fd:close()
   return M.parse(content)

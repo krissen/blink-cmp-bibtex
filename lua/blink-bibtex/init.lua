@@ -38,13 +38,15 @@ end
 --- @param prefix string|nil The raw prefix string
 --- @return string The sanitized prefix for the current key
 local function sanitize_prefix(prefix)
-  prefix = prefix or ''
+  if not prefix or prefix == '' then
+    return ''
+  end
+  -- Normalize semicolons to commas and extract last segment
   local normalized = prefix:gsub(';', ',')
   local segments = vim.split(normalized, ',', { trimempty = false })
   local candidate = segments[#segments] or ''
-  candidate = candidate:gsub('^%s+', '')
-  candidate = candidate:gsub('%s+$', '')
-  return candidate
+  -- Trim whitespace in one operation
+  return candidate:match('^%s*(.-)%s*$') or ''
 end
 
 --- Format author/editor list into a readable string
