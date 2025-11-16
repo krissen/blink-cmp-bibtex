@@ -129,9 +129,16 @@ With that in mind, each completion item exposes:
 - `documentation`: multi-line APA preview covering author/editor, year, title,
   container, publisher and DOI/URL when available.
 
+## Documentation
+
+- [API Reference](docs/api.md) – Detailed API documentation for all modules
+- [Development Guide](docs/development.md) – Architecture, coding style, and contribution guidelines
+- [Specification](docs/spec.md) – High-level feature specification and design goals
+- [Changelog](CHANGELOG.md) – Version history and notable changes
+
 ## Roadmap
 
-- Additional preview styles beyond APA.
+- Additional preview styles beyond APA and IEEE.
 - Smarter detection of bibliography files in mixed-language projects.
 
 ## Related projects
@@ -149,6 +156,9 @@ Issues and pull requests are welcome. Please read
 [`CONTRIBUTING.md`](CONTRIBUTING.md) for development setup, coding guidelines and
 the review process. A high-level specification lives in [`docs/spec.md`](docs/spec.md)
 so new features stay consistent with the overall goals.
+
+For detailed technical information, see the [Development Guide](docs/development.md).
+For API details, consult the [API Reference](docs/api.md).
 
 ## License
 

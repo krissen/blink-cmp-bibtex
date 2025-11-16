@@ -68,7 +68,7 @@ local bibliography_commands = {
 --- @param value string The string to trim
 --- @return string The trimmed string
 local function trim(value)
-  return (value:gsub('^%s+', ''):gsub('%s+$', ''))
+  return value:match('^%s*(.-)%s*$') or ''
 end
 
 --- Split a comma-separated resource string into individual entries
