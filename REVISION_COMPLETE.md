@@ -2,7 +2,7 @@
 
 ## Summary
 
-A comprehensive code revision of the blink-bibtex codebase has been successfully completed. This revision addresses all requirements from the problem statement:
+A comprehensive code revision of the blink-cmp-bibtex codebase has been successfully completed. This revision addresses all requirements from the problem statement:
 
 ### ✅ Accomplished Goals
 

@@ -1,6 +1,6 @@
 # Code Revision Summary
 
-This document summarizes the comprehensive code revision performed on the blink-bibtex codebase.
+This document summarizes the comprehensive code revision performed on the blink-cmp-bibtex codebase.
 
 ## Overview
 

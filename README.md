@@ -1,4 +1,6 @@
-# blink-bibtex
+# blink-cmp-bibtex
+
+> **⚠️ IMPORTANT**: This plugin was recently renamed from `blink-bibtex` to `blink-cmp-bibtex`. If you're upgrading, please see the [Migration Guide](#migration-from-blink-bibtex) below.
 
 BibTeX completion source for [blink.cmp](https://github.com/Saghen/blink.cmp).
 It indexes `\addbibresource` declarations and project BibTeX files to offer
@@ -7,13 +9,13 @@ R Markdown buffers.
 
 ## Why this plugin?
 
-`blink-bibtex` was created to bring BibTeX citation completion to [blink.cmp](https://github.com/Saghen/blink.cmp) users. While excellent alternatives exist, they have different trade-offs:
+`blink-cmp-bibtex` was created to bring BibTeX citation completion to [blink.cmp](https://github.com/Saghen/blink.cmp) users. While excellent alternatives exist, they have different trade-offs:
 
 - **[VimTeX](https://github.com/lervag/vimtex)** is the comprehensive LaTeX plugin with built-in completion, syntax highlighting, compilation, and more. It can integrate with blink.cmp through [blink.compat](https://github.com/saghen/blink.compat) using its `omni` source. However, VimTeX is primarily a full-featured LaTeX environment rather than a focused completion source.
 
 - **[cmp-bibtex](https://github.com/texlaborg/cmp-bibtex)** is the established citation source for `nvim-cmp`. It's GPL-licensed and tightly coupled to the `cmp` API, making it unsuitable for direct use with blink.cmp.
 
-`blink-bibtex` fills the gap by providing a native, MIT-licensed completion source designed specifically for blink.cmp. It focuses solely on citation completion with minimal overhead, making the transition from cmp seamless for users with citation-heavy workflows in LaTeX, Markdown, and R Markdown.
+`blink-cmp-bibtex` fills the gap by providing a native, MIT-licensed completion source designed specifically for blink.cmp. It focuses solely on citation completion with minimal overhead, making the transition from cmp seamless for users with citation-heavy workflows in LaTeX, Markdown, and R Markdown.
 
 ## Features
 
@@ -28,7 +30,7 @@ R Markdown buffers.
 - Generates APA-inspired previews showing author, year, title and container data
   with selectable templates (APA default, IEEE optional).
 - Ships with sane defaults yet allows overriding behavior via
-  `require("blink-bibtex").setup()` or provider-level `opts`.
+  `require("blink-cmp-bibtex").setup()` or provider-level `opts`.
 
 ## Installation
 
@@ -38,7 +40,7 @@ Example with [lazy.nvim](https://github.com/folke/lazy.nvim):
 {
   "saghen/blink.cmp",
   dependencies = {
-    "krissen/blink-bibtex", -- replace with your fork if needed
+    "krissen/blink-cmp-bibtex",
   },
   opts = {
     sources = {
@@ -48,7 +50,7 @@ Example with [lazy.nvim](https://github.com/folke/lazy.nvim):
       end,
       providers = {
         bibtex = {
-          module = "blink-bibtex",
+          module = "blink-cmp-bibtex",
           name = "BibTeX",
           min_keyword_length = 2,
           score_offset = 10,
@@ -65,11 +67,11 @@ Example with [lazy.nvim](https://github.com/folke/lazy.nvim):
 
 ## Configuration
 
-Call `require("blink-bibtex").setup()` early in your config to change defaults.
+Call `require("blink-cmp-bibtex").setup()` early in your config to change defaults.
 Only values you set will override the built-ins.
 
 ```lua
-require("blink-bibtex").setup({
+require("blink-cmp-bibtex").setup({
   filetypes = { "tex", "plaintex", "markdown", "rmd" },
   files = { vim.fn.expand("~/research/global.bib") },
   search_paths = { "references.bib", "bib/*.bib" },
@@ -87,7 +89,7 @@ pane. The built-in options are:
 - `apa` (default) – Author-year summaries with multiline APA documentation.
 - `ieee` – IEEE-inspired strings using quoted titles plus volume/issue metadata.
 
-Custom styles can be added by extending `require("blink-bibtex").setup()` with a
+Custom styles can be added by extending `require("blink-cmp-bibtex").setup()` with a
 `preview_style` that matches one of the registered templates.
 
 ### Buffer discovery
@@ -114,7 +116,7 @@ merged into the global setup options. This enables per-source overrides for
 
 ## Usage
 
-`blink-bibtex` triggers autocompletion as you type citation keys in your documents:
+`blink-cmp-bibtex` triggers autocompletion as you type citation keys in your documents:
 
 ### In LaTeX files
 
@@ -175,7 +177,7 @@ Each completion item exposes:
 
 ## Alternatives
 
-If `blink-bibtex` doesn't fit your needs, consider these alternatives:
+If `blink-cmp-bibtex` doesn't fit your needs, consider these alternatives:
 
 ### VimTeX
 
@@ -192,6 +194,83 @@ If `blink-bibtex` doesn't fit your needs, consider these alternatives:
 ### Other community sources
 
 The blink.cmp ecosystem has various [community sources](https://cmp.saghen.dev/configuration/sources#community-sources) for different completion needs. Check the documentation for the latest list.
+
+## Migration from blink-bibtex
+
+If you're upgrading from the old `blink-bibtex` name, you'll need to update your configuration in three places:
+
+### 1. Update your lazy.nvim plugin specification
+
+**Before:**
+```lua
+{
+  "saghen/blink.cmp",
+  dependencies = {
+    "krissen/blink-bibtex",
+  },
+  -- ...
+}
+```
+
+**After:**
+```lua
+{
+  "saghen/blink.cmp",
+  dependencies = {
+    "krissen/blink-cmp-bibtex",
+  },
+  -- ...
+}
+```
+
+### 2. Update the module name in your blink.cmp config
+
+**Before:**
+```lua
+providers = {
+  bibtex = {
+    module = "blink-bibtex",
+    -- ...
+  },
+}
+```
+
+**After:**
+```lua
+providers = {
+  bibtex = {
+    module = "blink-cmp-bibtex",
+    -- ...
+  },
+}
+```
+
+### 3. Update any direct setup() calls
+
+**Before:**
+```lua
+require("blink-bibtex").setup({
+  -- config
+})
+```
+
+**After:**
+```lua
+require("blink-cmp-bibtex").setup({
+  -- config
+})
+```
+
+### 4. Clean up the old plugin
+
+After updating your config, remove the old plugin directory and reinstall:
+
+```vim
+:Lazy clean
+:Lazy sync
+```
+
+Then restart Neovim.
 
 ## Contributing
 

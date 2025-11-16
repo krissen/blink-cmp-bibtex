@@ -1,4 +1,4 @@
-local ok, source = pcall(require, 'blink-bibtex')
+local ok, source = pcall(require, 'blink-cmp-bibtex')
 if not ok then
   return
 end

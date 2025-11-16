@@ -1,6 +1,6 @@
---- Configuration module for blink-bibtex
+--- Configuration module for blink-cmp-bibtex
 --- Manages default settings and allows customization through setup() and extend()
---- @module blink-bibtex.config
+--- @module blink-cmp-bibtex.config
 
 local M = {}
 

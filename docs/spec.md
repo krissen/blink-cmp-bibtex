@@ -1,6 +1,6 @@
-# blink-bibtex specification
+# blink-cmp-bibtex specification
 
-This document is a lightweight feature description for `blink-bibtex`, a native
+This document is a lightweight feature description for `blink-cmp-bibtex`, a native
 source for [blink.cmp](https://github.com/Saghen/blink.cmp). The goal is to
 reimplement the functionality provided by `cmp-bibtex` (a GPL-3 source for
 nvim-cmp) with a fresh, MIT-licensed codebase that targets blink.cmp directly.
@@ -47,11 +47,11 @@ nvim-cmp) with a fresh, MIT-licensed codebase that targets blink.cmp directly.
   - `scan.lua`: buffer/project inspectors that find relevant `.bib` files.
   - `cache.lua`: memoized storage keyed by file path with mtime checks.
   - `init.lua`: blink.cmp source implementation.
-- Provide a `plugin/blink-bibtex.lua` entrypoint so that the source can be
+- Provide a `plugin/blink-cmp-bibtex.lua` entrypoint so that the source can be
   configured automatically when added to the runtime path.
 - Supply `README.md` coverage for installation (lazy.nvim), configuration, and
   feature summary. Include snippets showing how to register the source with
-  blink.cmp and how to call `require("blink-bibtex").setup()`. Document the
+  blink.cmp and how to call `require("blink-cmp-bibtex").setup()`. Document the
   MIT rationale (why this plugin exists alongside `cmp-bibtex`), reference
   related blink.cmp sources, and describe how to contribute.
 - Provide a `CONTRIBUTING.md` that captures workflow expectations (linting,

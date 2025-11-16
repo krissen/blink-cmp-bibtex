@@ -1,6 +1,6 @@
 --- BibTeX file scanner module
 --- Discovers and resolves BibTeX file paths from buffers and configuration
---- @module blink-bibtex.scan
+--- @module blink-cmp-bibtex.scan
 
 local M = {}
 

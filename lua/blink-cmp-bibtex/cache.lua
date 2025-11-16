@@ -1,8 +1,8 @@
---- Cache module for blink-bibtex
+--- Cache module for blink-cmp-bibtex
 --- Provides memoized storage of parsed BibTeX entries with modification time tracking
---- @module blink-bibtex.cache
+--- @module blink-cmp-bibtex.cache
 
-local parser = require('blink-bibtex.parser')
+local parser = require('blink-cmp-bibtex.parser')
 
 local M = {}
 --- Cache storage keyed by file path
@@ -16,7 +16,7 @@ local function notify(message)
     return
   end
   vim.schedule(function()
-    vim.notify(message, vim.log.levels.WARN, { title = 'blink-bibtex' })
+    vim.notify(message, vim.log.levels.WARN, { title = 'blink-cmp-bibtex' })
   end)
 end
 

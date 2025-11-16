@@ -1,6 +1,6 @@
 # Development Guide
 
-This guide provides technical details for developers working on blink-bibtex.
+This guide provides technical details for developers working on blink-cmp-bibtex.
 
 ## Architecture
 
@@ -294,19 +294,19 @@ end
 ### Inspect cache
 
 ```lua
-:lua vim.print(require('blink-bibtex.cache'))
+:lua vim.print(require('blink-cmp-bibtex.cache'))
 ```
 
 ### Check loaded files
 
 ```lua
-:lua vim.print(require('blink-bibtex.scan').resolve_bib_paths(0, require('blink-bibtex.config').get()))
+:lua vim.print(require('blink-cmp-bibtex.scan').resolve_bib_paths(0, require('blink-cmp-bibtex.config').get()))
 ```
 
 ### Check parsed entries
 
 ```lua
-:lua vim.print(require('blink-bibtex.parser').parse_file('references.bib'))
+:lua vim.print(require('blink-cmp-bibtex.parser').parse_file('references.bib'))
 ```
 
 ## Release Process
