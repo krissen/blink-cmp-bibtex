@@ -1,0 +1,366 @@
+local config = require('blink-bibtex.config')
+local scan = require('blink-bibtex.scan')
+local cache = require('blink-bibtex.cache')
+
+local Source = {}
+Source.__index = Source
+
+local completion_kind = 1
+
+do
+  local ok, cmp_types = pcall(require, 'blink.cmp.types')
+  if ok and cmp_types and cmp_types.CompletionItemKind then
+    local kinds = cmp_types.CompletionItemKind
+    completion_kind = kinds.Reference or kinds.Value or kinds.Text or completion_kind
+  end
+end
+
+local function table_is_empty(tbl)
+  if not tbl then
+    return true
+  end
+  if vim.tbl_isempty then
+    return vim.tbl_isempty(tbl)
+  end
+  return next(tbl) == nil
+end
+
+local function sanitize_prefix(prefix)
+  prefix = prefix or ''
+  local normalized = prefix:gsub(';', ',')
+  local segments = vim.split(normalized, ',', { trimempty = false })
+  local candidate = segments[#segments] or ''
+  candidate = candidate:gsub('^%s+', '')
+  candidate = candidate:gsub('%s+$', '')
+  return candidate
+end
+
+local function format_author_list(fields)
+  local author = fields.author
+  if (not author or author == '') and fields.editor then
+    author = fields.editor
+  end
+  if not author or author == '' then
+    return nil
+  end
+  local names = vim.split(author, '%s+and%s+', { trimempty = true })
+  if #names == 0 then
+    return author
+  end
+  if #names == 1 then
+    return names[1]
+  end
+  if #names == 2 then
+    return string.format('%s & %s', names[1], names[2])
+  end
+  local last = names[#names]
+  names[#names] = '& ' .. last
+  return table.concat(names, ', ')
+end
+
+local function format_container(fields)
+  local journal = fields.journaltitle or fields.journal
+  local booktitle = fields.booktitle
+  local publisher = fields.publisher
+  local location = fields.location or fields.address
+  if journal then
+    return journal
+  end
+  if booktitle then
+    if publisher then
+      if location then
+        return string.format('%s — %s (%s)', booktitle, publisher, location)
+      end
+      return string.format('%s — %s', booktitle, publisher)
+    end
+    return booktitle
+  end
+  if publisher and location then
+    return string.format('%s (%s)', publisher, location)
+  end
+  return publisher or nil
+end
+
+local function build_entry_context(entry)
+  local fields = entry.fields or {}
+  local author = format_author_list(fields)
+  local year = fields.year or fields.date or 'n.d.'
+  local title = fields.title or fields.booktitle or '[no title]'
+  local journal = fields.journaltitle or fields.journal
+  local publisher = fields.publisher
+  local volume = fields.volume
+  local number = fields.number or fields.issue
+  local pages = fields.pages
+  local doi = fields.doi
+  local url = fields.url
+  local container = format_container(fields)
+  return {
+    author = author,
+    year = year,
+    title = title,
+    journal = journal,
+    publisher = publisher,
+    volume = volume,
+    number = number,
+    pages = pages,
+    doi = doi,
+    url = url,
+    container = container,
+  }
+end
+
+local preview_styles = {}
+
+preview_styles.apa = {
+  detail = function(ctx)
+    local author = ctx.author or 'Unknown'
+    if ctx.container then
+      return string.format('%s (%s) – %s (%s)', author, ctx.year, ctx.title, ctx.container)
+    end
+    return string.format('%s (%s) – %s', author, ctx.year, ctx.title)
+  end,
+  documentation = function(ctx)
+    local lines = {}
+    if ctx.author then
+      table.insert(lines, string.format('%s (%s).', ctx.author, ctx.year))
+    else
+      table.insert(lines, string.format('(%s).', ctx.year))
+    end
+    table.insert(lines, string.format('%s.', ctx.title))
+    if ctx.journal then
+      local segment = ctx.journal
+      if ctx.volume then
+        segment = string.format('%s, %s', segment, ctx.volume)
+        if ctx.number then
+          segment = string.format('%s(%s)', segment, ctx.number)
+        end
+      end
+      if ctx.pages then
+        segment = string.format('%s, %s', segment, ctx.pages)
+      end
+      table.insert(lines, segment .. '.')
+    elseif ctx.container then
+      table.insert(lines, ctx.container .. '.')
+    elseif ctx.publisher then
+      table.insert(lines, ctx.publisher .. '.')
+    end
+    if ctx.doi then
+      table.insert(lines, 'https://doi.org/' .. ctx.doi:gsub('^https?://doi.org/', ''))
+    elseif ctx.url then
+      table.insert(lines, ctx.url)
+    end
+    return table.concat(lines, '\n')
+  end,
+}
+
+preview_styles.ieee = {
+  detail = function(ctx)
+    local pieces = {}
+    table.insert(pieces, ctx.author or 'Unknown')
+    table.insert(pieces, string.format('"%s,"', ctx.title))
+    if ctx.journal then
+      table.insert(pieces, ctx.journal)
+    elseif ctx.container then
+      table.insert(pieces, ctx.container)
+    end
+    if ctx.volume then
+      local segment = string.format('vol. %s', ctx.volume)
+      if ctx.number then
+        segment = string.format('%s, no. %s', segment, ctx.number)
+      end
+      table.insert(pieces, segment)
+    end
+    if ctx.pages then
+      table.insert(pieces, string.format('pp. %s', ctx.pages))
+    end
+    table.insert(pieces, string.format('%s.', ctx.year))
+    return table.concat(pieces, ' ')
+  end,
+  documentation = function(ctx)
+    local lines = {}
+    local line = {}
+    table.insert(line, ctx.author or 'Unknown')
+    table.insert(line, string.format('"%s,"', ctx.title))
+    if ctx.journal then
+      table.insert(line, ctx.journal)
+    elseif ctx.container then
+      table.insert(line, ctx.container)
+    end
+    if ctx.volume then
+      local vol = string.format('vol. %s', ctx.volume)
+      if ctx.number then
+        vol = string.format('%s, no. %s', vol, ctx.number)
+      end
+      table.insert(line, vol)
+    end
+    if ctx.pages then
+      table.insert(line, string.format('pp. %s', ctx.pages))
+    end
+    table.insert(line, string.format('%s.', ctx.year))
+    table.insert(lines, table.concat(line, ', '))
+    if ctx.publisher then
+      table.insert(lines, ctx.publisher .. '.')
+    end
+    if ctx.doi then
+      table.insert(lines, 'DOI: ' .. ctx.doi)
+    elseif ctx.url then
+      table.insert(lines, 'URL: ' .. ctx.url)
+    end
+    return table.concat(lines, '\n')
+  end,
+}
+
+local function get_preview_style(name)
+  return preview_styles[name] or preview_styles.apa
+end
+
+local function match_latex_citation(text, opts)
+  local brace_start = text:match('()%{[^{}]*$')
+  if not brace_start then
+    return nil
+  end
+  local prefix = text:sub(brace_start + 1)
+  local before = text:sub(1, brace_start - 1)
+  local cursor = #before
+  while cursor > 0 and before:sub(cursor, cursor):match('%s') do
+    cursor = cursor - 1
+  end
+  local function skip_optional()
+    while cursor > 0 and before:sub(cursor, cursor) == ']' do
+      cursor = cursor - 1
+      local depth = 1
+      while cursor > 0 and depth > 0 do
+        local ch = before:sub(cursor, cursor)
+        if ch == '[' then
+          depth = depth - 1
+        elseif ch == ']' then
+          depth = depth + 1
+        end
+        cursor = cursor - 1
+      end
+      while cursor > 0 and before:sub(cursor, cursor):match('%s') do
+        cursor = cursor - 1
+      end
+    end
+  end
+  skip_optional()
+  local command_segment = before:sub(1, cursor)
+  local command, modifier = command_segment:match('\\([%a@]+)(%*?)$')
+  if not command then
+    return nil
+  end
+  for _, allowed in ipairs(opts.citation_commands or {}) do
+    if command == allowed then
+      return {
+        prefix = prefix,
+        command = command .. (modifier or ''),
+        trigger = 'latex',
+      }
+    end
+  end
+  return nil
+end
+
+local function match_pandoc_citation(text)
+  local prefix = text:match('%[@([^%]]*)$')
+  if prefix then
+    return { prefix = prefix, trigger = 'pandoc' }
+  end
+  local boundary = text:match('[^%w@]@([%w:_%-%.,]*)$')
+  if boundary then
+    return { prefix = boundary, trigger = 'pandoc' }
+  end
+  local line_start = text:match('^@([%w:_%-%.,]*)$')
+  if line_start then
+    return { prefix = line_start, trigger = 'pandoc' }
+  end
+  return nil
+end
+
+local function extract_context(context, opts)
+  local line = context.line or ''
+  local col = context.cursor and context.cursor[2] or #line
+  local text = line:sub(1, col)
+  local latex = match_latex_citation(text, opts)
+  if latex then
+    return latex
+  end
+  return match_pandoc_citation(text)
+end
+
+local function filter_entries(entries, prefix)
+  local items = {}
+  local lowered = prefix:lower()
+  for _, entry in ipairs(entries) do
+    if lowered == '' or entry.key:lower():find(lowered, 1, true) == 1 then
+      table.insert(items, entry)
+    end
+  end
+  return items
+end
+
+local function empty_response()
+  return {
+    items = {},
+    is_incomplete_forward = false,
+    is_incomplete_backward = false,
+  }
+end
+
+function Source.new(opts)
+  local self = setmetatable({}, Source)
+  self.opts = config.extend(opts)
+  return self
+end
+
+function Source:get_completions(context, callback)
+  local bufnr = context.bufnr or vim.api.nvim_get_current_buf()
+  local ft = vim.bo[bufnr].filetype
+  if #self.opts.filetypes > 0 and not vim.tbl_contains(self.opts.filetypes, ft) then
+    callback(empty_response())
+    return function() end
+  end
+  local detection = extract_context(context, self.opts)
+  if not detection then
+    callback(empty_response())
+    return function() end
+  end
+  local prefix = sanitize_prefix(detection.prefix)
+  local paths = scan.resolve_bib_paths(bufnr, self.opts)
+  if table_is_empty(paths) then
+    callback(empty_response())
+    return function() end
+  end
+  local cancelled = false
+  vim.schedule(function()
+    if cancelled then
+      return
+    end
+    local entries = cache.collect(paths, self.opts.max_entries)
+    local filtered = filter_entries(entries, prefix)
+    local items = {}
+    local style = get_preview_style(self.opts.preview_style)
+    for _, entry in ipairs(filtered) do
+      local ctx = build_entry_context(entry)
+      items[#items + 1] = {
+        label = entry.key,
+        insertText = entry.key,
+        kind = completion_kind,
+        detail = style.detail(ctx),
+        documentation = style.documentation(ctx),
+      }
+    end
+    callback({ items = items, is_incomplete_forward = true, is_incomplete_backward = true })
+  end)
+  return function()
+    cancelled = true
+  end
+end
+
+function Source:resolve(item, callback)
+  callback(item)
+end
+
+Source.setup = config.setup
+
+return Source
