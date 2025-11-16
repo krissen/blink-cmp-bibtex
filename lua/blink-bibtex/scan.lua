@@ -239,9 +239,10 @@ function M.resolve_bib_paths(bufnr, opts)
   local buffer_files = M.find_bib_files_from_buffer(bufnr)
   local bufname = vim.api.nvim_buf_get_name(bufnr)
   local root = find_root(bufname, opts.root_markers or {})
+  local buffer_dir = bufname ~= '' and vim.fs.dirname(bufname) or root
   local dedup = {}
   local resolved = {}
-  local function add_path(path)
+  local function add_path(path, base_dir)
     if not path or path == '' then
       return
     end
@@ -249,7 +250,8 @@ function M.resolve_bib_paths(bufnr, opts)
     if is_absolute(path) then
       expanded = normalize_path(path)
     else
-      expanded = normalize_path(table.concat({ root, path }, '/'))
+      local base = base_dir or root
+      expanded = normalize_path(table.concat({ base, path }, '/'))
     end
     if expanded and not dedup[expanded] then
       dedup[expanded] = true
@@ -257,7 +259,7 @@ function M.resolve_bib_paths(bufnr, opts)
     end
   end
   for _, path in ipairs(buffer_files) do
-    add_path(path)
+    add_path(path, buffer_dir)
   end
   for _, path in ipairs(manual_files) do
     add_path(path)
