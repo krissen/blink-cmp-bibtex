@@ -1,5 +1,11 @@
+--- BibTeX parser module
+--- Parses BibTeX files and normalizes LaTeX commands to UTF-8
+--- @module blink-bibtex.parser
+
 local M = {}
 
+--- LaTeX text formatting commands that should be stripped
+--- @type string[]
 local latex_wrappers = {
   "\\textit",
   "\\emph",
@@ -75,10 +81,17 @@ local accent_letter_aliases = {
   ['\\j'] = 'j',
 }
 
+--- Trim whitespace from both ends of a string
+--- @param value string The string to trim
+--- @return string The trimmed string
 local function trim(value)
   return (value:gsub("^%s+", ""):gsub("%s+$", ""))
 end
 
+--- Replace a LaTeX accent with its UTF-8 equivalent
+--- @param accent string The accent character
+--- @param letter string The base letter
+--- @return string|nil The accented character or nil if not found
 local function replace_accent(accent, letter)
   local map = accent_map[accent]
   if not map then
@@ -87,6 +100,9 @@ local function replace_accent(accent, letter)
   return map[letter]
 end
 
+--- Strip LaTeX commands and convert to plain UTF-8 text
+--- @param value string|nil The string to process
+--- @return string The stripped and normalized string
 local function strip_latex(value)
   if not value then
     return ''
@@ -118,6 +134,12 @@ local function strip_latex(value)
   return trim(value)
 end
 
+--- Read a balanced block of text (e.g., matching braces)
+--- @param str string The input string
+--- @param start number Starting position
+--- @param open_char string Opening character
+--- @param close_char string Closing character
+--- @return string|nil, number The extracted block and next position
 local function read_balanced_block(str, start, open_char, close_char)
   if not open_char or not close_char then
     return nil, start
@@ -142,6 +164,10 @@ local function read_balanced_block(str, start, open_char, close_char)
   return str:sub(start), len + 1
 end
 
+--- Read a braced value from a BibTeX field
+--- @param str string The input string
+--- @param start number Starting position
+--- @return string, number The extracted value and next position
 local function read_braced_value(str, start)
   local block, next_index = read_balanced_block(str, start, '{', '}')
   if not block then
@@ -150,6 +176,10 @@ local function read_braced_value(str, start)
   return block:sub(2, -2), next_index
 end
 
+--- Read a quoted value from a BibTeX field
+--- @param str string The input string
+--- @param start number Starting position
+--- @return string, number The extracted value and next position
 local function read_quoted_value(str, start)
   local i = start + 1
   local len = #str
@@ -163,6 +193,9 @@ local function read_quoted_value(str, start)
   return str:sub(start + 1), len + 1
 end
 
+--- Parse BibTeX entry fields
+--- @param body string The entry body content
+--- @return table<string, string> Parsed fields as key-value pairs
 local function parse_fields(body)
   local fields = {}
   local i = 1
@@ -201,6 +234,9 @@ local function parse_fields(body)
   return fields
 end
 
+--- Parse a single BibTeX entry
+--- @param raw_entry string The raw entry text
+--- @return table|nil Parsed entry with key and fields, or nil if invalid
 local function parse_entry(raw_entry)
   local content = raw_entry:sub(2, -2)
   local key, rest = content:match('^%s*([^,%s]+)%s*,(.*)$')
@@ -214,6 +250,9 @@ local function parse_entry(raw_entry)
   }
 end
 
+--- Parse BibTeX content into a list of entries
+--- @param content string The BibTeX file content
+--- @return table[] List of parsed entries
 function M.parse(content)
   local entries = {}
   local i = 1
@@ -249,6 +288,9 @@ function M.parse(content)
   return entries
 end
 
+--- Parse a BibTeX file and return all entries
+--- @param path string The file path to parse
+--- @return table[] List of parsed entries
 function M.parse_file(path)
   local fd = assert(io.open(path, 'r'))
   local content = fd:read('*a')

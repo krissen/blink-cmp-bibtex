@@ -1,5 +1,13 @@
+--- BibTeX file scanner module
+--- Discovers and resolves BibTeX file paths from buffers and configuration
+--- @module blink-bibtex.scan
+
 local M = {}
 
+--- Resolve an option value (may be a function or static value)
+--- @param value any The option value to resolve
+--- @param ... any Additional arguments to pass if value is a function
+--- @return any The resolved value
 local function resolve_option(value, ...)
   if type(value) == 'function' then
     local ok, result = pcall(value, ...)
@@ -11,6 +19,9 @@ local function resolve_option(value, ...)
   return value
 end
 
+--- Check if a value is a list-like table
+--- @param value any The value to check
+--- @return boolean True if the value is a list
 local function is_list(value)
   if value == nil then
     return false
@@ -18,9 +29,20 @@ local function is_list(value)
   if vim.islist then
     return vim.islist(value)
   end
-  return vim.tbl_islist(value)
+  -- Fallback for older Neovim versions
+  if type(value) ~= 'table' then
+    return false
+  end
+  local count = 0
+  for _ in pairs(value) do
+    count = count + 1
+  end
+  return count == #value
 end
 
+--- Normalize a value to a list format
+--- @param value any The value to normalize
+--- @return table A list-like table
 local function normalize_list(value)
   if value == nil then
     return {}
@@ -31,6 +53,8 @@ local function normalize_list(value)
   return { value }
 end
 
+--- BibTeX bibliography command names to recognize
+--- @type table<string, boolean>
 local bibliography_commands = {
   addbibresource = true,
   ['addbibresource*'] = true,
@@ -40,10 +64,16 @@ local bibliography_commands = {
   nobibliography = true,
 }
 
+--- Trim whitespace from a string
+--- @param value string The string to trim
+--- @return string The trimmed string
 local function trim(value)
   return (value:gsub('^%s+', ''):gsub('%s+$', ''))
 end
 
+--- Split a comma-separated resource string into individual entries
+--- @param value string The resource string to split
+--- @return string[] List of resource names
 local function split_resources(value)
   local entries = {}
   for part in value:gmatch('[^,]+') do
@@ -58,6 +88,10 @@ local function split_resources(value)
   return entries
 end
 
+--- Skip whitespace in a string starting from a given index
+--- @param str string The input string
+--- @param idx number Starting index
+--- @return number The next non-whitespace index
 local function skip_whitespace(str, idx)
   while idx <= #str and str:sub(idx, idx):match('%s') do
     idx = idx + 1
@@ -65,6 +99,10 @@ local function skip_whitespace(str, idx)
   return idx
 end
 
+--- Read a balanced block (e.g., braces) from a string
+--- @param str string The input string
+--- @param idx number Starting index
+--- @return string|nil, number The extracted block and next index
 local function read_balanced_block(str, idx)
   if str:sub(idx, idx) ~= '{' then
     return nil, idx
@@ -88,6 +126,10 @@ local function read_balanced_block(str, idx)
   return nil, idx
 end
 
+--- Skip optional arguments in a LaTeX command
+--- @param str string The input string
+--- @param idx number Starting index
+--- @return number The index after all optional arguments
 local function skip_optional_arguments(str, idx)
   local cursor = skip_whitespace(str, idx)
   while str:sub(cursor, cursor) == '[' do
@@ -107,6 +149,9 @@ local function skip_optional_arguments(str, idx)
   return cursor
 end
 
+--- Extract bibliography file paths from a LaTeX command line
+--- @param line string The line to parse
+--- @return string[] List of extracted file paths
 local function extract_command_paths(line)
   local results = {}
   local i = 1
@@ -134,6 +179,9 @@ local function extract_command_paths(line)
   return results
 end
 
+--- Find bibliography files in YAML front matter
+--- @param lines string[] Buffer lines to search
+--- @return string[] List of bibliography file paths
 local function find_yaml_bibliography(lines)
   local resources = {}
   local in_front_matter = false
@@ -164,8 +212,14 @@ local function find_yaml_bibliography(lines)
   return resources
 end
 
+--- Platform-specific path separator
+--- @type string
 local path_separator = package.config:sub(1, 1)
 
+--- Join two path components
+--- @param base string|nil Base path
+--- @param relative string|nil Relative path
+--- @return string|nil The joined path
 local function joinpath(base, relative)
   if base == nil or base == '' then
     return relative
@@ -182,11 +236,15 @@ local function joinpath(base, relative)
   return base .. path_separator .. relative
 end
 
+--- Normalize a path, expanding home directory and resolving relative paths
+--- @param path string The path to normalize
+--- @return string|nil The normalized path or nil if invalid
 local function normalize_path(path)
   if not path or path == '' then
     return nil
   end
-  local home = vim.loop.os_homedir()
+  local uv = vim.uv or vim.loop
+  local home = uv.os_homedir()
   if home then
     path = path:gsub('^~', home)
   end
@@ -195,13 +253,20 @@ local function normalize_path(path)
   return path
 end
 
+--- Check if a path is absolute
+--- @param path string The path to check
+--- @return boolean True if the path is absolute
 local function is_absolute(path)
   return path:match('^%a:[\\/]') or path:sub(1, 1) == '/'
 end
 
+--- Find the project root directory based on markers
+--- @param bufname string Buffer file name
+--- @param markers table List of root marker files/directories
+--- @return string The root directory path
 local function find_root(bufname, markers)
-  local cwd_fn = (vim.uv and vim.uv.cwd) or vim.loop.cwd
-  local dir = bufname ~= '' and vim.fs.dirname(bufname) or (cwd_fn and cwd_fn() or '')
+  local uv = vim.uv or vim.loop
+  local dir = bufname ~= '' and vim.fs.dirname(bufname) or (uv.cwd() or '')
   if markers and #markers > 0 then
     local found = vim.fs.find(markers, { upward = true, path = dir })[1]
     if found then
@@ -227,6 +292,9 @@ local function expand_search_path(path, root)
   return resolved
 end
 
+--- Ensure a path has a .bib extension
+--- @param path string|nil The path to check
+--- @return string|nil The path with .bib extension if needed
 local function ensure_bib_extension(path)
   if not path or path == '' then
     return path
@@ -244,6 +312,9 @@ local function ensure_bib_extension(path)
   return path .. '.bib'
 end
 
+--- Find BibTeX files referenced in a buffer
+--- @param bufnr number Buffer number
+--- @return string[] List of bibliography file names (not full paths)
 function M.find_bib_files_from_buffer(bufnr)
   local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
   local resources = {}
@@ -259,6 +330,11 @@ function M.find_bib_files_from_buffer(bufnr)
   return resources
 end
 
+--- Resolve all BibTeX file paths for a buffer
+--- Combines buffer-discovered files, manual files, and search paths
+--- @param bufnr number Buffer number
+--- @param opts table Configuration options
+--- @return string[] List of resolved absolute file paths
 function M.resolve_bib_paths(bufnr, opts)
   opts = opts or {}
   local manual_files = normalize_list(resolve_option(opts.files, bufnr))
@@ -271,8 +347,8 @@ function M.resolve_bib_paths(bufnr, opts)
     buffer_dir = vim.fs.dirname(bufname)
   end
   if not buffer_dir or buffer_dir == '' then
-    local cwd_fn = (vim.uv and vim.uv.cwd) or vim.loop.cwd
-    buffer_dir = cwd_fn and cwd_fn() or ''
+    local uv = vim.uv or vim.loop
+    buffer_dir = uv.cwd() or ''
   end
   local dedup = {}
   local resolved = {}

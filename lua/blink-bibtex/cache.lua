@@ -1,8 +1,16 @@
+--- Cache module for blink-bibtex
+--- Provides memoized storage of parsed BibTeX entries with modification time tracking
+--- @module blink-bibtex.cache
+
 local parser = require('blink-bibtex.parser')
 
 local M = {}
+--- Cache storage keyed by file path
+--- @type table<string, {mtime: number, size: number, entries: table[]}>
 local store = {}
 
+--- Notify user of warnings
+--- @param message string The warning message to display
 local function notify(message)
   if not (vim and vim.notify) then
     return
@@ -12,14 +20,21 @@ local function notify(message)
   end)
 end
 
+--- Get file statistics for a given path
+--- @param path string The file path to check
+--- @return table|nil File stat information or nil if unavailable
 local function stat(path)
-  local ok, result = pcall(vim.loop.fs_stat, path)
+  local uv = vim.uv or vim.loop
+  local ok, result = pcall(uv.fs_stat, path)
   if not ok then
     return nil
   end
   return result
 end
 
+--- Load and cache BibTeX entries from a file
+--- @param path string The file path to load
+--- @return table[] List of parsed BibTeX entries
 local function load_file(path)
   local info = stat(path)
   if not info then
@@ -44,6 +59,10 @@ local function load_file(path)
   return entries
 end
 
+--- Collect all entries from multiple BibTeX files
+--- @param paths string[] List of file paths to collect from
+--- @param limit number|nil Optional maximum number of entries to collect
+--- @return table[] List of all collected entries
 function M.collect(paths, limit)
   local items = {}
   for _, path in ipairs(paths) do
@@ -63,6 +82,8 @@ function M.collect(paths, limit)
   return items
 end
 
+--- Invalidate cache for a specific file path
+--- @param path string The file path to invalidate
 function M.invalidate(path)
   store[path] = nil
 end
