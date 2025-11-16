@@ -5,6 +5,15 @@ It indexes `\addbibresource` declarations and project BibTeX files to offer
 citation-key completion together with APA-styled previews in LaTeX, Markdown and
 R Markdown buffers.
 
+## Background
+
+`blink-bibtex` exists because [`cmp-bibtex`](https://github.com/texlaborg/cmp-bibtex)
+—the long-standing source for `nvim-cmp`—is GPL-licensed and tied to the
+`cmp` API. Rather than porting that code (which would keep the GPL
+requirements), this project re-implements the feature set from scratch under
+the MIT license and exposes it directly to blink.cmp. The goal is to make the
+transition from cmp to blink seamless for users with citation-heavy workflows.
+
 ## Features
 
 - Native blink.cmp source implemented in pure Lua (no `blink.compat`).
@@ -112,6 +121,22 @@ With that in mind, each completion item exposes:
 
 - Additional preview styles beyond APA.
 - Smarter detection of bibliography files in mixed-language projects.
+
+## Related projects
+
+- [`cmp-bibtex`](https://github.com/texlaborg/cmp-bibtex) – the inspiration for
+  this plugin's behavior and command coverage.
+- [`blink-cmp-dictionary`](https://github.com/Kaiser-Yang/blink-cmp-dictionary)
+  – reference implementation for blink.cmp provider structure.
+- [`blink-cmp-git`](https://github.com/Kaiser-Yang/blink-cmp-git) – another
+  community source that informed the async completion wiring here.
+
+## Contributing
+
+Issues and pull requests are welcome. Please read
+[`CONTRIBUTING.md`](CONTRIBUTING.md) for development setup, coding guidelines and
+the review process. A high-level specification lives in [`docs/spec.md`](docs/spec.md)
+so new features stay consistent with the overall goals.
 
 ## License
 
