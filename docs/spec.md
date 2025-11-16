@@ -49,7 +49,11 @@ nvim-cmp) with a fresh, MIT-licensed codebase that targets blink.cmp directly.
   configured automatically when added to the runtime path.
 - Supply `README.md` coverage for installation (lazy.nvim), configuration, and
   feature summary. Include snippets showing how to register the source with
-  blink.cmp and how to call `require("blink-bibtex").setup()`.
+  blink.cmp and how to call `require("blink-bibtex").setup()`. Document the
+  MIT rationale (why this plugin exists alongside `cmp-bibtex`), reference
+  related blink.cmp sources, and describe how to contribute.
+- Provide a `CONTRIBUTING.md` that captures workflow expectations (linting,
+  testing, documentation updates) so new contributors can get started quickly.
 - Default configuration should be practical without user input, but each module
   must allow overriding values through `setup()` or provider `opts` in blink.cmp.
 - Ensure style tooling (`.editorconfig`, `.luacheckrc`) matches common blink
