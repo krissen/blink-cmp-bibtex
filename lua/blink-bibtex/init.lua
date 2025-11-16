@@ -204,7 +204,20 @@ end
 
 local function extract_context(context, opts)
   local line = context.line or ''
-  local col = context.cursor and context.cursor[2] or #line
+  local col
+  if context.cursor then
+    if type(context.cursor) == 'table' then
+      col = context.cursor[2]
+    else
+      col = context.cursor
+    end
+  end
+  if not col and context.col then
+    col = context.col
+  end
+  if not col then
+    col = #line
+  end
   local text = line:sub(1, col)
   local latex = match_latex_citation(text, opts)
   if latex then
