@@ -114,16 +114,53 @@ merged into the global setup options. This enables per-source overrides for
 
 ## Usage
 
-Insert a citation command (`\parencite{`, `\textcite[see][42]{`, or Pandoc style
-`[@`) and trigger completion via your blink.cmp mapping. blink.cmp renders two
-panes for each item:
+`blink-bibtex` triggers autocompletion as you type citation keys in your documents:
+
+### In LaTeX files
+
+Start typing a citation command followed by an opening brace, then begin typing
+the citation key. For example, when you have a BibTeX entry with the key
+`Niemi2025`:
+
+```latex
+\cite{Nie
+```
+
+As you type `Nie`, blink.cmp will show matching citation keys. The completion
+menu displays each key with a concise APA-style summary, and selecting an entry
+shows expanded details in the documentation pane.
+
+This works with all supported citation commands: `\parencite{`, `\textcite{`,
+`\footcite{`, `\smartcite{`, `\autocite{`, `\nocite{`, `\citep{`, `\citet{`, and
+more. Optional arguments are also supported (e.g., `\cite[see][42]{Nie`).
+
+### In Markdown and R Markdown files
+
+Use Pandoc-style citations with the `@` symbol. For the same `Niemi2025` entry:
+
+```markdown
+@Nie
+```
+
+Or within brackets for inline citations:
+
+```markdown
+[@Nie
+```
+
+As you type, blink.cmp shows matching keys with the same preview information as
+in LaTeX mode.
+
+### Completion details
+
+blink.cmp renders two panes for each matched item:
 
 - The completion row itself ("detail" column) contains the key plus a concise
   APA-style summary (`Author (Year) – Title`).
 - The documentation pane (typically shown below or beside the menu) expands the
   same entry with publisher/journal, place, DOI/URL, etc.
 
-With that in mind, each completion item exposes:
+Each completion item exposes:
 
 - `label`: the citation key.
 - `detail`: short APA-like string (`Author (Year) – Title`).
