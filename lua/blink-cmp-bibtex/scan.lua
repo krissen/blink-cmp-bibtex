@@ -377,11 +377,15 @@ function M.resolve_bib_paths(bufnr, opts)
       expanded = normalize_path(joinpath(anchor, path))
     end
     if expanded and not dedup[expanded] then
-      -- Verify the path is not a directory
-      local uv = vim.uv or vim.loop
-      local stat = uv.fs_stat(expanded)
-      if stat and stat.type == 'directory' then
-        return
+      -- Filter out directories to prevent them from being passed to blink.cmp
+      -- which could cause "Is a directory" errors in frecency database creation.
+      -- Only check if path doesn't have a .bib extension (performance optimization).
+      if not expanded:match('%.bib$') then
+        local uv = vim.uv or vim.loop
+        local stat = uv.fs_stat(expanded)
+        if stat and stat.type == 'directory' then
+          return
+        end
       end
       dedup[expanded] = true
       resolved[#resolved + 1] = expanded
