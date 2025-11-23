@@ -4,8 +4,8 @@
 
 BibTeX completion source for [blink.cmp](https://github.com/Saghen/blink.cmp).
 It indexes `\addbibresource` declarations and project BibTeX files to offer
-citation-key completion together with APA-styled previews in LaTeX, Markdown and
-R Markdown buffers.
+citation-key completion together with APA-styled previews in LaTeX, Typst,
+Markdown and R Markdown Typst buffers.
 
 ## Why this plugin?
 
@@ -15,7 +15,7 @@ R Markdown buffers.
 
 - **[cmp-bibtex](https://github.com/texlaborg/cmp-bibtex)** is the established citation source for `nvim-cmp`. It's GPL-licensed and tightly coupled to the `cmp` API, making it unsuitable for direct use with blink.cmp.
 
-`blink-cmp-bibtex` fills the gap by providing a native, MIT-licensed completion source designed specifically for blink.cmp. It focuses solely on citation completion with minimal overhead, making the transition from cmp seamless for users with citation-heavy workflows in LaTeX, Markdown, and R Markdown.
+`blink-cmp-bibtex` fills the gap by providing a native, MIT-licensed completion source designed specifically for blink.cmp. It focuses solely on citation completion with minimal overhead, making the transition from cmp seamless for users with citation-heavy workflows in LaTeX, Typst, Markdown, and R Markdown.
 
 ## Features
 
@@ -202,6 +202,7 @@ If you're upgrading from the old `blink-bibtex` name, you'll need to update your
 ### 1. Update your lazy.nvim plugin specification
 
 **Before:**
+
 ```lua
 {
   "saghen/blink.cmp",
@@ -213,6 +214,7 @@ If you're upgrading from the old `blink-bibtex` name, you'll need to update your
 ```
 
 **After:**
+
 ```lua
 {
   "saghen/blink.cmp",
@@ -226,6 +228,7 @@ If you're upgrading from the old `blink-bibtex` name, you'll need to update your
 ### 2. Update the module name in your blink.cmp config
 
 **Before:**
+
 ```lua
 providers = {
   bibtex = {
@@ -236,6 +239,7 @@ providers = {
 ```
 
 **After:**
+
 ```lua
 providers = {
   bibtex = {
@@ -248,6 +252,7 @@ providers = {
 ### 3. Update any direct setup() calls
 
 **Before:**
+
 ```lua
 require("blink-bibtex").setup({
   -- config
@@ -255,6 +260,7 @@ require("blink-bibtex").setup({
 ```
 
 **After:**
+
 ```lua
 require("blink-cmp-bibtex").setup({
   -- config
