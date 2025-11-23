@@ -72,7 +72,7 @@ Only values you set will override the built-ins.
 
 ```lua
 require("blink-cmp-bibtex").setup({
-  filetypes = { "tex", "plaintex", "markdown", "rmd" },
+  filetypes = { "tex", "plaintex", "markdown", "rmd", "typst" },
   files = { vim.fn.expand("~/research/global.bib") },
   search_paths = { "references.bib", "bib/*.bib" },
   root_markers = { ".git", "texmf.cnf" },
