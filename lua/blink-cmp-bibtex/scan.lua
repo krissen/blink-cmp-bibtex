@@ -266,7 +266,13 @@ end
 --- @return string The root directory path
 local function find_root(bufname, markers)
   local uv = vim.uv or vim.loop
-  local dir = bufname ~= '' and vim.fs.dirname(bufname) or (uv.cwd() or '')
+  -- Ensure bufname is not just a directory marker like '.' or empty
+  local dir
+  if not bufname or bufname == '' or bufname == '.' then
+    dir = uv.cwd() or ''
+  else
+    dir = vim.fs.dirname(bufname)
+  end
   if markers and #markers > 0 then
     local found = vim.fs.find(markers, { upward = true, path = dir })[1]
     if found then
@@ -349,7 +355,8 @@ function M.resolve_bib_paths(bufnr, opts)
   local bufname = vim.api.nvim_buf_get_name(bufnr)
   local root = find_root(bufname, opts.root_markers or {})
   local buffer_dir = nil
-  if bufname and bufname ~= '' then
+  -- Only try to get dirname if bufname is a valid file path (not empty, not just '.')
+  if bufname and bufname ~= '' and bufname ~= '.' then
     buffer_dir = vim.fs.dirname(bufname)
   end
   if not buffer_dir or buffer_dir == '' then
@@ -370,6 +377,17 @@ function M.resolve_bib_paths(bufnr, opts)
       expanded = normalize_path(joinpath(anchor, path))
     end
     if expanded and not dedup[expanded] then
+      -- Filter out directories to prevent them from being passed to blink.cmp
+      -- which could cause "Is a directory" errors in frecency database creation.
+      -- Only check if path doesn't have a .bib extension (performance optimization).
+      if not expanded:match('%.bib$') then
+        local uv = vim.uv or vim.loop
+        local stat = uv.fs_stat(expanded)
+        if stat and stat.type == 'directory' then
+          dedup[expanded] = true
+          return
+        end
+      end
       dedup[expanded] = true
       resolved[#resolved + 1] = expanded
     end
