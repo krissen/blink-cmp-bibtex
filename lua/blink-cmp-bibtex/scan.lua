@@ -222,7 +222,7 @@ local function find_typst_imports(lines)
     -- #import "file.typ"
     -- #import "file.typ": item
     -- #import "file.typ": *
-    -- Match with double quotes (captures path before first quote or colon)
+    -- Capture the path within quotes
     for path in line:gmatch('#import%s+"([^"]+)"') do
       if path:match('%.typ$') then
         imports[#imports + 1] = trim(path)
@@ -392,7 +392,7 @@ end
 
 --- Ensure a path has a bibliography extension (.bib, .yml, or .yaml)
 --- @param path string|nil The path to check
---- @return string|nil The path with .bib extension if needed
+--- @return string|nil The path with .bib extension if needed (unless it already has .yml or .yaml)
 local function ensure_bib_extension(path)
   if not path or path == '' then
     return path
