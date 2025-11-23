@@ -337,7 +337,7 @@ end
 --- @param text string The text to search
 --- @return table|nil Citation detection result or nil if no match
 local function match_typst_citation(text)
-  local prefix = text:match("@([%w:_%-%.,]+)$") -- match @abc
+  local prefix = text:match("@([%w:_%-%.,]*)$") -- match @abc or just @
   if prefix then
     return { prefix = prefix, trigger = "typst" }
   end
@@ -351,8 +351,9 @@ end
 --- Extract citation context from the current line and cursor position
 --- @param context table Completion context from blink.cmp
 --- @param opts table Configuration options
+--- @param filetype string|nil The filetype of the current buffer
 --- @return table|nil Detection result with prefix and trigger type
-local function extract_context(context, opts)
+local function extract_context(context, opts, filetype)
   local line = context.line or ''
   local col = context.cursor and context.cursor[2] or #line
   local text = line:sub(1, col)
@@ -360,11 +361,22 @@ local function extract_context(context, opts)
   if latex then
     return latex
   end
+  -- Check Typst patterns first for Typst files to prevent Pandoc interception
+  if filetype == 'typst' then
+    local typst = match_typst_citation(text)
+    if typst then
+      return typst
+    end
+  end
   local pandoc = match_pandoc_citation(text)
   if pandoc then
     return pandoc
   end
-  return match_typst_citation(text)
+  -- Check Typst patterns for other filetypes as fallback
+  if filetype ~= 'typst' then
+    return match_typst_citation(text)
+  end
+  return nil
 end
 
 --- Filter entries by prefix match
@@ -412,7 +424,7 @@ function Source:get_completions(context, callback)
     callback(empty_response())
     return function() end
   end
-  local detection = extract_context(context, self.opts)
+  local detection = extract_context(context, self.opts, ft)
   if not detection then
     callback(empty_response())
     return function() end
