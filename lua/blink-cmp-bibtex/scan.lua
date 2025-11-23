@@ -218,13 +218,21 @@ end
 local function find_typst_imports(lines)
   local imports = {}
   for _, line in ipairs(lines) do
-    -- Match #import "path/to/file.typ" with double quotes
-    for path in line:gmatch('#import%s+"([^"]+%.typ)"') do
-      imports[#imports + 1] = trim(path)
+    -- Match various #import patterns:
+    -- #import "file.typ"
+    -- #import "file.typ": item
+    -- #import "file.typ": *
+    -- Match with double quotes (captures path before first quote or colon)
+    for path in line:gmatch('#import%s+"([^"]+)"') do
+      if path:match('%.typ$') then
+        imports[#imports + 1] = trim(path)
+      end
     end
-    -- Match #import 'path/to/file.typ' with single quotes
-    for path in line:gmatch("#import%s+'([^']+%.typ)'") do
-      imports[#imports + 1] = trim(path)
+    -- Match with single quotes
+    for path in line:gmatch("#import%s+'([^']+)'") do
+      if path:match('%.typ$') then
+        imports[#imports + 1] = trim(path)
+      end
     end
   end
   return imports
@@ -236,6 +244,8 @@ end
 local function read_file_lines(filepath)
   local fd, err = io.open(filepath, 'r')
   if not fd then
+    -- Silently return nil for missing imports - this is expected in many cases
+    -- as users may import files that don't exist yet or are in different locations
     return nil
   end
   local lines = {}
