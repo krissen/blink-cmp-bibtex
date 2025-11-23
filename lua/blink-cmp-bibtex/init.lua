@@ -45,8 +45,9 @@ local function sanitize_prefix(prefix)
   local normalized = prefix:gsub(';', ',')
   local segments = vim.split(normalized, ',', { trimempty = false })
   local candidate = segments[#segments] or ''
-  -- Trim whitespace in one operation
-  return candidate:match('^%s*(.-)%s*$') or ''
+  -- Trim whitespace and strip leading @ symbol (for multi-ref Pandoc citations)
+  local trimmed = candidate:match('^%s*(.-)%s*$') or ''
+  return trimmed:match('^@(.*)$') or trimmed
 end
 
 --- Format author/editor list into a readable string
