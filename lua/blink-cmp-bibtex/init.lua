@@ -337,7 +337,8 @@ end
 --- @param text string The text to search
 --- @return table|nil Citation detection result or nil if no match
 local function match_typst_citation(text)
-  local prefix = text:match("@([%w:_%-%.,]*)$") -- match @abc or just @
+  -- Restrict Typst citation pattern: only match @ after a word character or underscore
+  local prefix = text:match("[%w_]@([%w:_%-%.,]*)$") -- match word@abc, not line-start or after non-word
   if prefix then
     return { prefix = prefix, trigger = "typst" }
   end
