@@ -317,11 +317,11 @@ local function unquote(value)
     return ''
   end
   -- Remove matching double quotes
-  if value:match('^".*"$') then
+  if value:match('^"[^"]*"$') then
     return value:sub(2, -2)
   end
   -- Remove matching single quotes
-  if value:match("^'.*'$") then
+  if value:match("^'[^']*'$") then
     return value:sub(2, -2)
   end
   return value
@@ -399,6 +399,8 @@ function M.parse_hayagriva(content)
       -- Finalize any previous array being collected
       if collecting_array and current_field and #array_values > 0 then
         current_entry[current_field] = table.concat(array_values, ' and ')
+        collecting_array = false
+        current_field = nil
         array_values = {}
       end
       
