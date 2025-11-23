@@ -322,11 +322,19 @@ local function find_typst_bibliography(lines, base_dir, visited)
   for _, line in ipairs(lines) do
     -- Match #bibliography("path/to/file.bib") with double quotes
     for path in line:gmatch('#bibliography%s*%(%s*"([^"]+)"%s*%)') do
-      resources[#resources + 1] = trim(path)
+      path = trim(path)
+      if not is_absolute(path) and base_dir then
+        path = joinpath(base_dir, path)
+      end
+      resources[#resources + 1] = path
     end
     -- Match #bibliography('path/to/file.bib') with single quotes
     for path in line:gmatch("#bibliography%s*%(%s*'([^']+)'%s*%)") do
-      resources[#resources + 1] = trim(path)
+      path = trim(path)
+      if not is_absolute(path) and base_dir then
+        path = joinpath(base_dir, path)
+      end
+      resources[#resources + 1] = path
     end
   end
   
