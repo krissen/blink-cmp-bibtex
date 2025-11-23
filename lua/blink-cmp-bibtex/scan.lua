@@ -218,12 +218,22 @@ end
 local function find_typst_imports(lines)
   local imports = {}
   for _, line in ipairs(lines) do
-    -- Match various #import patterns with both single and double quotes:
+    -- Match #import patterns with double quotes:
     -- #import "file.typ"
     -- #import "file.typ": item
     -- #import "file.typ": *
-    -- Capture the path within quotes
-    for path in line:gmatch('#import%s+["\']([^"\']+)["\']') do
+    -- Capture the path within double quotes
+    for path in line:gmatch('#import%s+"([^"]+)"') do
+      if path:match('%.typ$') then
+        imports[#imports + 1] = trim(path)
+      end
+    end
+    -- Match #import patterns with single quotes:
+    -- #import 'file.typ'
+    -- #import 'file.typ': item
+    -- #import 'file.typ': *
+    -- Capture the path within single quotes
+    for path in line:gmatch("#import%s+'([^']+)'") do
       if path:match('%.typ$') then
         imports[#imports + 1] = trim(path)
       end
