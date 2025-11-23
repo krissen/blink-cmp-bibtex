@@ -218,9 +218,12 @@ end
 local function find_typst_bibliography(lines)
   local resources = {}
   for _, line in ipairs(lines) do
-    -- Match #bibliography("path/to/file.bib") or #bibliography("file.bib")
-    -- Also handle single quotes: #bibliography('file.bib')
-    for path in line:gmatch('#bibliography%s*%(%s*["\']([^"\']+)["\']%s*%)') do
+    -- Match #bibliography("path/to/file.bib") with double quotes
+    for path in line:gmatch('#bibliography%s*%(%s*"([^"]+)"%s*%)') do
+      resources[#resources + 1] = trim(path)
+    end
+    -- Match #bibliography('path/to/file.bib') with single quotes
+    for path in line:gmatch("#bibliography%s*%(%s*'([^']+)'%s*%)") do
       resources[#resources + 1] = trim(path)
     end
   end
