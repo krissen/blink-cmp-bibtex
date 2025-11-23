@@ -260,6 +260,54 @@ local function read_file_lines(filepath)
   return lines
 end
 
+--- Platform-specific path separator
+--- @type string
+local path_separator = package.config:sub(1, 1)
+
+--- Join two path components
+--- @param base string|nil Base path
+--- @param relative string|nil Relative path
+--- @return string|nil The joined path
+local function joinpath(base, relative)
+  if base == nil or base == '' then
+    return relative
+  end
+  if relative == nil or relative == '' then
+    return base
+  end
+  if vim.fs and vim.fs.joinpath then
+    return vim.fs.joinpath(base, relative)
+  end
+  if base:sub(-1) == path_separator then
+    return base .. relative
+  end
+  return base .. path_separator .. relative
+end
+
+--- Normalize a path, expanding home directory and resolving relative paths
+--- @param path string The path to normalize
+--- @return string|nil The normalized path or nil if invalid
+local function normalize_path(path)
+  if not path or path == '' then
+    return nil
+  end
+  local uv = vim.uv or vim.loop
+  local home = uv.os_homedir()
+  if home then
+    path = path:gsub('^~', home)
+  end
+  path = vim.fn.expand(path)
+  path = vim.fs.normalize(path)
+  return path
+end
+
+--- Check if a path is absolute
+--- @param path string The path to check
+--- @return boolean True if the path is absolute
+local function is_absolute(path)
+  return path:match('^%a:[\\/]') or path:sub(1, 1) == '/'
+end
+
 --- Find bibliography files in Typst #bibliography() declarations
 --- Recursively follows #import statements to find bibliographies in imported files
 --- @param lines string[] Buffer lines to search
@@ -312,54 +360,6 @@ local function find_typst_bibliography(lines, base_dir, visited)
   end
   
   return resources
-end
-
---- Platform-specific path separator
---- @type string
-local path_separator = package.config:sub(1, 1)
-
---- Join two path components
---- @param base string|nil Base path
---- @param relative string|nil Relative path
---- @return string|nil The joined path
-local function joinpath(base, relative)
-  if base == nil or base == '' then
-    return relative
-  end
-  if relative == nil or relative == '' then
-    return base
-  end
-  if vim.fs and vim.fs.joinpath then
-    return vim.fs.joinpath(base, relative)
-  end
-  if base:sub(-1) == path_separator then
-    return base .. relative
-  end
-  return base .. path_separator .. relative
-end
-
---- Normalize a path, expanding home directory and resolving relative paths
---- @param path string The path to normalize
---- @return string|nil The normalized path or nil if invalid
-local function normalize_path(path)
-  if not path or path == '' then
-    return nil
-  end
-  local uv = vim.uv or vim.loop
-  local home = uv.os_homedir()
-  if home then
-    path = path:gsub('^~', home)
-  end
-  path = vim.fn.expand(path)
-  path = vim.fs.normalize(path)
-  return path
-end
-
---- Check if a path is absolute
---- @param path string The path to check
---- @return boolean True if the path is absolute
-local function is_absolute(path)
-  return path:match('^%a:[\\/]') or path:sub(1, 1) == '/'
 end
 
 --- Find the project root directory based on markers
