@@ -2,10 +2,10 @@
 
 > **⚠️ IMPORTANT**: This plugin was recently renamed from `blink-bibtex` to `blink-cmp-bibtex`. If you're upgrading, please see the [Migration Guide](#migration-from-blink-bibtex) below.
 
-BibTeX completion source for [blink.cmp](https://github.com/Saghen/blink.cmp).
-It indexes `\addbibresource` declarations and project BibTeX files to offer
+BibTeX and Hayagriva completion source for [blink.cmp](https://github.com/Saghen/blink.cmp).
+It indexes `\addbibresource` declarations and project bibliography files to offer
 citation-key completion together with APA-styled previews in LaTeX, Typst,
-Markdown and R Markdown Typst buffers.
+Markdown and R Markdown buffers.
 
 ## Why this plugin?
 
@@ -20,12 +20,12 @@ Markdown and R Markdown Typst buffers.
 ## Features
 
 - Native blink.cmp source implemented in pure Lua (no `blink.compat`).
-- Discovers `.bib` files from the current buffer, configured search paths or an
-  explicit `files` list.
+- Discovers `.bib` files (BibTeX) and `.yml`/`.yaml` files (Hayagriva) from the current buffer, configured search paths or an explicit `files` list.
+- For Typst files, follows `#import` statements to find bibliography declarations in imported files.
 - Parses entries lazily, normalizes common LaTeX accents (e.g. `{"a}`, `\aa`)
   and caches the results with modification-time tracking.
 - Supports common citation commands (`\cite`, `\parencite`, `\textcite`,
-  `\smartcite`, `\footcite`, `\nocite`, Pandoc `[@key]`, …) including optional
+  `\smartcite`, `\footcite`, `\nocite`, Pandoc `[@key]`, Typst `@key` and `#cite(<key>)`, …) including optional
   pre/post notes.
 - Generates APA-inspired previews showing author, year, title and container data
   with selectable templates (APA default, IEEE optional).
@@ -103,6 +103,8 @@ Custom styles can be added by extending `require("blink-cmp-bibtex").setup()` wi
   bibliographies.
 - Markdown YAML metadata lines such as `bibliography: references.bib` are
   respected.
+- Typst `#bibliography()` declarations are detected, including those in imported files via `#import` statements.
+- Both BibTeX (`.bib`) and Hayagriva (`.yml`, `.yaml`) bibliography files are supported and automatically detected based on file extension.
 - `opts.search_paths` accepts either file paths or glob patterns relative to the
   detected project root (based on `opts.root_markers`).
 - `opts.files` is a list of absolute or `vim.fn.expand`-friendly paths that are
@@ -152,6 +154,49 @@ Or within brackets for inline citations:
 
 As you type, blink.cmp shows matching keys with the same preview information as
 in LaTeX mode.
+
+### In Typst files
+
+Typst supports both simple `@key` citations and the more explicit `#cite(<key>)` syntax:
+
+```typst
+@Nie
+```
+
+Or using the cite function:
+
+```typst
+#cite(<Nie
+```
+
+#### Typst bibliography formats
+
+Typst supports two bibliography file formats:
+
+1. **BibTeX** (`.bib` files) - Traditional format used in LaTeX
+2. **Hayagriva** (`.yml` or `.yaml` files) - Typst's native YAML-based bibliography format
+
+Both formats are automatically detected and parsed. For example:
+
+```typst
+#bibliography("references.bib")  // BibTeX format
+#bibliography("references.yml")  // Hayagriva format
+```
+
+#### Import tracking
+
+The plugin automatically follows Typst `#import` statements to find bibliography declarations in imported files. For example:
+
+```typst
+// main.typ
+#import "refs.typ": refs
+@Nie  // Completion works here!
+
+// refs.typ (in the same directory)
+#let refs = bibliography("references.bib")
+```
+
+The plugin will detect the `bibliography()` call in `refs.typ` and index the entries from `references.bib`, even though it's not directly declared in the main file.
 
 ### Completion details
 
