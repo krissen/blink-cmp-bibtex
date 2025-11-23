@@ -170,6 +170,11 @@ end
    ```markdown
    [@<trigger completion>
    ```
+   
+   **Pandoc multi-key citations:**
+   ```markdown
+   [@key1; @<trigger completion>
+   ```
 
 5. **File discovery:**
    - Test `\addbibresource{file.bib}`
