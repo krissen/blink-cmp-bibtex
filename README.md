@@ -150,6 +150,12 @@ Or within brackets for inline citations:
 [@Nie
 ```
 
+Multiple references are supported using semicolons:
+
+```markdown
+[@ref1; @Nie
+```
+
 As you type, blink.cmp shows matching keys with the same preview information as
 in LaTeX mode.
 
