@@ -318,6 +318,9 @@ function M.parse_hayagriva(content)
   -- Hayagriva entries are top-level keys with nested fields
   local current_key = nil
   local current_entry = nil
+  local current_field = nil
+  local collecting_array = false
+  local array_values = {}
   
   for line in content:gmatch('[^\r\n]+') do
     -- Skip empty lines and comments
@@ -328,6 +331,14 @@ function M.parse_hayagriva(content)
     -- Top-level key (entry key) - no leading whitespace before key
     local key = line:match('^([%w_%-]+):%s*$')
     if key then
+      -- Finalize any array being collected
+      if collecting_array and current_field and #array_values > 0 then
+        current_entry[current_field] = table.concat(array_values, ' and ')
+        collecting_array = false
+        array_values = {}
+        current_field = nil
+      end
+      
       -- Save previous entry if exists
       if current_key and current_entry then
         entries[#entries + 1] = {
@@ -342,25 +353,54 @@ function M.parse_hayagriva(content)
       goto continue
     end
     
+    -- Array item (starts with - after whitespace)
+    local array_item = line:match('^%s+%-%s+(.+)$')
+    if array_item and collecting_array then
+      array_item = array_item:gsub('^"(.*)"$', '%1'):gsub("^'(.*)'$", '%1')
+      array_values[#array_values + 1] = trim(array_item)
+      goto continue
+    end
+    
     -- Field within an entry (has leading whitespace)
     local field, value = line:match('^%s+([%w_%-]+):%s*(.*)$')
     if field and current_entry then
+      -- Finalize any previous array being collected
+      if collecting_array and current_field and #array_values > 0 then
+        current_entry[current_field] = table.concat(array_values, ' and ')
+        array_values = {}
+      end
+      
       -- Remove quotes from value if present
       value = value:gsub('^"(.*)"$', '%1'):gsub("^'(.*)'$", '%1')
       value = trim(value)
       
       -- Map Hayagriva fields to BibTeX fields
       local field_lower = field:lower()
-      if field_lower == 'date' then
-        current_entry.year = value
-      elseif field_lower == 'type' then
-        current_entry.type = value
+      
+      if value == '' then
+        -- Empty value means array follows
+        collecting_array = true
+        current_field = field_lower == 'date' and 'year' or field_lower
       else
-        current_entry[field_lower] = value
+        collecting_array = false
+        current_field = nil
+        
+        if field_lower == 'date' then
+          current_entry.year = value
+        elseif field_lower == 'type' then
+          current_entry.type = value
+        else
+          current_entry[field_lower] = value
+        end
       end
     end
     
     ::continue::
+  end
+  
+  -- Finalize any array being collected
+  if collecting_array and current_field and #array_values > 0 then
+    current_entry[current_field] = table.concat(array_values, ' and ')
   end
   
   -- Add the last entry
