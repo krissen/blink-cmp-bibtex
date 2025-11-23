@@ -384,6 +384,7 @@ function M.resolve_bib_paths(bufnr, opts)
         local uv = vim.uv or vim.loop
         local stat = uv.fs_stat(expanded)
         if stat and stat.type == 'directory' then
+          dedup[expanded] = true
           return
         end
       end
