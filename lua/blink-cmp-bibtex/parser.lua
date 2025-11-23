@@ -308,6 +308,25 @@ function M.parse_file(path)
   return M.parse(content)
 end
 
+--- Remove surrounding quotes from a string
+--- Handles both single and double quotes, but only if they match at both ends
+--- @param value string The string to unquote
+--- @return string The unquoted string
+local function unquote(value)
+  if not value or value == '' then
+    return ''
+  end
+  -- Remove matching double quotes
+  if value:match('^".*"$') then
+    return value:sub(2, -2)
+  end
+  -- Remove matching single quotes
+  if value:match("^'.*'$") then
+    return value:sub(2, -2)
+  end
+  return value
+end
+
 --- Parse Hayagriva YAML content into BibTeX-compatible entries
 --- @param content string The YAML file content
 --- @return table[] List of parsed entries
@@ -315,7 +334,8 @@ function M.parse_hayagriva(content)
   local entries = {}
   
   -- Simple YAML parser for Hayagriva format
-  -- Hayagriva entries are top-level keys with nested fields
+  -- This is a basic parser that handles common Hayagriva structures
+  -- It doesn't aim to be a full YAML parser but supports the subset used by Hayagriva
   local current_key = nil
   local current_entry = nil
   local current_field = nil
@@ -329,7 +349,8 @@ function M.parse_hayagriva(content)
     end
     
     -- Top-level key (entry key) - no leading whitespace before key
-    local key = line:match('^([%w_%-]+):%s*$')
+    -- Supports keys with alphanumeric, underscore, hyphen, dot, and colon
+    local key = line:match('^([%w_%-.:]+):%s*$')
     if key then
       -- Finalize any array being collected
       if collecting_array and current_field and #array_values > 0 then
@@ -356,7 +377,7 @@ function M.parse_hayagriva(content)
     -- Array item (starts with - after whitespace)
     local array_item = line:match('^%s+%-%s+(.+)$')
     if array_item and collecting_array then
-      array_item = array_item:gsub('^"(.*)"$', '%1'):gsub("^'(.*)'$", '%1')
+      array_item = unquote(array_item)
       array_values[#array_values + 1] = trim(array_item)
       goto continue
     end
@@ -371,7 +392,7 @@ function M.parse_hayagriva(content)
       end
       
       -- Remove quotes from value if present
-      value = value:gsub('^"(.*)"$', '%1'):gsub("^'(.*)'$", '%1')
+      value = unquote(value)
       value = trim(value)
       
       -- Map Hayagriva fields to BibTeX fields
