@@ -7,7 +7,7 @@ local M = {}
 --- Default configuration options
 --- @type table
 local defaults = {
-  filetypes = { "tex", "plaintex", "markdown", "rmd" },
+  filetypes = { "tex", "plaintex", "markdown", "rmd", "typst" },
   files = {},
   search_paths = {},
   root_markers = { ".git", "latexmkrc", "texmf.cnf" },
