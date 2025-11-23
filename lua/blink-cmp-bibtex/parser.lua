@@ -299,7 +299,80 @@ function M.parse_file(path)
   end
   local content = fd:read('*a')
   fd:close()
+  
+  -- Check file extension to determine format
+  if path:match('%.ya?ml$') then
+    return M.parse_hayagriva(content)
+  end
+  
   return M.parse(content)
+end
+
+--- Parse Hayagriva YAML content into BibTeX-compatible entries
+--- @param content string The YAML file content
+--- @return table[] List of parsed entries
+function M.parse_hayagriva(content)
+  local entries = {}
+  
+  -- Simple YAML parser for Hayagriva format
+  -- Hayagriva entries are top-level keys with nested fields
+  local current_key = nil
+  local current_entry = nil
+  
+  for line in content:gmatch('[^\r\n]+') do
+    -- Skip empty lines and comments
+    if line:match('^%s*$') or line:match('^%s*#') then
+      goto continue
+    end
+    
+    -- Top-level key (entry key) - no leading whitespace before key
+    local key = line:match('^([%w_%-]+):%s*$')
+    if key then
+      -- Save previous entry if exists
+      if current_key and current_entry then
+        entries[#entries + 1] = {
+          key = current_key,
+          entrytype = current_entry.type or 'misc',
+          fields = current_entry,
+        }
+      end
+      -- Start new entry
+      current_key = key
+      current_entry = {}
+      goto continue
+    end
+    
+    -- Field within an entry (has leading whitespace)
+    local field, value = line:match('^%s+([%w_%-]+):%s*(.*)$')
+    if field and current_entry then
+      -- Remove quotes from value if present
+      value = value:gsub('^"(.*)"$', '%1'):gsub("^'(.*)'$", '%1')
+      value = trim(value)
+      
+      -- Map Hayagriva fields to BibTeX fields
+      local field_lower = field:lower()
+      if field_lower == 'date' then
+        current_entry.year = value
+      elseif field_lower == 'type' then
+        current_entry.type = value
+      else
+        current_entry[field_lower] = value
+      end
+    end
+    
+    ::continue::
+  end
+  
+  -- Add the last entry
+  if current_key and current_entry then
+    entries[#entries + 1] = {
+      key = current_key,
+      entrytype = current_entry.type or 'misc',
+      fields = current_entry,
+    }
+  end
+  
+  return entries
 end
 
 return M
