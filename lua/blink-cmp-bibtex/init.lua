@@ -343,13 +343,13 @@ local function match_typst_citation(text)
   if prefix then
     return { prefix = prefix, trigger = "typst" }
   end
-  local boundary = text:match("[^%w@]@([%w:_%-%.,]*)$") -- match after non-word character
-  if boundary then
-    return { prefix = boundary, trigger = "typst" }
+  local prefix_after_nonword = text:match("[^%w@]@([%w:_%-%.,]*)$") -- match after non-word character
+  if prefix_after_nonword then
+    return { prefix = prefix_after_nonword, trigger = "typst" }
   end
-  local line_start = text:match("^@([%w:_%-%.,]*)$") -- match at line start
-  if line_start then
-    return { prefix = line_start, trigger = "typst" }
+  local prefix_at_start = text:match("^@([%w:_%-%.,]*)$") -- match at line start
+  if prefix_at_start then
+    return { prefix = prefix_at_start, trigger = "typst" }
   end
   local prefix_cite = text:match("#cite%s*%(%s*<([^>]*)$") -- match #cite(<abc
   if prefix_cite then
