@@ -212,6 +212,21 @@ local function find_yaml_bibliography(lines)
   return resources
 end
 
+--- Find bibliography files in Typst #bibliography() declarations
+--- @param lines string[] Buffer lines to search
+--- @return string[] List of bibliography file paths
+local function find_typst_bibliography(lines)
+  local resources = {}
+  for _, line in ipairs(lines) do
+    -- Match #bibliography("path/to/file.bib") or #bibliography("file.bib")
+    -- Also handle single quotes: #bibliography('file.bib')
+    for path in line:gmatch('#bibliography%s*%(%s*["\']([^"\']+)["\']%s*%)') do
+      resources[#resources + 1] = trim(path)
+    end
+  end
+  return resources
+end
+
 --- Platform-specific path separator
 --- @type string
 local path_separator = package.config:sub(1, 1)
@@ -331,6 +346,10 @@ function M.find_bib_files_from_buffer(bufnr)
   end
   local yaml_resources = find_yaml_bibliography(lines)
   for _, resource in ipairs(yaml_resources) do
+    resources[#resources + 1] = ensure_bib_extension(resource)
+  end
+  local typst_resources = find_typst_bibliography(lines)
+  for _, resource in ipairs(typst_resources) do
     resources[#resources + 1] = ensure_bib_extension(resource)
   end
   return resources
