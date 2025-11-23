@@ -359,9 +359,9 @@ function M.parse_hayagriva(content)
     end
     
     -- Top-level key (entry key) - no leading whitespace before key
-    -- Supports keys with alphanumeric, underscore, hyphen, and dot
-    -- Note: We don't include colon in the pattern to avoid ambiguity with the field separator
-    local key = line:match('^([%w_%-%.]+):%s*$')
+    -- Supports keys with alphanumeric, underscore, and hyphen
+    -- We use a conservative pattern to avoid ambiguity with the colon field separator
+    local key = line:match('^([%w_%-]+):%s*$')
     if key then
       -- Finalize any array being collected
       if collecting_array and current_field and #array_values > 0 then
