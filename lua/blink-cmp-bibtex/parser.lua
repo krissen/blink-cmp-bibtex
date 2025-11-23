@@ -327,6 +327,16 @@ local function unquote(value)
   return value
 end
 
+--- Map Hayagriva field names to BibTeX equivalents
+--- @param field_name string The Hayagriva field name
+--- @return string The BibTeX field name
+local function map_hayagriva_field(field_name)
+  if field_name == 'date' then
+    return 'year'
+  end
+  return field_name
+end
+
 --- Parse Hayagriva YAML content into BibTeX-compatible entries
 --- @param content string The YAML file content
 --- @return table[] List of parsed entries
@@ -349,8 +359,9 @@ function M.parse_hayagriva(content)
     end
     
     -- Top-level key (entry key) - no leading whitespace before key
-    -- Supports keys with alphanumeric, underscore, hyphen, dot, and colon
-    local key = line:match('^([%w_%-.:]+):%s*$')
+    -- Supports keys with alphanumeric, underscore, hyphen, and dot
+    -- Note: We don't include colon in the pattern to avoid ambiguity with the field separator
+    local key = line:match('^([%w_%-%.]+):%s*$')
     if key then
       -- Finalize any array being collected
       if collecting_array and current_field and #array_values > 0 then
@@ -397,21 +408,20 @@ function M.parse_hayagriva(content)
       
       -- Map Hayagriva fields to BibTeX fields
       local field_lower = field:lower()
+      local mapped_field = map_hayagriva_field(field_lower)
       
       if value == '' then
         -- Empty value means array follows
         collecting_array = true
-        current_field = field_lower == 'date' and 'year' or field_lower
+        current_field = mapped_field
       else
         collecting_array = false
         current_field = nil
         
-        if field_lower == 'date' then
-          current_entry.year = value
-        elseif field_lower == 'type' then
+        if field_lower == 'type' then
           current_entry.type = value
         else
-          current_entry[field_lower] = value
+          current_entry[mapped_field] = value
         end
       end
     end
