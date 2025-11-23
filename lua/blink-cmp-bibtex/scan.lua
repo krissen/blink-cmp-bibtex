@@ -212,11 +212,51 @@ local function find_yaml_bibliography(lines)
   return resources
 end
 
---- Find bibliography files in Typst #bibliography() declarations
+--- Find Typst import statements
 --- @param lines string[] Buffer lines to search
+--- @return string[] List of imported file paths
+local function find_typst_imports(lines)
+  local imports = {}
+  for _, line in ipairs(lines) do
+    -- Match #import "path/to/file.typ" with double quotes
+    for path in line:gmatch('#import%s+"([^"]+%.typ)"') do
+      imports[#imports + 1] = trim(path)
+    end
+    -- Match #import 'path/to/file.typ' with single quotes
+    for path in line:gmatch("#import%s+'([^']+%.typ)'") do
+      imports[#imports + 1] = trim(path)
+    end
+  end
+  return imports
+end
+
+--- Read lines from a file
+--- @param filepath string The file path to read
+--- @return string[]|nil List of lines or nil if file cannot be read
+local function read_file_lines(filepath)
+  local fd, err = io.open(filepath, 'r')
+  if not fd then
+    return nil
+  end
+  local lines = {}
+  for line in fd:lines() do
+    lines[#lines + 1] = line
+  end
+  fd:close()
+  return lines
+end
+
+--- Find bibliography files in Typst #bibliography() declarations
+--- Recursively follows #import statements to find bibliographies in imported files
+--- @param lines string[] Buffer lines to search
+--- @param base_dir string|nil Directory to resolve relative imports from
+--- @param visited table<string, boolean>|nil Table to track visited files (prevents cycles)
 --- @return string[] List of bibliography file paths
-local function find_typst_bibliography(lines)
+local function find_typst_bibliography(lines, base_dir, visited)
+  visited = visited or {}
   local resources = {}
+  
+  -- Find direct bibliography declarations
   for _, line in ipairs(lines) do
     -- Match #bibliography("path/to/file.bib") with double quotes
     for path in line:gmatch('#bibliography%s*%(%s*"([^"]+)"%s*%)') do
@@ -227,6 +267,36 @@ local function find_typst_bibliography(lines)
       resources[#resources + 1] = trim(path)
     end
   end
+  
+  -- Follow imports to find bibliographies in imported files
+  if base_dir then
+    local imports = find_typst_imports(lines)
+    for _, import_path in ipairs(imports) do
+      local full_path
+      if is_absolute(import_path) then
+        full_path = normalize_path(import_path)
+      else
+        full_path = normalize_path(joinpath(base_dir, import_path))
+      end
+      
+      if full_path and not visited[full_path] then
+        visited[full_path] = true
+        local import_lines = read_file_lines(full_path)
+        if import_lines then
+          local import_dir = vim.fs.dirname(full_path)
+          local imported_resources = find_typst_bibliography(import_lines, import_dir, visited)
+          for _, resource in ipairs(imported_resources) do
+            -- Resolve imported resource paths relative to the imported file's directory
+            if not is_absolute(resource) then
+              resource = joinpath(import_dir, resource)
+            end
+            resources[#resources + 1] = resource
+          end
+        end
+      end
+    end
+  end
+  
   return resources
 end
 
@@ -310,7 +380,7 @@ local function expand_search_path(path, root)
   return resolved
 end
 
---- Ensure a path has a .bib extension
+--- Ensure a path has a bibliography extension (.bib, .yml, or .yaml)
 --- @param path string|nil The path to check
 --- @return string|nil The path with .bib extension if needed
 local function ensure_bib_extension(path)
@@ -320,7 +390,8 @@ local function ensure_bib_extension(path)
   if path:find('[%*%?%[]') then
     return path
   end
-  if path:match('%.bib$') then
+  -- Accept .bib, .yml, .yaml extensions as-is
+  if path:match('%.bib$') or path:match('%.ya?ml$') then
     return path
   end
   local filename = path:match('([^/\\]+)$') or path
@@ -341,6 +412,14 @@ function M.find_bib_files_from_buffer(bufnr)
   if not ok or not lines then
     return {}
   end
+  
+  -- Get buffer directory for resolving imports
+  local bufname = vim.api.nvim_buf_get_name(bufnr)
+  local buffer_dir = nil
+  if bufname and bufname ~= '' then
+    buffer_dir = vim.fs.dirname(bufname)
+  end
+  
   local resources = {}
   for _, line in ipairs(lines) do
     for _, resource in ipairs(extract_command_paths(line)) do
@@ -351,7 +430,7 @@ function M.find_bib_files_from_buffer(bufnr)
   for _, resource in ipairs(yaml_resources) do
     resources[#resources + 1] = ensure_bib_extension(resource)
   end
-  local typst_resources = find_typst_bibliography(lines)
+  local typst_resources = find_typst_bibliography(lines, buffer_dir)
   for _, resource in ipairs(typst_resources) do
     resources[#resources + 1] = ensure_bib_extension(resource)
   end
