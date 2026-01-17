@@ -26,13 +26,14 @@ stylua lua/
 
 ## Architecture
 
-Five modules under `lua/blink-cmp-bibtex/`:
+Six modules under `lua/blink-cmp-bibtex/`:
 
 1. **config.lua** - Default settings, `setup()` and `extend()` functions for configuration
 2. **parser.lua** - BibTeX/Hayagriva parsing with LaTeX accent normalization to UTF-8
 3. **scan.lua** - File discovery from `\addbibresource{}`, YAML metadata, Typst `#bibliography()`, `#import` statements, and glob patterns
 4. **cache.lua** - Mtime-based caching of parsed entries
-5. **init.lua** - blink.cmp source implementation (`Source:get_completions`, `Source:resolve`)
+5. **local_bib.lua** - Local bibliography management (copy entries from global to project-local files)
+6. **init.lua** - blink.cmp source implementation (`Source:get_completions`, `Source:resolve`, `Source:execute`)
 
 **Data flow**: Buffer → scan.lua (file discovery) → cache.lua (mtime check) → parser.lua (parse if needed) → init.lua (format & filter) → blink.cmp
 
@@ -45,6 +46,20 @@ Entry point: `plugin/blink-cmp-bibtex.lua`
 - Multi-key citations supported: `\cite{key1,key2,key3}` and `[@key1; @key2]`
 - Typst support includes following `#import` statements to find bibliography declarations
 - Preview styles (APA, IEEE) are extensible via `preview_styles` table in init.lua
+
+## Language Requirements
+
+**IMPORTANT: All written content in this project MUST be in English only.**
+
+This includes:
+- Code comments (inline and block)
+- Documentation files (README, docs/, etc.)
+- Commit messages
+- JSDoc annotations
+- Error messages and notifications
+- Variable and function names
+
+No exceptions. Do not use Swedish or any other language.
 
 ## Code Style
 
