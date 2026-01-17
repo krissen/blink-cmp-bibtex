@@ -349,16 +349,17 @@ function M.parse_hayagriva(content)
   local lines = {}
   local line_starts = {}
   local pos = 1
-  for line in content:gmatch('([^\r\n]*)[\r\n]?') do
-    if pos <= #content then
-      lines[#lines + 1] = line
-      line_starts[#lines] = pos
-      pos = pos + #line + 1
-      -- Handle \r\n
-      if content:sub(pos - 1, pos - 1) == '\r' and content:sub(pos, pos) == '\n' then
-        pos = pos + 1
-      end
-    end
+  -- Pattern captures line content and position after newline
+  for line, new_pos in content:gmatch('([^\r\n]*)\r?\n()') do
+    lines[#lines + 1] = line
+    line_starts[#lines] = pos
+    pos = new_pos
+  end
+  -- Handle final line not terminated by newline
+  if pos <= #content then
+    local line = content:sub(pos)
+    lines[#lines + 1] = line
+    line_starts[#lines] = pos
   end
 
   -- Simple YAML parser for Hayagriva format
