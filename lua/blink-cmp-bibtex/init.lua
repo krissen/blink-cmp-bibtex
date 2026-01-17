@@ -38,6 +38,24 @@ local function table_is_empty(tbl)
   return next(tbl) == nil
 end
 
+--- Check if a file path is in the global_files list
+--- @param path string The file path to check
+--- @param global_files table|nil List of global file patterns
+--- @return boolean True if the path matches a global file pattern
+local function is_global_file(path, global_files)
+  if not global_files or #global_files == 0 then
+    return false
+  end
+  for _, gf in ipairs(global_files) do
+    local expanded = vim.fn.expand(gf)
+    local normalized = vim.fs.normalize(expanded)
+    if path == expanded or path == normalized then
+      return true
+    end
+  end
+  return false
+end
+
 --- Sanitize a citation key prefix by handling multi-key citations
 --- Extracts the last citation key being typed when multiple keys are separated by commas or semicolons
 --- @param prefix string|nil The raw prefix string
@@ -459,20 +477,28 @@ function Source:get_completions(context, callback)
     local filtered = filter_entries(entries, prefix)
     local items = {}
     local style = get_preview_style(self.opts.preview_style)
+    local show_indicator = self.opts.source_indicator
     for _, entry in ipairs(filtered) do
       local ctx = build_entry_context(entry)
+      local is_global = is_global_file(entry.source_path, self.opts.global_files)
+      local detail_text = style.detail(ctx)
+      if show_indicator then
+        local indicator = is_global and '[G] ' or '[L] '
+        detail_text = indicator .. detail_text
+      end
       -- Store entry in lookup table for later use (e.g., copy to local bib)
       if entry.raw then
         entry_lookup[entry.key] = {
           raw = entry.raw,
           source_path = entry.source_path,
+          is_global = is_global,
         }
       end
       items[#items + 1] = {
         label = entry.key,
         insertText = entry.key,
         kind = completion_kind,
-        detail = style.detail(ctx),
+        detail = detail_text,
         documentation = style.documentation(ctx),
         data = {
           source = 'blink-cmp-bibtex',

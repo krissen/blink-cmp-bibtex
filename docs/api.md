@@ -61,20 +61,25 @@ Configure global default settings.
 
 **Parameters:**
 - `opts` (table, optional): Configuration options
-  - `filetypes` (string[]): Supported filetypes (default: `{"tex", "plaintex", "markdown", "rmd"}`)
-  - `files` (string[]): List of absolute BibTeX file paths to always include
+  - `filetypes` (string[]): Supported filetypes (default: `{"tex", "plaintex", "markdown", "rmd", "typst"}`)
+  - `files` (string[]): List of local BibTeX file paths to always include
+  - `global_files` (string[]): List of global (shared) BibTeX file paths (shown with `[G]` indicator)
   - `search_paths` (string[]): Glob patterns or paths to search for BibTeX files
   - `root_markers` (string[]): Files/directories indicating project root (default: `{".git", "latexmkrc", "texmf.cnf"}`)
   - `citation_commands` (string[]): LaTeX citation commands to recognize
   - `preview_style` (string): Preview template name (`"apa"` or `"ieee"`, default: `"apa"`)
+  - `source_indicator` (boolean): Show `[L]`/`[G]` source indicators (default: `true`)
   - `max_entries` (number): Maximum entries to collect (default: 4000)
 
 **Example:**
 ```lua
 require('blink-cmp-bibtex').setup({
   filetypes = { "tex", "markdown" },
+  files = { "references.bib" },
+  global_files = { vim.fn.expand("~/research/master.bib") },
   preview_style = "ieee",
-  search_paths = { "references.bib", "bib/*.bib" }
+  source_indicator = true,
+  search_paths = { "bib/*.bib" }
 })
 ```
 
@@ -134,6 +139,7 @@ Collect all entries from multiple BibTeX files.
   - `entrytype` (string): Entry type (e.g., "article", "book")
   - `fields` (table): Field values
   - `source_path` (string): Path to source file
+  - `raw` (string): Raw BibTeX entry text
 
 ### `cache.invalidate(path)`
 
@@ -254,17 +260,27 @@ The parser automatically converts common LaTeX accent commands to UTF-8:
 
 ## Citation Command Support
 
-The following LaTeX citation commands are supported:
+The following citation commands are supported:
 
 - Standard: `\cite`, `\citep`, `\citet`
 - BibLaTeX: `\parencite`, `\textcite`, `\footcite`, `\smartcite`, `\autocite`, `\nocite`
 - Pandoc: `[@key]`, `@key`
+- Typst: `@key`, `#cite(<key>)`
 
-All commands support optional arguments for pre/post notes:
+All LaTeX commands support optional arguments for pre/post notes:
 ```latex
 \parencite[see][p. 42]{key}
 \textcite[]{key}
 ```
+
+## Source Indicators
+
+Completion items display `[L]` or `[G]` indicators to show the source of each entry:
+
+- `[L]` – Entry is from a **local** bibliography (files in `files`, `search_paths`, or detected from buffer)
+- `[G]` – Entry is from a **global** bibliography (files listed in `global_files`)
+
+This feature is enabled by default. Set `source_indicator = false` to disable.
 
 ## Buffer Discovery
 
