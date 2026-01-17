@@ -7,6 +7,8 @@ It indexes `\addbibresource` declarations and project bibliography files to offe
 citation-key completion together with APA-styled previews in LaTeX, Typst,
 Markdown and R Markdown buffers.
 
+**Quick links:** [Features](#features) · [Installation](#installation) · [Configuration](#configuration) · [Usage](#usage) · [Alternatives](#alternatives)
+
 ## Why this plugin?
 
 `blink-cmp-bibtex` was created to bring BibTeX citation completion to [blink.cmp](https://github.com/Saghen/blink.cmp) users. While excellent alternatives exist, they have different trade-offs:
