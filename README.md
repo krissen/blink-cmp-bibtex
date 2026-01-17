@@ -81,22 +81,31 @@ require("blink-cmp-bibtex").setup({
   root_markers = { ".git", "texmf.cnf" },
   citation_commands = { "cite", "parencite", "textcite" },
   preview_style = "ieee",      -- or "apa" (default)
-  source_indicator = true,     -- Show [L]/[G] indicators (default: true)
+  source_indicator = true,     -- Show source indicators (default: true)
 })
 ```
 
 ### Source indicators
 
 When you have both local (project) and global (shared) bibliography files,
-completion items display `[L]` or `[G]` indicators to show where each entry
-comes from:
+completion items display nuanced indicators showing where each entry comes from
+and whether local and global versions differ:
 
-- `[L]` – Entry is from a **local** bibliography (files in `files`, `search_paths`,
-  or detected from buffer)
-- `[G]` – Entry is from a **global** bibliography (files listed in `global_files`)
+| Indicator | Meaning |
+|-----------|---------|
+| `[L]` | Entry exists **only** in local bibliography |
+| `[G]` | Entry exists **only** in global bibliography |
+| `[L=G]` | Entry exists in **both**, content is **identical** |
+| `[L≠G]` | Entry exists in **both**, content **differs** |
 
-This is enabled by default. To disable the indicators, set `source_indicator = false`
-in your configuration.
+Indicators only appear when your configuration includes both local and global
+sources. If all entries come from the same source type (e.g., only local files),
+no indicators are shown.
+
+When an entry exists in both local and global files, the completion menu shows
+the local version (deduplication prefers local).
+
+To disable indicators, set `source_indicator = false` in your configuration.
 
 ### Preview styles
 
