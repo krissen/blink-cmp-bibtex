@@ -18,6 +18,17 @@ local defaults = {
   pandoc_triggers = { "[@", "@" },
   preview_style = "apa",
   max_entries = 4000,
+  local_bib = {
+    enabled = false,
+    target = nil,
+    targets = {},
+    patterns = { "local.bib", "references.bib" },
+    auto_add = false,
+    notify_on_add = true,
+    notify_on_duplicate = false,
+    create_if_missing = false,
+    duplicate_check = true,
+  },
 }
 
 --- Deep copy a table to avoid mutation
