@@ -107,6 +107,49 @@ the local version (deduplication prefers local).
 
 To disable indicators, set `source_indicator = false` in your configuration.
 
+### Local bibliography management
+
+When working with both global (shared) and local (project) bibliography files, you can
+automatically copy entries from global files to a local project file. This is useful
+when you want to maintain a self-contained project bibliography while drawing from a
+master reference library.
+
+```lua
+require("blink-cmp-bibtex").setup({
+  global_files = { vim.fn.expand("~/research/master.bib") },
+  search_paths = { "references.bib" },
+  local_bib = {
+    enabled = true,
+    target = "plus.bib",         -- Local file to copy entries to
+    auto_add = true,             -- Copy on completion accept
+    create_if_missing = true,    -- Create target if it doesn't exist
+    notify_on_add = true,        -- Show notification when entry is added
+    duplicate_check = true,      -- Skip if entry already exists (default: true)
+  },
+})
+```
+
+**How it works:**
+
+1. When you accept a completion for a `[G]` (global-only) entry, the BibTeX entry
+   is automatically copied to your `local_bib.target` file.
+2. The entry appears in future completions as `[L=G]` (exists in both, identical).
+3. You can also manually copy entries using the `:BibTeXCopyToLocal [key]` command.
+
+**Configuration options:**
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `enabled` | boolean | `false` | Enable local bibliography management |
+| `target` | string | `nil` | Path to local bib file (relative to project root) |
+| `targets` | table | `nil` | Per-directory targets: `{ ["/path/to/project"] = "refs.bib" }` |
+| `patterns` | table | `nil` | Fallback patterns to search: `{ "local.bib", "plus.bib" }` |
+| `auto_add` | boolean | `false` | Automatically copy global entries on accept |
+| `create_if_missing` | boolean | `false` | Create target file if it doesn't exist |
+| `notify_on_add` | boolean | `true` | Show notification when entry is added |
+| `notify_on_duplicate` | boolean | `false` | Show notification for duplicate entries |
+| `duplicate_check` | boolean | `true` | Check for existing entries before adding |
+
 ### Preview styles
 
 `preview_style` picks the formatter for the completion detail and documentation
