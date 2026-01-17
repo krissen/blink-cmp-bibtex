@@ -46,10 +46,12 @@ local function is_global_file(path, global_files)
   if not global_files or #global_files == 0 then
     return false
   end
+  -- Normalize input path for consistent comparison
+  local normalized_path = vim.fs.normalize(path)
   for _, gf in ipairs(global_files) do
     local expanded = vim.fn.expand(gf)
     local normalized = vim.fs.normalize(expanded)
-    if path == expanded or path == normalized then
+    if normalized_path == normalized then
       return true
     end
   end
@@ -712,16 +714,37 @@ function Source.copy_to_local_bib(key)
     end
   end
 
-  -- Look up the entry in our cache
+  -- Get current bib paths for validation
+  local bufnr = vim.api.nvim_get_current_buf()
+  local paths = scan.resolve_bib_paths(bufnr, opts)
+
+  -- Build set of current paths for validation
+  local current_paths = {}
+  for _, p in ipairs(paths) do
+    current_paths[vim.fs.normalize(p)] = true
+  end
+
+  -- Look up the entry in our cache, validating source_path is current
   local entry_data = entry_lookup[key]
+  if entry_data and entry_data.source_path then
+    local normalized = vim.fs.normalize(entry_data.source_path)
+    if not current_paths[normalized] then
+      -- Cached entry is from a different project/context, invalidate it
+      entry_data = nil
+    end
+  end
+
   if not entry_data or not entry_data.raw then
-    -- Entry not in lookup - try to load from all known bib files
-    local bufnr = vim.api.nvim_get_current_buf()
-    local paths = scan.resolve_bib_paths(bufnr, opts)
+    -- Entry not in lookup or stale - reload from current bib files
     local entries = cache.collect(paths, opts.max_entries)
     for _, entry in ipairs(entries) do
       if entry.key == key and entry.raw then
-        entry_data = { raw = entry.raw, source_path = entry.source_path }
+        local is_global = is_global_file(entry.source_path, opts.global_files)
+        entry_data = {
+          raw = entry.raw,
+          source_path = entry.source_path,
+          is_global = is_global,
+        }
         entry_lookup[key] = entry_data
         break
       end

@@ -345,6 +345,22 @@ end
 function M.parse_hayagriva(content)
   local entries = {}
 
+  -- Split content into lines while preserving line info for raw extraction
+  local lines = {}
+  local line_starts = {}
+  local pos = 1
+  for line in content:gmatch('([^\r\n]*)[\r\n]?') do
+    if pos <= #content then
+      lines[#lines + 1] = line
+      line_starts[#lines] = pos
+      pos = pos + #line + 1
+      -- Handle \r\n
+      if content:sub(pos - 1, pos - 1) == '\r' and content:sub(pos, pos) == '\n' then
+        pos = pos + 1
+      end
+    end
+  end
+
   -- Simple YAML parser for Hayagriva format
   -- This is a basic parser that handles common Hayagriva structures
   -- It doesn't aim to be a full YAML parser but supports the subset used by Hayagriva
@@ -353,8 +369,9 @@ function M.parse_hayagriva(content)
   local current_field = nil
   local collecting_array = false
   local array_values = {}
+  local entry_start_line = nil
 
-  for line in content:gmatch('[^\r\n]+') do
+  for line_num, line in ipairs(lines) do
     -- Skip empty lines and comments
     if line:match('^%s*$') or line:match('^%s*#') then
       goto continue
@@ -375,15 +392,20 @@ function M.parse_hayagriva(content)
 
       -- Save previous entry if exists
       if current_key and current_entry then
+        -- Extract raw text for previous entry
+        local entry_end = line_starts[line_num] - 1
+        local raw = content:sub(line_starts[entry_start_line], entry_end):gsub('%s+$', '')
         entries[#entries + 1] = {
           key = current_key,
           entrytype = current_entry.type or 'misc',
           fields = current_entry,
+          raw = raw,
         }
       end
       -- Start new entry
       current_key = key
       current_entry = {}
+      entry_start_line = line_num
       goto continue
     end
 
@@ -438,10 +460,12 @@ function M.parse_hayagriva(content)
 
   -- Add the last entry
   if current_key and current_entry then
+    local raw = content:sub(line_starts[entry_start_line]):gsub('%s+$', '')
     entries[#entries + 1] = {
       key = current_key,
       entrytype = current_entry.type or 'misc',
       fields = current_entry,
+      raw = raw,
     }
   end
 
