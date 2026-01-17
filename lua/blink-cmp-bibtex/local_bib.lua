@@ -53,6 +53,15 @@ local function make_absolute(path, base)
   return base .. '/' .. path
 end
 
+--- Ensure parent directory exists for a file path
+--- @param path string The file path
+local function ensure_parent_dir(path)
+  local dir = vim.fs.dirname(path)
+  if dir and dir ~= '' then
+    vim.fn.mkdir(dir, 'p')
+  end
+end
+
 --- Resolve the target bib file based on configuration
 --- Priority: targets[cwd] > target > pattern match
 --- @param opts table The local_bib configuration
@@ -115,6 +124,7 @@ end
 --- @param path string The file path to create
 --- @return boolean True if file was created successfully
 function M.create_empty_file(path)
+  ensure_parent_dir(path)
   local fd, err = io.open(path, 'w')
   if not fd then
     notify_warn(string.format('Cannot create %s: %s', path, err or 'unknown error'))
@@ -130,6 +140,7 @@ end
 --- @param raw string The raw BibTeX entry text
 --- @return boolean True if entry was appended successfully
 function M.append_entry(path, raw)
+  ensure_parent_dir(path)
   local fd, err = io.open(path, 'a')
   if not fd then
     notify_warn(string.format('Cannot write to %s: %s', path, err or 'unknown error'))
