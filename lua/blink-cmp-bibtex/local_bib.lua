@@ -135,18 +135,63 @@ function M.create_empty_file(path)
   return true
 end
 
+--- Determine the prefix needed before appending an entry
+--- Ensures a blank line between entries
+--- @param path string The file path to check
+--- @return string The prefix to prepend (empty, single newline, or double newline)
+local function get_append_prefix(path)
+  local uv = vim.uv or vim.loop
+  local stat = uv.fs_stat(path)
+  if not stat or stat.size == 0 then
+    return ''
+  end
+
+  -- Read last 2 bytes to check how file ends
+  local fd = uv.fs_open(path, 'r', 438)
+  if not fd then
+    return '\n\n'
+  end
+
+  local read_size = math.min(stat.size, 2)
+  local last_bytes = uv.fs_read(fd, read_size, stat.size - read_size)
+  uv.fs_close(fd)
+
+  if not last_bytes then
+    return '\n\n'
+  end
+
+  -- Ensure blank line between entries
+  if last_bytes:match('\n\n$') then
+    return ''
+  elseif last_bytes:match('\n$') then
+    return '\n'
+  else
+    return '\n\n'
+  end
+end
+
 --- Append a BibTeX entry to a file
 --- @param path string The file path to append to
 --- @param raw string The raw BibTeX entry text
 --- @return boolean True if entry was appended successfully
 function M.append_entry(path, raw)
   ensure_parent_dir(path)
+
+  local prefix = get_append_prefix(path)
+
   local fd, err = io.open(path, 'a')
   if not fd then
     notify_warn(string.format('Cannot write to %s: %s', path, err or 'unknown error'))
     return false
   end
-  fd:write('\n' .. raw .. '\n')
+
+  local content = prefix .. raw
+  -- Ensure entry ends with newline
+  if not content:match('\n$') then
+    content = content .. '\n'
+  end
+
+  fd:write(content)
   fd:close()
   return true
 end
