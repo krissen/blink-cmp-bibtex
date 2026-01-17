@@ -132,9 +132,18 @@ Custom styles can be added by extending `require("blink-cmp-bibtex").setup()` wi
 - Typst `#bibliography()` declarations are detected, including those in imported files via `#import` statements.
 - Both BibTeX (`.bib`) and Hayagriva (`.yml`, `.yaml`) bibliography files are supported and automatically detected based on file extension.
 - `opts.search_paths` accepts either file paths or glob patterns relative to the
-  detected project root (based on `opts.root_markers`).
+  detected project root (based on `opts.root_markers`). These are treated as
+  **local** sources.
 - `opts.files` is a list of absolute or `vim.fn.expand`-friendly paths that are
-  always included.
+  always included. These are treated as **local** sources (shown with `[L]`
+  indicator when source indicators are enabled).
+- `opts.global_files` is a list of paths to shared/master bibliography files.
+  These are treated as **global** sources (shown with `[G]` indicator).
+
+  **Note:** Source indicators (`[L]`, `[G]`, `[L=G]`, `[L≠G]`) only appear when
+  you have both local and global sources configured. If you only use `files`
+  and `search_paths` without `global_files`, no indicators are shown since all
+  entries are implicitly local.
 
 ### blink.cmp provider options
 
