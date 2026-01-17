@@ -1,13 +1,15 @@
 # blink-cmp-bibtex
 
-> **⚠️ IMPORTANT**: This plugin was recently renamed from `blink-bibtex` to `blink-cmp-bibtex`. If you're upgrading, please see the [Migration Guide](#migration-from-blink-bibtex) below.
-
 BibTeX and Hayagriva completion source for [blink.cmp](https://github.com/Saghen/blink.cmp).
 It indexes `\addbibresource` declarations and project bibliography files to offer
 citation-key completion together with APA-styled previews in LaTeX, Typst,
 Markdown and R Markdown buffers.
 
-**Quick links:** [Features](#features) · [Installation](#installation) · [Configuration](#configuration) · [Usage](#usage) · [Alternatives](#alternatives)
+---
+
+[Features](#features) · [Installation](#installation) · [Configuration](#configuration) · [Usage](#usage) · [Alternatives](#alternatives)
+
+---
 
 ## Why this plugin?
 
