@@ -301,12 +301,12 @@ function M.parse_file(path)
   end
   local content = fd:read('*a')
   fd:close()
-  
+
   -- Check file extension to determine format
   if path:match('%.ya?ml$') then
     return M.parse_hayagriva(content)
   end
-  
+
   return M.parse(content)
 end
 
@@ -344,7 +344,7 @@ end
 --- @return table[] List of parsed entries
 function M.parse_hayagriva(content)
   local entries = {}
-  
+
   -- Simple YAML parser for Hayagriva format
   -- This is a basic parser that handles common Hayagriva structures
   -- It doesn't aim to be a full YAML parser but supports the subset used by Hayagriva
@@ -353,13 +353,13 @@ function M.parse_hayagriva(content)
   local current_field = nil
   local collecting_array = false
   local array_values = {}
-  
+
   for line in content:gmatch('[^\r\n]+') do
     -- Skip empty lines and comments
     if line:match('^%s*$') or line:match('^%s*#') then
       goto continue
     end
-    
+
     -- Top-level key (entry key) - no leading whitespace before key
     -- Supports keys with alphanumeric, underscore, and hyphen
     -- We use a conservative pattern to avoid ambiguity with the colon field separator
@@ -372,7 +372,7 @@ function M.parse_hayagriva(content)
         array_values = {}
         current_field = nil
       end
-      
+
       -- Save previous entry if exists
       if current_key and current_entry then
         entries[#entries + 1] = {
@@ -386,7 +386,7 @@ function M.parse_hayagriva(content)
       current_entry = {}
       goto continue
     end
-    
+
     -- Array item (starts with - after whitespace)
     local array_item = line:match('^%s+%-%s+(.+)$')
     if array_item and collecting_array then
@@ -394,26 +394,24 @@ function M.parse_hayagriva(content)
       array_values[#array_values + 1] = trim(array_item)
       goto continue
     end
-    
+
     -- Field within an entry (has leading whitespace)
     local field, value = line:match('^%s+([%w_%-]+):%s*(.*)$')
     if field and current_entry then
       -- Finalize any previous array being collected
       if collecting_array and current_field and #array_values > 0 then
         current_entry[current_field] = table.concat(array_values, ' and ')
-        collecting_array = false
-        current_field = nil
         array_values = {}
       end
-      
+
       -- Remove quotes from value if present
       value = unquote(value)
       value = trim(value)
-      
+
       -- Map Hayagriva fields to BibTeX fields
       local field_lower = field:lower()
       local mapped_field = map_hayagriva_field(field_lower)
-      
+
       if value == '' then
         -- Empty value means array follows
         collecting_array = true
@@ -421,7 +419,7 @@ function M.parse_hayagriva(content)
       else
         collecting_array = false
         current_field = nil
-        
+
         if field_lower == 'type' then
           current_entry.type = value
         else
@@ -429,15 +427,15 @@ function M.parse_hayagriva(content)
         end
       end
     end
-    
+
     ::continue::
   end
-  
+
   -- Finalize any array being collected
   if collecting_array and current_field and #array_values > 0 then
     current_entry[current_field] = table.concat(array_values, ' and ')
   end
-  
+
   -- Add the last entry
   if current_key and current_entry then
     entries[#entries + 1] = {
@@ -446,7 +444,7 @@ function M.parse_hayagriva(content)
       fields = current_entry,
     }
   end
-  
+
   return entries
 end
 

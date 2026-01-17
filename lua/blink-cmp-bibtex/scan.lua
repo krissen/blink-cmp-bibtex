@@ -246,7 +246,7 @@ end
 --- @param filepath string The file path to read
 --- @return string[]|nil List of lines or nil if file cannot be read
 local function read_file_lines(filepath)
-  local fd, err = io.open(filepath, 'r')
+  local fd = io.open(filepath, 'r')
   if not fd then
     -- Silently return nil for missing imports - this is expected in many cases
     -- as users may import files that don't exist yet or are in different locations
@@ -317,7 +317,7 @@ end
 local function find_typst_bibliography(lines, base_dir, visited)
   visited = visited or {}
   local resources = {}
-  
+
   -- Find direct bibliography declarations
   for _, line in ipairs(lines) do
     -- Match #bibliography("path/to/file.bib") with double quotes
@@ -337,7 +337,7 @@ local function find_typst_bibliography(lines, base_dir, visited)
       resources[#resources + 1] = path
     end
   end
-  
+
   -- Follow imports to find bibliographies in imported files
   if base_dir then
     local imports = find_typst_imports(lines)
@@ -348,7 +348,7 @@ local function find_typst_bibliography(lines, base_dir, visited)
       else
         full_path = normalize_path(joinpath(base_dir, import_path))
       end
-      
+
       if full_path and not visited[full_path] then
         visited[full_path] = true
         local import_lines = read_file_lines(full_path)
@@ -366,7 +366,7 @@ local function find_typst_bibliography(lines, base_dir, visited)
       end
     end
   end
-  
+
   return resources
 end
 
@@ -440,14 +440,14 @@ function M.find_bib_files_from_buffer(bufnr)
   if not ok or not lines then
     return {}
   end
-  
+
   -- Get buffer directory for resolving imports
   local bufname = vim.api.nvim_buf_get_name(bufnr)
   local buffer_dir = nil
   if bufname and bufname ~= '' then
     buffer_dir = vim.fs.dirname(bufname)
   end
-  
+
   local resources = {}
   for _, line in ipairs(lines) do
     for _, resource in ipairs(extract_command_paths(line)) do
