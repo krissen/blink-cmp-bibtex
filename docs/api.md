@@ -63,12 +63,12 @@ Configure global default settings.
 - `opts` (table, optional): Configuration options
   - `filetypes` (string[]): Supported filetypes (default: `{"tex", "plaintex", "markdown", "rmd", "typst"}`)
   - `files` (string[]): List of local BibTeX file paths to always include
-  - `global_files` (string[]): List of global (shared) BibTeX file paths (shown with `[G]` indicator)
+  - `global_files` (string[]): List of global (shared) BibTeX file paths
   - `search_paths` (string[]): Glob patterns or paths to search for BibTeX files
   - `root_markers` (string[]): Files/directories indicating project root (default: `{".git", "latexmkrc", "texmf.cnf"}`)
   - `citation_commands` (string[]): LaTeX citation commands to recognize
   - `preview_style` (string): Preview template name (`"apa"` or `"ieee"`, default: `"apa"`)
-  - `source_indicator` (boolean): Show `[L]`/`[G]` source indicators (default: `true`)
+  - `source_indicator` (boolean): Show source indicators when mixing local and global files (default: `true`)
   - `max_entries` (number): Maximum entries to collect (default: 4000)
 
 **Example:**
@@ -275,10 +275,22 @@ All LaTeX commands support optional arguments for pre/post notes:
 
 ## Source Indicators
 
-Completion items display `[L]` or `[G]` indicators to show the source of each entry:
+When using both local and global bibliography files, completion items display
+nuanced indicators showing where each entry comes from:
 
-- `[L]` – Entry is from a **local** bibliography (files in `files`, `search_paths`, or detected from buffer)
-- `[G]` – Entry is from a **global** bibliography (files listed in `global_files`)
+| Indicator | Meaning |
+|-----------|---------|
+| `[L]` | Entry exists **only** in local bibliography |
+| `[G]` | Entry exists **only** in global bibliography |
+| `[L=G]` | Entry exists in **both**, content is **identical** |
+| `[L≠G]` | Entry exists in **both**, content **differs** |
+
+Indicators only appear when your configuration includes both local and global
+sources. If all entries come from the same source type (e.g., only local files),
+no indicators are shown.
+
+When an entry exists in both local and global files, the completion menu shows
+the local version (deduplication prefers local).
 
 This feature is enabled by default. Set `source_indicator = false` to disable.
 

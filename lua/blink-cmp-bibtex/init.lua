@@ -56,6 +56,103 @@ local function is_global_file(path, global_files)
   return false
 end
 
+--- Normalize whitespace for content comparison
+--- @param s string|nil
+--- @return string
+local function normalize_whitespace(s)
+  if not s then
+    return ''
+  end
+  return s:gsub('%s+', ' '):gsub('^%s+', ''):gsub('%s+$', '')
+end
+
+--- Source status for an entry
+--- @class SourceInfo
+--- @field status 'unique'|'identical'|'modified'
+--- @field is_local boolean
+--- @field is_global boolean
+
+--- Compute source status for all entries
+--- @param entries table[] Raw entries from cache.collect
+--- @param global_files table|nil List of global file patterns
+--- @return table<string, SourceInfo> Map of key -> source info
+--- @return boolean has_mixed True if entries from both local and global
+local function compute_source_status(entries, global_files)
+  -- Build set of normalized global file paths
+  local global_set = {}
+  for _, gf in ipairs(global_files or {}) do
+    local expanded = vim.fn.expand(gf)
+    local normalized = vim.fs.normalize(expanded)
+    global_set[normalized] = true
+  end
+
+  -- Group entries by key, tracking source and content
+  local by_key = {} -- key -> { local_raw, global_raw, is_local, is_global }
+
+  for _, entry in ipairs(entries) do
+    local key = entry.key
+    local path = vim.fs.normalize(entry.source_path)
+    local is_global = global_set[path] or false
+    local raw = normalize_whitespace(entry.raw)
+
+    if not by_key[key] then
+      by_key[key] = { is_local = false, is_global = false }
+    end
+
+    if is_global then
+      by_key[key].is_global = true
+      by_key[key].global_raw = by_key[key].global_raw or raw
+    else
+      by_key[key].is_local = true
+      by_key[key].local_raw = by_key[key].local_raw or raw
+    end
+  end
+
+  -- Compute status and check for mixed sources
+  local has_any_local, has_any_global = false, false
+  local result = {}
+
+  for key, info in pairs(by_key) do
+    if info.is_local then
+      has_any_local = true
+    end
+    if info.is_global then
+      has_any_global = true
+    end
+
+    local status = 'unique'
+    if info.is_local and info.is_global then
+      status = (info.local_raw == info.global_raw) and 'identical' or 'modified'
+    end
+
+    result[key] = {
+      status = status,
+      is_local = info.is_local,
+      is_global = info.is_global,
+    }
+  end
+
+  return result, (has_any_local and has_any_global)
+end
+
+--- Format source indicator based on source info
+--- @param info SourceInfo
+--- @return string
+local function format_source_indicator(info)
+  if info.status == 'unique' then
+    if info.is_local and not info.is_global then
+      return '[L]'
+    elseif info.is_global and not info.is_local then
+      return '[G]'
+    end
+  elseif info.status == 'identical' then
+    return '[L=G]'
+  elseif info.status == 'modified' then
+    return '[L≠G]'
+  end
+  return ''
+end
+
 --- Sanitize a citation key prefix by handling multi-key citations
 --- Extracts the last citation key being typed when multiple keys are separated by commas or semicolons
 --- @param prefix string|nil The raw prefix string
@@ -474,37 +571,67 @@ function Source:get_completions(context, callback)
       return
     end
     local entries = cache.collect(paths, self.opts.max_entries)
+
+    -- Compute source status from all entries (before filtering and dedup)
+    local source_status, has_mixed = compute_source_status(entries, self.opts.global_files)
+    local show_indicator = self.opts.source_indicator and has_mixed
+
     local filtered = filter_entries(entries, prefix)
+
+    -- Sort entries: local first, then global (for deduplication to prefer local)
+    table.sort(filtered, function(a, b)
+      local a_global = is_global_file(a.source_path, self.opts.global_files)
+      local b_global = is_global_file(b.source_path, self.opts.global_files)
+      if a_global ~= b_global then
+        return not a_global -- local (false) before global (true)
+      end
+      return a.key < b.key
+    end)
+
     local items = {}
     local style = get_preview_style(self.opts.preview_style)
-    local show_indicator = self.opts.source_indicator
+    local seen_keys = {}
+
     for _, entry in ipairs(filtered) do
-      local ctx = build_entry_context(entry)
-      local is_global = is_global_file(entry.source_path, self.opts.global_files)
-      local detail_text = style.detail(ctx)
-      if show_indicator then
-        local indicator = is_global and '[G] ' or '[L] '
-        detail_text = indicator .. detail_text
-      end
-      -- Store entry in lookup table for later use (e.g., copy to local bib)
-      if entry.raw then
-        entry_lookup[entry.key] = {
-          raw = entry.raw,
-          source_path = entry.source_path,
-          is_global = is_global,
+      -- Deduplicate: only process first occurrence (local preferred due to sort)
+      if not seen_keys[entry.key] then
+        seen_keys[entry.key] = true
+
+        local ctx = build_entry_context(entry)
+        local is_global = is_global_file(entry.source_path, self.opts.global_files)
+        local detail_text = style.detail(ctx)
+
+        if show_indicator then
+          local info = source_status[entry.key]
+          if info then
+            local indicator = format_source_indicator(info)
+            if indicator ~= '' then
+              detail_text = indicator .. ' ' .. detail_text
+            end
+          end
+        end
+
+        -- Store entry in lookup table for later use (e.g., copy to local bib)
+        if entry.raw then
+          entry_lookup[entry.key] = {
+            raw = entry.raw,
+            source_path = entry.source_path,
+            is_global = is_global,
+          }
+        end
+
+        items[#items + 1] = {
+          label = entry.key,
+          insertText = entry.key,
+          kind = completion_kind,
+          detail = detail_text,
+          documentation = style.documentation(ctx),
+          data = {
+            source = 'blink-cmp-bibtex',
+            key = entry.key,
+          },
         }
       end
-      items[#items + 1] = {
-        label = entry.key,
-        insertText = entry.key,
-        kind = completion_kind,
-        detail = detail_text,
-        documentation = style.documentation(ctx),
-        data = {
-          source = 'blink-cmp-bibtex',
-          key = entry.key,
-        },
-      }
     end
     callback({ items = items, is_incomplete_forward = true, is_incomplete_backward = true })
   end)
