@@ -9,6 +9,7 @@ local M = {}
 local defaults = {
   filetypes = { "tex", "plaintex", "markdown", "rmd", "typst" },
   files = {},
+  global_files = {},
   search_paths = {},
   root_markers = { ".git", "latexmkrc", "texmf.cnf" },
   citation_commands = {
@@ -17,6 +18,7 @@ local defaults = {
   },
   pandoc_triggers = { "[@", "@" },
   preview_style = "apa",
+  source_indicator = true,
   max_entries = 4000,
   local_bib = {
     enabled = false,

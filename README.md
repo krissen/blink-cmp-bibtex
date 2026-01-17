@@ -29,6 +29,8 @@ Markdown and R Markdown buffers.
   pre/post notes.
 - Generates APA-inspired previews showing author, year, title and container data
   with selectable templates (APA default, IEEE optional).
+- Shows `[L]`/`[G]` source indicators to distinguish local (project) from global
+  (shared) bibliography files.
 - Ships with sane defaults yet allows overriding behavior via
   `require("blink-cmp-bibtex").setup()` or provider-level `opts`.
 
@@ -73,13 +75,28 @@ Only values you set will override the built-ins.
 ```lua
 require("blink-cmp-bibtex").setup({
   filetypes = { "tex", "plaintex", "markdown", "rmd", "typst" },
-  files = { vim.fn.expand("~/research/global.bib") },
-  search_paths = { "references.bib", "bib/*.bib" },
+  files = { "references.bib" },                              -- Local project files
+  global_files = { vim.fn.expand("~/research/master.bib") }, -- Global shared files
+  search_paths = { "bib/*.bib" },
   root_markers = { ".git", "texmf.cnf" },
   citation_commands = { "cite", "parencite", "textcite" },
-  preview_style = "ieee", -- or "apa" (default)
+  preview_style = "ieee",      -- or "apa" (default)
+  source_indicator = true,     -- Show [L]/[G] indicators (default: true)
 })
 ```
+
+### Source indicators
+
+When you have both local (project) and global (shared) bibliography files,
+completion items display `[L]` or `[G]` indicators to show where each entry
+comes from:
+
+- `[L]` – Entry is from a **local** bibliography (files in `files`, `search_paths`,
+  or detected from buffer)
+- `[G]` – Entry is from a **global** bibliography (files listed in `global_files`)
+
+This is enabled by default. To disable the indicators, set `source_indicator = false`
+in your configuration.
 
 ### Preview styles
 
@@ -209,14 +226,14 @@ The plugin will detect the `bibliography()` call in `refs.typ` and index the ent
 blink.cmp renders two panes for each matched item:
 
 - The completion row itself ("detail" column) contains the key plus a concise
-  APA-style summary (`Author (Year) – Title`).
+  APA-style summary (`[L] Author (Year) – Title` or `[G] Author (Year) – Title`).
 - The documentation pane (typically shown below or beside the menu) expands the
   same entry with publisher/journal, place, DOI/URL, etc.
 
 Each completion item exposes:
 
 - `label`: the citation key.
-- `detail`: short APA-like string (`Author (Year) – Title`).
+- `detail`: source indicator plus APA-like string (`[L] Author (Year) – Title`).
 - `documentation`: multi-line APA preview covering author/editor, year, title,
   container, publisher and DOI/URL when available.
 
