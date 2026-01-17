@@ -46,10 +46,15 @@ end
 --- @param base string|nil The base directory (defaults to cwd)
 --- @return string The absolute path
 local function make_absolute(path, base)
-  if path:match('^/') or path:match('^%a:') then
+  -- Check for Unix absolute path or Windows absolute path (with separator after drive)
+  if path:match('^/') or path:match('^%a:[/\\]') then
     return path
   end
   base = base or get_cwd()
+  if vim.fs.joinpath then
+    return vim.fs.joinpath(base, path)
+  end
+  -- Fallback for older Neovim versions
   return base .. '/' .. path
 end
 
