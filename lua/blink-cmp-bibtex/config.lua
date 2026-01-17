@@ -16,7 +16,6 @@ local defaults = {
     "cite", "parencite", "textcite", "footcite", "smartcite",
     "autocite", "nocite", "citep", "citet",
   },
-  pandoc_triggers = { "[@", "@" },
   preview_style = "apa",
   source_indicator = true,
   max_entries = 4000,

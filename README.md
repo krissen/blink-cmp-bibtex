@@ -142,7 +142,7 @@ require("blink-cmp-bibtex").setup({
 |--------|------|---------|-------------|
 | `enabled` | boolean | `false` | Enable local bibliography management |
 | `target` | string | `nil` | Path to local bib file (relative to project root) |
-| `targets` | table | `nil` | Per-directory targets: `{ ["/path/to/project"] = "refs.bib" }` |
+| `targets` | table | `{}` | Per-directory targets: `{ ["/path/to/project"] = "refs.bib" }` |
 | `patterns` | table | `{ "local.bib", "references.bib" }` | Fallback patterns to search |
 | `auto_add` | boolean | `false` | Automatically copy global entries on accept |
 | `create_if_missing` | boolean | `false` | Create target file if it doesn't exist |
