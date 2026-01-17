@@ -152,7 +152,7 @@ local function get_append_prefix(path)
   end
 
   -- Read last 2 bytes to check how file ends
-  local fd = uv.fs_open(path, 'r', 438)
+  local fd = uv.fs_open(path, 'r', 0)
   if not fd then
     return '\n\n'
   end
