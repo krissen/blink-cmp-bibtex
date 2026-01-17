@@ -5,11 +5,16 @@
 local config = require('blink-cmp-bibtex.config')
 local scan = require('blink-cmp-bibtex.scan')
 local cache = require('blink-cmp-bibtex.cache')
+local local_bib = require('blink-cmp-bibtex.local_bib')
 
 --- @class Source
 --- @field opts table Configuration options for this source instance
 local Source = {}
 Source.__index = Source
+
+--- Global lookup table for entry raw text, keyed by citation key
+--- @type table<string, {raw: string, source_path: string}>
+local entry_lookup = {}
 
 --- Default completion kind (fallback to 1 if blink.cmp types unavailable)
 --- @type number
@@ -456,12 +461,23 @@ function Source:get_completions(context, callback)
     local style = get_preview_style(self.opts.preview_style)
     for _, entry in ipairs(filtered) do
       local ctx = build_entry_context(entry)
+      -- Store entry in lookup table for later use (e.g., copy to local bib)
+      if entry.raw then
+        entry_lookup[entry.key] = {
+          raw = entry.raw,
+          source_path = entry.source_path,
+        }
+      end
       items[#items + 1] = {
         label = entry.key,
         insertText = entry.key,
         kind = completion_kind,
         detail = style.detail(ctx),
         documentation = style.documentation(ctx),
+        data = {
+          source = 'blink-cmp-bibtex',
+          key = entry.key,
+        },
       }
     end
     callback({ items = items, is_incomplete_forward = true, is_incomplete_backward = true })
@@ -480,5 +496,63 @@ end
 
 --- Setup function exposed for user configuration
 Source.setup = config.setup
+
+--- Copy a BibTeX entry to the local bib file
+--- @param key string|nil The citation key to copy (if nil, try to detect from cursor)
+--- @return boolean True if entry was copied successfully
+function Source.copy_to_local_bib(key)
+  local opts = config.get()
+  if not opts.local_bib or not opts.local_bib.enabled then
+    local msg = 'local_bib is not enabled. Set local_bib.enabled = true in your config'
+    vim.notify(msg, vim.log.levels.WARN, { title = 'blink-cmp-bibtex' })
+    return false
+  end
+
+  -- If no key provided, try to detect from cursor position
+  if not key or key == '' then
+    local line = vim.api.nvim_get_current_line()
+    local col = vim.api.nvim_win_get_cursor(0)[2]
+    -- Try to extract citation key under/before cursor
+    local text = line:sub(1, col + 1)
+    -- Match citation key patterns
+    key = text:match('@([%w:_%-]+)$')
+      or text:match('{([%w:_%-]+)$')
+      or text:match(',([%w:_%-]+)$')
+    if not key then
+      vim.notify('No citation key found at cursor', vim.log.levels.WARN, { title = 'blink-cmp-bibtex' })
+      return false
+    end
+  end
+
+  -- Look up the entry in our cache
+  local entry_data = entry_lookup[key]
+  if not entry_data or not entry_data.raw then
+    -- Entry not in lookup - try to load from all known bib files
+    local bufnr = vim.api.nvim_get_current_buf()
+    local paths = scan.resolve_bib_paths(bufnr, opts)
+    local entries = cache.collect(paths, opts.max_entries)
+    for _, entry in ipairs(entries) do
+      if entry.key == key and entry.raw then
+        entry_data = { raw = entry.raw, source_path = entry.source_path }
+        entry_lookup[key] = entry_data
+        break
+      end
+    end
+  end
+
+  if not entry_data or not entry_data.raw then
+    local msg = string.format("Entry '%s' not found in any bib file", key)
+    vim.notify(msg, vim.log.levels.WARN, { title = 'blink-cmp-bibtex' })
+    return false
+  end
+
+  return local_bib.copy_entry(key, entry_data.raw, opts.local_bib)
+end
+
+--- Get the entry lookup table (for debugging/testing)
+--- @return table<string, {raw: string, source_path: string}>
+function Source.get_entry_lookup()
+  return entry_lookup
+end
 
 return Source

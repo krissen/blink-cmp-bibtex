@@ -252,7 +252,7 @@ end
 
 --- Parse BibTeX content into a list of entries
 --- @param content string The BibTeX file content
---- @return table[] List of parsed entries
+--- @return table[] List of parsed entries with raw text
 function M.parse(content)
   local entries = {}
   local i = 1
@@ -278,6 +278,8 @@ function M.parse(content)
       local parsed = parse_entry(block)
       if parsed then
         parsed.entrytype = entrytype:lower()
+        -- Store raw BibTeX text for later use (e.g., copying to local bib file)
+        parsed.raw = content:sub(entry_start, next_index - 1)
         entries[#entries + 1] = parsed
       end
       i = next_index

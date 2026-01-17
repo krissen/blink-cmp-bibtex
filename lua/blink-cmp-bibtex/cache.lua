@@ -62,7 +62,7 @@ end
 --- Collect all entries from multiple BibTeX files
 --- @param paths string[] List of file paths to collect from
 --- @param limit number|nil Optional maximum number of entries to collect
---- @return table[] List of all collected entries
+--- @return table[] List of all collected entries with raw BibTeX text
 function M.collect(paths, limit)
   local items = {}
   for _, path in ipairs(paths) do
@@ -73,6 +73,7 @@ function M.collect(paths, limit)
         entrytype = entry.entrytype,
         fields = entry.fields,
         source_path = path,
+        raw = entry.raw,
       }
       if limit and #items >= limit then
         return items
