@@ -473,6 +473,7 @@ end
 function M.resolve_bib_paths(bufnr, opts)
   opts = opts or {}
   local manual_files = normalize_list(resolve_option(opts.files, bufnr))
+  local global_files = normalize_list(resolve_option(opts.global_files, bufnr))
   local search_paths = normalize_list(resolve_option(opts.search_paths, bufnr))
   local buffer_files = M.find_bib_files_from_buffer(bufnr)
   local bufname = vim.api.nvim_buf_get_name(bufnr)
@@ -500,18 +501,16 @@ function M.resolve_bib_paths(bufnr, opts)
       expanded = normalize_path(joinpath(anchor, path))
     end
     if expanded and not dedup[expanded] then
-      -- Filter out directories to prevent them from being passed to blink.cmp
-      -- which could cause "Is a directory" errors in frecency database creation.
-      -- Only check if path doesn't have a .bib extension (performance optimization).
-      if not expanded:match('%.bib$') then
-        local uv = vim.uv or vim.loop
-        local stat = uv.fs_stat(expanded)
-        if stat and stat.type == 'directory' then
-          dedup[expanded] = true
-          return
-        end
-      end
       dedup[expanded] = true
+      -- Verify file exists and is not a directory
+      local uv = vim.uv or vim.loop
+      local stat = uv.fs_stat(expanded)
+      if not stat then
+        return -- File doesn't exist, skip it
+      end
+      if stat.type == 'directory' then
+        return -- Skip directories
+      end
       resolved[#resolved + 1] = expanded
     end
   end
@@ -521,11 +520,20 @@ function M.resolve_bib_paths(bufnr, opts)
   for _, path in ipairs(manual_files) do
     add_path(path)
   end
+  for _, path in ipairs(global_files) do
+    add_path(path)
+  end
   for _, path in ipairs(search_paths) do
     for _, expanded in ipairs(expand_search_path(path, root)) do
       add_path(expanded)
     end
   end
+
+  -- Auto-include local_bib.target if configured
+  if opts.local_bib and opts.local_bib.target then
+    add_path(opts.local_bib.target, root)
+  end
+
   return resolved
 end
 

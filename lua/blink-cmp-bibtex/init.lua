@@ -601,13 +601,12 @@ function Source:get_completions(context, callback)
         local is_global = is_global_file(entry.source_path, self.opts.global_files)
         local detail_text = style.detail(ctx)
 
+        -- Get indicator for labelDetails.description (shown on right side)
+        local indicator = ''
         if show_indicator then
           local info = source_status[entry.key]
           if info then
-            local indicator = format_source_indicator(info)
-            if indicator ~= '' then
-              detail_text = indicator .. ' ' .. detail_text
-            end
+            indicator = format_source_indicator(info)
           end
         end
 
@@ -625,6 +624,7 @@ function Source:get_completions(context, callback)
           insertText = entry.key,
           kind = completion_kind,
           detail = detail_text,
+          labelDetails = indicator ~= '' and { description = indicator } or nil,
           documentation = style.documentation(ctx),
           data = {
             source = 'blink-cmp-bibtex',
@@ -645,6 +645,41 @@ end
 --- @param callback function Callback to invoke with resolved item
 function Source:resolve(item, callback)
   callback(item)
+end
+
+--- Execute after a completion item is accepted
+--- Used for auto_add functionality to copy global entries to local bib
+--- @param context table Completion context from blink.cmp
+--- @param item table The accepted completion item
+--- @param callback function Callback to invoke when done
+--- @param default_implementation function Default execute implementation
+function Source:execute(context, item, callback, default_implementation)
+  -- Run default implementation first
+  if default_implementation then
+    default_implementation(context, item)
+  end
+
+  -- Check if auto_add is enabled
+  local opts = self.opts
+  if not opts.local_bib or not opts.local_bib.enabled or not opts.local_bib.auto_add then
+    callback()
+    return
+  end
+
+  -- Get entry key from item data
+  local key = item.data and item.data.key
+  if not key then
+    callback()
+    return
+  end
+
+  -- Only auto-add if entry is from a global file
+  local entry_data = entry_lookup[key]
+  if entry_data and entry_data.is_global then
+    local_bib.copy_entry(key, entry_data.raw, opts.local_bib)
+  end
+
+  callback()
 end
 
 --- Setup function exposed for user configuration
@@ -706,6 +741,49 @@ end
 --- @return table<string, {raw: string, source_path: string}>
 function Source.get_entry_lookup()
   return entry_lookup
+end
+
+--- Debug function to inspect source indicator state
+--- @return table Debug information
+function Source.debug_source_indicators()
+  local opts = config.get()
+  local bufnr = vim.api.nvim_get_current_buf()
+  local paths = scan.resolve_bib_paths(bufnr, opts)
+  local entries = cache.collect(paths, opts.max_entries)
+
+  -- Build global_set the same way as compute_source_status
+  local global_set = {}
+  for _, gf in ipairs(opts.global_files or {}) do
+    local expanded = vim.fn.expand(gf)
+    local normalized = vim.fs.normalize(expanded)
+    global_set[normalized] = true
+  end
+
+  -- Classify each entry
+  local classification = {}
+  for _, entry in ipairs(entries) do
+    local path = vim.fs.normalize(entry.source_path)
+    local is_global = global_set[path] or false
+    classification[entry.key] = {
+      source_path = entry.source_path,
+      normalized_path = path,
+      is_global = is_global,
+    }
+  end
+
+  -- Compute source status
+  local source_status, has_mixed = compute_source_status(entries, opts.global_files)
+
+  return {
+    global_files_config = opts.global_files,
+    global_set = global_set,
+    resolved_paths = paths,
+    source_indicator_enabled = opts.source_indicator,
+    has_mixed = has_mixed,
+    entry_count = #entries,
+    sample_entries = classification,
+    source_status = source_status,
+  }
 end
 
 return Source
