@@ -55,26 +55,79 @@ Resolve additional details for a completion item. Currently returns the item unc
 - `item` (table): The completion item to resolve
 - `callback` (function): Callback to invoke with resolved item
 
+### `Source:execute(context, item, callback, default_implementation)`
+
+Execute after a completion item is accepted. Used for auto_add functionality to copy global entries to local bib.
+
+**Parameters:**
+- `context` (table): Completion context from blink.cmp
+- `item` (table): The accepted completion item
+- `callback` (function): Callback to invoke when done
+- `default_implementation` (function): Default execute implementation
+
+**Behavior:**
+- Runs the default implementation first (if provided)
+- If `local_bib.auto_add` is enabled and the accepted entry is from a global file, copies it to the local bib target
+
+### `Source.copy_to_local_bib(key)`
+
+Manually copy a BibTeX entry to the local bib file.
+
+**Parameters:**
+- `key` (string, optional): The citation key to copy. If nil, tries to detect from cursor position.
+
+**Returns:**
+- `boolean`: True if entry was copied successfully
+
+**Example:**
+```lua
+-- Copy a specific key
+require('blink-cmp-bibtex').copy_to_local_bib('Smith2023')
+
+-- Copy entry at cursor (detects key from @key, {key, or ,key patterns)
+require('blink-cmp-bibtex').copy_to_local_bib()
+```
+
+**Vim Command:**
+```vim
+:BibTeXCopyToLocal [key]
+```
+
 ### `Source.setup(opts)`
 
 Configure global default settings.
 
 **Parameters:**
 - `opts` (table, optional): Configuration options
-  - `filetypes` (string[]): Supported filetypes (default: `{"tex", "plaintex", "markdown", "rmd"}`)
-  - `files` (string[]): List of absolute BibTeX file paths to always include
+  - `filetypes` (string[]): Supported filetypes (default: `{"tex", "plaintex", "markdown", "rmd", "typst"}`)
+  - `files` (string[]): List of local BibTeX file paths to always include
+  - `global_files` (string[]): List of global (shared) BibTeX file paths
   - `search_paths` (string[]): Glob patterns or paths to search for BibTeX files
   - `root_markers` (string[]): Files/directories indicating project root (default: `{".git", "latexmkrc", "texmf.cnf"}`)
   - `citation_commands` (string[]): LaTeX citation commands to recognize
   - `preview_style` (string): Preview template name (`"apa"` or `"ieee"`, default: `"apa"`)
+  - `source_indicator` (boolean): Show source indicators when mixing local and global files (default: `true`)
   - `max_entries` (number): Maximum entries to collect (default: 4000)
+  - `local_bib` (table): Local bibliography management options
+    - `enabled` (boolean): Enable local bibliography management (default: `false`)
+    - `target` (string): Path to local bib file, relative to project root
+    - `targets` (table): Per-directory targets: `{ ["/path/to/project"] = "refs.bib" }`
+    - `patterns` (string[]): Fallback patterns to search (default: `{ "local.bib", "references.bib" }`)
+    - `auto_add` (boolean): Automatically copy global entries on accept (default: `false`)
+    - `create_if_missing` (boolean): Create target file if it doesn't exist (default: `false`)
+    - `notify_on_add` (boolean): Show notification when entry is added (default: `true`)
+    - `notify_on_duplicate` (boolean): Show notification for duplicate entries (default: `false`)
+    - `duplicate_check` (boolean): Check for existing entries before adding (default: `true`)
 
 **Example:**
 ```lua
 require('blink-cmp-bibtex').setup({
   filetypes = { "tex", "markdown" },
+  files = { "references.bib" },
+  global_files = { vim.fn.expand("~/research/master.bib") },
   preview_style = "ieee",
-  search_paths = { "references.bib", "bib/*.bib" }
+  source_indicator = true,
+  search_paths = { "bib/*.bib" }
 })
 ```
 
@@ -134,6 +187,7 @@ Collect all entries from multiple BibTeX files.
   - `entrytype` (string): Entry type (e.g., "article", "book")
   - `fields` (table): Field values
   - `source_path` (string): Path to source file
+  - `raw` (string): Raw BibTeX entry text
 
 ### `cache.invalidate(path)`
 
@@ -215,6 +269,85 @@ Resolve all BibTeX file paths for a buffer. Combines buffer-discovered files, ma
 **Returns:**
 - `string[]`: List of resolved absolute file paths
 
+## Module: blink-cmp-bibtex.local_bib
+
+Local bibliography file management for copying entries from global to project-local files.
+
+### `local_bib.resolve_target(opts, cwd)`
+
+Resolve the target bib file based on configuration.
+
+**Parameters:**
+- `opts` (table): The local_bib configuration
+- `cwd` (string, optional): The current working directory
+
+**Returns:**
+- `string|nil`: The resolved target path, or nil if not found
+
+**Resolution priority:**
+1. `opts.targets[cwd]` - Per-directory target
+2. `opts.target` - Explicit target path
+3. `opts.patterns` - First matching pattern (or first pattern if `create_if_missing` is true)
+
+### `local_bib.key_exists_in_file(path, key)`
+
+Check if a citation key already exists in a file.
+
+**Parameters:**
+- `path` (string): The file path to check
+- `key` (string): The citation key to look for
+
+**Returns:**
+- `boolean`: True if the key exists in the file
+
+### `local_bib.create_empty_file(path)`
+
+Create an empty bib file with a comment header.
+
+**Parameters:**
+- `path` (string): The file path to create
+
+**Returns:**
+- `boolean`: True if file was created successfully
+
+### `local_bib.append_entry(path, raw)`
+
+Append a BibTeX entry to a file.
+
+**Parameters:**
+- `path` (string): The file path to append to
+- `raw` (string): The raw BibTeX entry text
+
+**Returns:**
+- `boolean`: True if entry was appended successfully
+
+**Notes:**
+- Ensures a blank line between entries
+- Creates parent directories if needed
+
+### `local_bib.copy_entry(key, raw, opts)`
+
+Copy a BibTeX entry to the local bib file.
+
+**Parameters:**
+- `key` (string): The citation key to copy
+- `raw` (string): The raw BibTeX entry text
+- `opts` (table): The local_bib configuration
+
+**Returns:**
+- `boolean`: True if entry was copied successfully
+
+**Example:**
+```lua
+local local_bib = require('blink-cmp-bibtex.local_bib')
+local_bib.copy_entry('Smith2023', '@article{Smith2023, ...}', {
+  enabled = true,
+  target = 'plus.bib',
+  create_if_missing = true,
+  notify_on_add = true,
+})
+```
+
 ## Preview Styles
 
 ### APA Style (default)
@@ -254,17 +387,39 @@ The parser automatically converts common LaTeX accent commands to UTF-8:
 
 ## Citation Command Support
 
-The following LaTeX citation commands are supported:
+The following citation commands are supported:
 
 - Standard: `\cite`, `\citep`, `\citet`
 - BibLaTeX: `\parencite`, `\textcite`, `\footcite`, `\smartcite`, `\autocite`, `\nocite`
 - Pandoc: `[@key]`, `@key`
+- Typst: `@key`, `#cite(<key>)`
 
-All commands support optional arguments for pre/post notes:
+All LaTeX commands support optional arguments for pre/post notes:
 ```latex
 \parencite[see][p. 42]{key}
 \textcite[]{key}
 ```
+
+## Source Indicators
+
+When using both local and global bibliography files, completion items display
+nuanced indicators showing where each entry comes from:
+
+| Indicator | Meaning |
+|-----------|---------|
+| `[L]` | Entry exists **only** in local bibliography |
+| `[G]` | Entry exists **only** in global bibliography |
+| `[L=G]` | Entry exists in **both**, content is **identical** |
+| `[L≠G]` | Entry exists in **both**, content **differs** |
+
+Indicators only appear when your configuration includes both local and global
+sources. If all entries come from the same source type (e.g., only local files),
+no indicators are shown.
+
+When an entry exists in both local and global files, the completion menu shows
+the local version (deduplication prefers local).
+
+This feature is enabled by default. Set `source_indicator = false` to disable.
 
 ## Buffer Discovery
 

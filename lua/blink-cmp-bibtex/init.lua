@@ -5,11 +5,16 @@
 local config = require('blink-cmp-bibtex.config')
 local scan = require('blink-cmp-bibtex.scan')
 local cache = require('blink-cmp-bibtex.cache')
+local local_bib = require('blink-cmp-bibtex.local_bib')
 
 --- @class Source
 --- @field opts table Configuration options for this source instance
 local Source = {}
 Source.__index = Source
+
+--- Global lookup table for entry raw text, keyed by citation key
+--- @type table<string, {raw: string, source_path: string}>
+local entry_lookup = {}
 
 --- Default completion kind (fallback to 1 if blink.cmp types unavailable)
 --- @type number
@@ -31,6 +36,123 @@ local function table_is_empty(tbl)
     return true
   end
   return next(tbl) == nil
+end
+
+--- Check if a file path is in the global_files list
+--- @param path string The file path to check
+--- @param global_files table|nil List of global file patterns
+--- @return boolean True if the path matches a global file pattern
+local function is_global_file(path, global_files)
+  if not global_files or #global_files == 0 then
+    return false
+  end
+  -- Normalize input path for consistent comparison
+  local normalized_path = vim.fs.normalize(path)
+  for _, gf in ipairs(global_files) do
+    local expanded = vim.fn.expand(gf)
+    local normalized = vim.fs.normalize(expanded)
+    if normalized_path == normalized then
+      return true
+    end
+  end
+  return false
+end
+
+--- Normalize whitespace for content comparison
+--- @param s string|nil
+--- @return string
+local function normalize_whitespace(s)
+  if not s then
+    return ''
+  end
+  return s:gsub('%s+', ' '):gsub('^%s+', ''):gsub('%s+$', '')
+end
+
+--- Source status for an entry
+--- @class SourceInfo
+--- @field status 'unique'|'identical'|'modified'
+--- @field is_local boolean
+--- @field is_global boolean
+
+--- Compute source status for all entries
+--- @param entries table[] Raw entries from cache.collect
+--- @param global_files table|nil List of global file patterns
+--- @return table<string, SourceInfo> Map of key -> source info
+--- @return boolean has_mixed True if entries from both local and global
+local function compute_source_status(entries, global_files)
+  -- Build set of normalized global file paths
+  local global_set = {}
+  for _, gf in ipairs(global_files or {}) do
+    local expanded = vim.fn.expand(gf)
+    local normalized = vim.fs.normalize(expanded)
+    global_set[normalized] = true
+  end
+
+  -- Group entries by key, tracking source and content
+  local by_key = {} -- key -> { local_raw, global_raw, is_local, is_global }
+
+  for _, entry in ipairs(entries) do
+    local key = entry.key
+    local path = vim.fs.normalize(entry.source_path)
+    local is_global = global_set[path] or false
+    local raw = normalize_whitespace(entry.raw)
+
+    if not by_key[key] then
+      by_key[key] = { is_local = false, is_global = false }
+    end
+
+    if is_global then
+      by_key[key].is_global = true
+      by_key[key].global_raw = by_key[key].global_raw or raw
+    else
+      by_key[key].is_local = true
+      by_key[key].local_raw = by_key[key].local_raw or raw
+    end
+  end
+
+  -- Compute status and check for mixed sources
+  local has_any_local, has_any_global = false, false
+  local result = {}
+
+  for key, info in pairs(by_key) do
+    if info.is_local then
+      has_any_local = true
+    end
+    if info.is_global then
+      has_any_global = true
+    end
+
+    local status = 'unique'
+    if info.is_local and info.is_global then
+      status = (info.local_raw == info.global_raw) and 'identical' or 'modified'
+    end
+
+    result[key] = {
+      status = status,
+      is_local = info.is_local,
+      is_global = info.is_global,
+    }
+  end
+
+  return result, (has_any_local and has_any_global)
+end
+
+--- Format source indicator based on source info
+--- @param info SourceInfo
+--- @return string
+local function format_source_indicator(info)
+  if info.status == 'unique' then
+    if info.is_local and not info.is_global then
+      return '[L]'
+    elseif info.is_global and not info.is_local then
+      return '[G]'
+    end
+  elseif info.status == 'identical' then
+    return '[L=G]'
+  elseif info.status == 'modified' then
+    return '[L≠G]'
+  end
+  return ''
 end
 
 --- Sanitize a citation key prefix by handling multi-key citations
@@ -451,18 +573,67 @@ function Source:get_completions(context, callback)
       return
     end
     local entries = cache.collect(paths, self.opts.max_entries)
+
+    -- Compute source status from all entries (before filtering and dedup)
+    local source_status, has_mixed = compute_source_status(entries, self.opts.global_files)
+    local show_indicator = self.opts.source_indicator and has_mixed
+
     local filtered = filter_entries(entries, prefix)
+
+    -- Sort entries: local first, then global (for deduplication to prefer local)
+    table.sort(filtered, function(a, b)
+      local a_global = is_global_file(a.source_path, self.opts.global_files)
+      local b_global = is_global_file(b.source_path, self.opts.global_files)
+      if a_global ~= b_global then
+        return not a_global -- local (false) before global (true)
+      end
+      return a.key < b.key
+    end)
+
     local items = {}
     local style = get_preview_style(self.opts.preview_style)
+    local seen_keys = {}
+
     for _, entry in ipairs(filtered) do
-      local ctx = build_entry_context(entry)
-      items[#items + 1] = {
-        label = entry.key,
-        insertText = entry.key,
-        kind = completion_kind,
-        detail = style.detail(ctx),
-        documentation = style.documentation(ctx),
-      }
+      -- Deduplicate: only process first occurrence (local preferred due to sort)
+      if not seen_keys[entry.key] then
+        seen_keys[entry.key] = true
+
+        local ctx = build_entry_context(entry)
+        local is_global = is_global_file(entry.source_path, self.opts.global_files)
+        local detail_text = style.detail(ctx)
+
+        -- Get indicator for labelDetails.description (shown on right side)
+        local indicator = ''
+        if show_indicator then
+          local info = source_status[entry.key]
+          if info then
+            indicator = format_source_indicator(info)
+          end
+        end
+
+        -- Store entry in lookup table for later use (e.g., copy to local bib)
+        if entry.raw then
+          entry_lookup[entry.key] = {
+            raw = entry.raw,
+            source_path = entry.source_path,
+            is_global = is_global,
+          }
+        end
+
+        items[#items + 1] = {
+          label = entry.key,
+          insertText = entry.key,
+          kind = completion_kind,
+          detail = detail_text,
+          labelDetails = indicator ~= '' and { description = indicator } or nil,
+          documentation = style.documentation(ctx),
+          data = {
+            source = 'blink-cmp-bibtex',
+            key = entry.key,
+          },
+        }
+      end
     end
     callback({ items = items, is_incomplete_forward = true, is_incomplete_backward = true })
   end)
@@ -478,7 +649,164 @@ function Source:resolve(item, callback)
   callback(item)
 end
 
+--- Execute after a completion item is accepted
+--- Used for auto_add functionality to copy global entries to local bib
+--- @param context table Completion context from blink.cmp
+--- @param item table The accepted completion item
+--- @param callback function Callback to invoke when done
+--- @param default_implementation function Default execute implementation
+function Source:execute(context, item, callback, default_implementation)
+  -- Run default implementation first
+  if default_implementation then
+    default_implementation(context, item)
+  end
+
+  -- Check if auto_add is enabled
+  local opts = self.opts
+  if not opts.local_bib or not opts.local_bib.enabled or not opts.local_bib.auto_add then
+    callback()
+    return
+  end
+
+  -- Get entry key from item data
+  local key = item.data and item.data.key
+  if not key then
+    callback()
+    return
+  end
+
+  -- Only auto-add if entry is from a global file
+  local entry_data = entry_lookup[key]
+  if entry_data and entry_data.is_global then
+    local_bib.copy_entry(key, entry_data.raw, opts.local_bib)
+  end
+
+  callback()
+end
+
 --- Setup function exposed for user configuration
 Source.setup = config.setup
+
+--- Copy a BibTeX entry to the local bib file
+--- @param key string|nil The citation key to copy (if nil, try to detect from cursor)
+--- @return boolean True if entry was copied successfully
+function Source.copy_to_local_bib(key)
+  local opts = config.get()
+  if not opts.local_bib or not opts.local_bib.enabled then
+    local msg = 'local_bib is not enabled. Set local_bib.enabled = true in your config'
+    vim.notify(msg, vim.log.levels.WARN, { title = 'blink-cmp-bibtex' })
+    return false
+  end
+
+  -- If no key provided, try to detect from cursor position
+  if not key or key == '' then
+    local line = vim.api.nvim_get_current_line()
+    local col = vim.api.nvim_win_get_cursor(0)[2]
+    -- Try to extract citation key under/before cursor
+    local text = line:sub(1, col + 1)
+    -- Match citation key patterns (word chars, colon, underscore, dot, hyphen)
+    key = text:match('@([%w:_%.%-]+)$')
+      or text:match('{([%w:_%.%-]+)$')
+      or text:match(',([%w:_%.%-]+)$')
+    if not key then
+      vim.notify('No citation key found at cursor', vim.log.levels.WARN, { title = 'blink-cmp-bibtex' })
+      return false
+    end
+  end
+
+  -- Get current bib paths for validation
+  local bufnr = vim.api.nvim_get_current_buf()
+  local paths = scan.resolve_bib_paths(bufnr, opts)
+
+  -- Build set of current paths for validation
+  local current_paths = {}
+  for _, p in ipairs(paths) do
+    current_paths[vim.fs.normalize(p)] = true
+  end
+
+  -- Look up the entry in our cache, validating source_path is current
+  local entry_data = entry_lookup[key]
+  if entry_data and entry_data.source_path then
+    local normalized = vim.fs.normalize(entry_data.source_path)
+    if not current_paths[normalized] then
+      -- Cached entry is from a different project/context, invalidate it
+      entry_data = nil
+    end
+  end
+
+  if not entry_data or not entry_data.raw then
+    -- Entry not in lookup or stale - reload from current bib files
+    local entries = cache.collect(paths, opts.max_entries)
+    for _, entry in ipairs(entries) do
+      if entry.key == key and entry.raw then
+        local is_global = is_global_file(entry.source_path, opts.global_files)
+        entry_data = {
+          raw = entry.raw,
+          source_path = entry.source_path,
+          is_global = is_global,
+        }
+        entry_lookup[key] = entry_data
+        break
+      end
+    end
+  end
+
+  if not entry_data or not entry_data.raw then
+    local msg = string.format("Entry '%s' not found in any bib file", key)
+    vim.notify(msg, vim.log.levels.WARN, { title = 'blink-cmp-bibtex' })
+    return false
+  end
+
+  return local_bib.copy_entry(key, entry_data.raw, opts.local_bib)
+end
+
+--- Get the entry lookup table (for debugging/testing)
+--- @return table<string, {raw: string, source_path: string}>
+function Source.get_entry_lookup()
+  return entry_lookup
+end
+
+--- Debug function to inspect source indicator state
+--- @return table Debug information
+function Source.debug_source_indicators()
+  local opts = config.get()
+  local bufnr = vim.api.nvim_get_current_buf()
+  local paths = scan.resolve_bib_paths(bufnr, opts)
+  local entries = cache.collect(paths, opts.max_entries)
+
+  -- Build global_set the same way as compute_source_status
+  local global_set = {}
+  for _, gf in ipairs(opts.global_files or {}) do
+    local expanded = vim.fn.expand(gf)
+    local normalized = vim.fs.normalize(expanded)
+    global_set[normalized] = true
+  end
+
+  -- Classify each entry
+  local classification = {}
+  for _, entry in ipairs(entries) do
+    local path = vim.fs.normalize(entry.source_path)
+    local is_global = global_set[path] or false
+    classification[entry.key] = {
+      source_path = entry.source_path,
+      normalized_path = path,
+      is_global = is_global,
+    }
+  end
+
+  -- Compute source status
+  local source_status, has_mixed = compute_source_status(entries, opts.global_files)
+
+  return {
+    global_files_config = opts.global_files,
+    global_set = global_set,
+    resolved_paths = paths,
+    source_indicator_enabled = opts.source_indicator,
+    has_mixed = has_mixed,
+    entry_count = #entries,
+    sample_entries = classification,
+    source_status = source_status,
+  }
+end
 
 return Source

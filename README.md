@@ -1,11 +1,15 @@
 # blink-cmp-bibtex
 
-> **⚠️ IMPORTANT**: This plugin was recently renamed from `blink-bibtex` to `blink-cmp-bibtex`. If you're upgrading, please see the [Migration Guide](#migration-from-blink-bibtex) below.
-
 BibTeX and Hayagriva completion source for [blink.cmp](https://github.com/Saghen/blink.cmp).
 It indexes `\addbibresource` declarations and project bibliography files to offer
 citation-key completion together with APA-styled previews in LaTeX, Typst,
 Markdown and R Markdown buffers.
+
+---
+
+[Features](#features) · [Installation](#installation) · [Configuration](#configuration) · [Usage](#usage) · [Alternatives](#alternatives)
+
+---
 
 ## Why this plugin?
 
@@ -29,6 +33,8 @@ Markdown and R Markdown buffers.
   pre/post notes.
 - Generates APA-inspired previews showing author, year, title and container data
   with selectable templates (APA default, IEEE optional).
+- Shows `[L]`/`[G]` source indicators to distinguish local (project) from global
+  (shared) bibliography files.
 - Ships with sane defaults yet allows overriding behavior via
   `require("blink-cmp-bibtex").setup()` or provider-level `opts`.
 
@@ -73,13 +79,80 @@ Only values you set will override the built-ins.
 ```lua
 require("blink-cmp-bibtex").setup({
   filetypes = { "tex", "plaintex", "markdown", "rmd", "typst" },
-  files = { vim.fn.expand("~/research/global.bib") },
-  search_paths = { "references.bib", "bib/*.bib" },
+  files = { "references.bib" },                              -- Local project files
+  global_files = { vim.fn.expand("~/research/master.bib") }, -- Global shared files
+  search_paths = { "bib/*.bib" },
   root_markers = { ".git", "texmf.cnf" },
   citation_commands = { "cite", "parencite", "textcite" },
-  preview_style = "ieee", -- or "apa" (default)
+  preview_style = "ieee",      -- or "apa" (default)
+  source_indicator = true,     -- Show source indicators (default: true)
 })
 ```
+
+### Source indicators
+
+When you have both local (project) and global (shared) bibliography files,
+completion items display nuanced indicators showing where each entry comes from
+and whether local and global versions differ:
+
+| Indicator | Meaning |
+|-----------|---------|
+| `[L]` | Entry exists **only** in local bibliography |
+| `[G]` | Entry exists **only** in global bibliography |
+| `[L=G]` | Entry exists in **both**, content is **identical** |
+| `[L≠G]` | Entry exists in **both**, content **differs** |
+
+Indicators only appear when your configuration includes both local and global
+sources. If all entries come from the same source type (e.g., only local files),
+no indicators are shown.
+
+When an entry exists in both local and global files, the completion menu shows
+the local version (deduplication prefers local).
+
+To disable indicators, set `source_indicator = false` in your configuration.
+
+### Local bibliography management
+
+When working with both global (shared) and local (project) bibliography files, you can
+automatically copy entries from global files to a local project file. This is useful
+when you want to maintain a self-contained project bibliography while drawing from a
+master reference library.
+
+```lua
+require("blink-cmp-bibtex").setup({
+  global_files = { vim.fn.expand("~/research/master.bib") },
+  search_paths = { "references.bib" },
+  local_bib = {
+    enabled = true,
+    target = "plus.bib",         -- Local file to copy entries to
+    auto_add = true,             -- Copy on completion accept
+    create_if_missing = true,    -- Create target if it doesn't exist
+    notify_on_add = true,        -- Show notification when entry is added
+    duplicate_check = true,      -- Skip if entry already exists (default: true)
+  },
+})
+```
+
+**How it works:**
+
+1. When you accept a completion for a `[G]` (global-only) entry, the BibTeX entry
+   is automatically copied to your `local_bib.target` file.
+2. The entry appears in future completions as `[L=G]` (exists in both, identical).
+3. You can also manually copy entries using the `:BibTeXCopyToLocal [key]` command.
+
+**Configuration options:**
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `enabled` | boolean | `false` | Enable local bibliography management |
+| `target` | string | `nil` | Path to local bib file (relative to project root) |
+| `targets` | table | `{}` | Per-directory targets: `{ ["/path/to/project"] = "refs.bib" }` |
+| `patterns` | table | `{ "local.bib", "references.bib" }` | Fallback patterns to search |
+| `auto_add` | boolean | `false` | Automatically copy global entries on accept |
+| `create_if_missing` | boolean | `false` | Create target file if it doesn't exist |
+| `notify_on_add` | boolean | `true` | Show notification when entry is added |
+| `notify_on_duplicate` | boolean | `false` | Show notification for duplicate entries |
+| `duplicate_check` | boolean | `true` | Check for existing entries before adding |
 
 ### Preview styles
 
@@ -106,9 +179,18 @@ Custom styles can be added by extending `require("blink-cmp-bibtex").setup()` wi
 - Typst `#bibliography()` declarations are detected, including those in imported files via `#import` statements.
 - Both BibTeX (`.bib`) and Hayagriva (`.yml`, `.yaml`) bibliography files are supported and automatically detected based on file extension.
 - `opts.search_paths` accepts either file paths or glob patterns relative to the
-  detected project root (based on `opts.root_markers`).
+  detected project root (based on `opts.root_markers`). These are treated as
+  **local** sources.
 - `opts.files` is a list of absolute or `vim.fn.expand`-friendly paths that are
-  always included.
+  always included. These are treated as **local** sources (shown with `[L]`
+  indicator when source indicators are enabled).
+- `opts.global_files` is a list of paths to shared/master bibliography files.
+  These are treated as **global** sources (shown with `[G]` indicator).
+
+  **Note:** Source indicators (`[L]`, `[G]`, `[L=G]`, `[L≠G]`) only appear when
+  you have both local and global sources configured. If you only use `files`
+  and `search_paths` without `global_files`, no indicators are shown since all
+  entries are implicitly local.
 
 ### blink.cmp provider options
 
@@ -208,15 +290,16 @@ The plugin will detect the `bibliography()` call in `refs.typ` and index the ent
 
 blink.cmp renders two panes for each matched item:
 
-- The completion row itself ("detail" column) contains the key plus a concise
-  APA-style summary (`Author (Year) – Title`).
+- The completion row shows the citation key with an APA-style summary. Source
+  indicators (`[L]`, `[G]`, etc.) appear on the right side of the menu.
 - The documentation pane (typically shown below or beside the menu) expands the
   same entry with publisher/journal, place, DOI/URL, etc.
 
 Each completion item exposes:
 
 - `label`: the citation key.
-- `detail`: short APA-like string (`Author (Year) – Title`).
+- `detail`: APA-like string (`Author (Year) – Title`).
+- `labelDetails.description`: source indicator (`[L]`, `[G]`, `[L=G]`, `[L≠G]`).
 - `documentation`: multi-line APA preview covering author/editor, year, title,
   container, publisher and DOI/URL when available.
 
