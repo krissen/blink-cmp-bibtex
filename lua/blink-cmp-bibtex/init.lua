@@ -704,10 +704,10 @@ function Source.copy_to_local_bib(key)
     local col = vim.api.nvim_win_get_cursor(0)[2]
     -- Try to extract citation key under/before cursor
     local text = line:sub(1, col + 1)
-    -- Match citation key patterns
-    key = text:match('@([%w:_%-]+)$')
-      or text:match('{([%w:_%-]+)$')
-      or text:match(',([%w:_%-]+)$')
+    -- Match citation key patterns (word chars, colon, underscore, dot, hyphen)
+    key = text:match('@([%w:_%.%-]+)$')
+      or text:match('{([%w:_%.%-]+)$')
+      or text:match(',([%w:_%.%-]+)$')
     if not key then
       vim.notify('No citation key found at cursor', vim.log.levels.WARN, { title = 'blink-cmp-bibtex' })
       return false

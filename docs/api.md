@@ -112,7 +112,7 @@ Configure global default settings.
     - `enabled` (boolean): Enable local bibliography management (default: `false`)
     - `target` (string): Path to local bib file, relative to project root
     - `targets` (table): Per-directory targets: `{ ["/path/to/project"] = "refs.bib" }`
-    - `patterns` (string[]): Fallback patterns to search: `{ "local.bib", "plus.bib" }`
+    - `patterns` (string[]): Fallback patterns to search (default: `{ "local.bib", "references.bib" }`)
     - `auto_add` (boolean): Automatically copy global entries on accept (default: `false`)
     - `create_if_missing` (boolean): Create target file if it doesn't exist (default: `false`)
     - `notify_on_add` (boolean): Show notification when entry is added (default: `true`)

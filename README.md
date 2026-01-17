@@ -143,7 +143,7 @@ require("blink-cmp-bibtex").setup({
 | `enabled` | boolean | `false` | Enable local bibliography management |
 | `target` | string | `nil` | Path to local bib file (relative to project root) |
 | `targets` | table | `nil` | Per-directory targets: `{ ["/path/to/project"] = "refs.bib" }` |
-| `patterns` | table | `nil` | Fallback patterns to search: `{ "local.bib", "plus.bib" }` |
+| `patterns` | table | `{ "local.bib", "references.bib" }` | Fallback patterns to search |
 | `auto_add` | boolean | `false` | Automatically copy global entries on accept |
 | `create_if_missing` | boolean | `false` | Create target file if it doesn't exist |
 | `notify_on_add` | boolean | `true` | Show notification when entry is added |
@@ -286,15 +286,16 @@ The plugin will detect the `bibliography()` call in `refs.typ` and index the ent
 
 blink.cmp renders two panes for each matched item:
 
-- The completion row itself ("detail" column) contains the key plus a concise
-  APA-style summary (`[L] Author (Year) – Title` or `[G] Author (Year) – Title`).
+- The completion row shows the citation key with an APA-style summary. Source
+  indicators (`[L]`, `[G]`, etc.) appear on the right side of the menu.
 - The documentation pane (typically shown below or beside the menu) expands the
   same entry with publisher/journal, place, DOI/URL, etc.
 
 Each completion item exposes:
 
 - `label`: the citation key.
-- `detail`: source indicator plus APA-like string (`[L] Author (Year) – Title`).
+- `detail`: APA-like string (`Author (Year) – Title`).
+- `labelDetails.description`: source indicator (`[L]`, `[G]`, `[L=G]`, `[L≠G]`).
 - `documentation`: multi-line APA preview covering author/editor, year, title,
   container, publisher and DOI/URL when available.
 
