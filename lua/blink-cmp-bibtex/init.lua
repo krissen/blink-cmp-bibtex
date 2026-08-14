@@ -19,9 +19,24 @@ Source.__index = Source
 --- @field source_path string The file the entry was read from
 --- @field is_global boolean Whether source_path is one of the configured global files
 
---- Global lookup table for entry raw text, keyed by citation key
+--- Entry raw text from the most recent completion round, keyed by citation key
 --- @type table<string, BibEntryRef>
 local entry_lookup = {}
+
+--- The same table from the round before it
+--- Two generations are kept so that Source:execute still resolves an accepted
+--- item when a new round has already replaced the lookup, while the memory a
+--- session holds stays bounded by two rounds instead of growing with every key
+--- ever completed.
+--- @type table<string, BibEntryRef>
+local previous_entry_lookup = {}
+
+--- Look up a remembered entry, falling back to the previous round
+--- @param key string The citation key
+--- @return BibEntryRef|nil
+local function recall_entry(key)
+  return entry_lookup[key] or previous_entry_lookup[key]
+end
 
 --- Default completion kind (fallback to 1 if blink.cmp types unavailable)
 --- @type number
@@ -517,6 +532,9 @@ function Source:get_completions(context, callback)
     local items = {}
     local style = get_preview_style(self.opts.preview_style)
     local seen_keys = {}
+    -- Built fresh per round and swapped in below, so a round that is cancelled
+    -- or fails part way leaves the remembered entries untouched.
+    local round_lookup = {}
 
     for _, entry in ipairs(filtered) do
       -- Deduplicate: only process first occurrence (local preferred due to sort)
@@ -538,7 +556,7 @@ function Source:get_completions(context, callback)
 
         -- Store entry in lookup table for later use (e.g., copy to local bib)
         if entry.raw then
-          entry_lookup[entry.key] = {
+          round_lookup[entry.key] = {
             raw = entry.raw,
             source_path = entry.source_path,
             is_global = is_global,
@@ -559,6 +577,8 @@ function Source:get_completions(context, callback)
         }
       end
     end
+    previous_entry_lookup = entry_lookup
+    entry_lookup = round_lookup
     callback({ items = items, is_incomplete_forward = true, is_incomplete_backward = true })
   end)
   return function()
@@ -600,7 +620,7 @@ function Source:execute(context, item, callback, default_implementation)
   end
 
   -- Only auto-add if entry is from a global file
-  local entry_data = entry_lookup[key]
+  local entry_data = recall_entry(key)
   if entry_data and entry_data.is_global then
     local_bib.copy_entry(key, entry_data.raw, opts.local_bib)
   end
@@ -651,7 +671,7 @@ function Source.copy_to_local_bib(key)
 
   -- Look up the entry in our cache, validating source_path is current
   --- @type BibEntryRef|nil
-  local entry_data = entry_lookup[key]
+  local entry_data = recall_entry(key)
   if entry_data and entry_data.source_path then
     local normalized = vim.fs.normalize(entry_data.source_path)
     if not current_paths[normalized] then
@@ -686,7 +706,8 @@ function Source.copy_to_local_bib(key)
   return local_bib.copy_entry(key, entry_data.raw, opts.local_bib)
 end
 
---- Get the entry lookup table (for debugging/testing)
+--- Get the entry lookup table of the most recent completion round
+--- The previous round is retained separately and is not included here.
 --- @return table<string, BibEntryRef>
 function Source.get_entry_lookup()
   return entry_lookup

@@ -248,3 +248,115 @@ describe('Source:resolve', function()
     assert.are.equal(item, resolved)
   end)
 end)
+
+describe('Source entry lookup lifetime', function()
+  local bufnr, dir, bib
+
+  before_each(function()
+    dir = vim.fs.normalize(vim.fn.tempname())
+    vim.fn.mkdir(dir, 'p')
+    bib = vim.fs.joinpath(dir, 'refs.bib')
+    local entries = {}
+    for index = 1, 5 do
+      table.insert(entries, string.format('@article{aaa%d,\n  title = {A %d}\n}', index, index))
+      table.insert(entries, string.format('@article{bbb%d,\n  title = {B %d}\n}', index, index))
+    end
+    helpers.write_file(bib, table.concat(entries, '\n'))
+    cache.invalidate(bib)
+    bufnr = helpers.make_buf({ lines = { '' }, filetype = 'tex' })
+  end)
+
+  after_each(function()
+    vim.api.nvim_buf_delete(bufnr, { force = true })
+    vim.fn.delete(dir, 'rf')
+  end)
+
+  it('keeps only the latest round in the lookup instead of accumulating keys', function()
+    local source = Source.new({ files = { bib } })
+    complete(source, helpers.ctx('\\cite{aaa', nil, bufnr))
+    assert.are.equal(5, vim.tbl_count(Source.get_entry_lookup()))
+
+    complete(source, helpers.ctx('\\cite{bbb', nil, bufnr))
+    local lookup = Source.get_entry_lookup()
+    assert.are.equal(5, vim.tbl_count(lookup))
+    assert.is_nil(lookup.aaa1, 'a key from the previous round is still in the current one')
+    assert.is_not_nil(lookup.bbb1)
+  end)
+
+  it('does not grow across many rounds', function()
+    local source = Source.new({ files = { bib } })
+    for _ = 1, 20 do
+      complete(source, helpers.ctx('\\cite{aaa', nil, bufnr))
+      complete(source, helpers.ctx('\\cite{bbb', nil, bufnr))
+    end
+    assert.are.equal(5, vim.tbl_count(Source.get_entry_lookup()))
+  end)
+end)
+
+describe('Source:execute auto_add', function()
+  local bufnr, dir, global_bib, target
+
+  --- Drive Source:execute synchronously.
+  --- @param source table
+  --- @param key string
+  local function accept(source, key)
+    local done = false
+    source:execute({ bufnr = bufnr }, { data = { key = key } }, function()
+      done = true
+    end, nil)
+    vim.wait(2000, function()
+      return done
+    end)
+    assert.is_true(done, 'execute never invoked its callback')
+  end
+
+  before_each(function()
+    dir = vim.fs.normalize(vim.fn.tempname())
+    vim.fn.mkdir(dir, 'p')
+    global_bib = vim.fs.joinpath(dir, 'global.bib')
+    target = vim.fs.joinpath(dir, 'local.bib')
+    helpers.write_file(global_bib, '@article{aaa1,\n  title = {A 1}\n}\n@article{bbb1,\n  title = {B 1}\n}')
+    helpers.write_file(target, '')
+    cache.invalidate(global_bib)
+    bufnr = helpers.make_buf({ lines = { '' }, filetype = 'tex' })
+  end)
+
+  after_each(function()
+    vim.api.nvim_buf_delete(bufnr, { force = true })
+    vim.fn.delete(dir, 'rf')
+  end)
+
+  --- @return table
+  local function make_source()
+    return Source.new({
+      files = { global_bib },
+      global_files = { global_bib },
+      local_bib = { enabled = true, auto_add = true, target = target, notify_on_add = false },
+    })
+  end
+
+  --- @return string
+  local function read_target()
+    local fd = assert(io.open(target, 'r'))
+    local content = fd:read('*a')
+    fd:close()
+    return content
+  end
+
+  it('copies the accepted entry to the local bib', function()
+    local source = make_source()
+    complete(source, helpers.ctx('\\cite{aaa', nil, bufnr))
+    accept(source, 'aaa1')
+    assert.is_truthy(read_target():find('@article{aaa1', 1, true))
+  end)
+
+  it('still resolves the accepted entry when a new round has already run', function()
+    -- The round that produced the item is retained one generation, so an accept
+    -- that lands after the next round has started still finds its entry.
+    local source = make_source()
+    complete(source, helpers.ctx('\\cite{aaa', nil, bufnr))
+    complete(source, helpers.ctx('\\cite{bbb', nil, bufnr))
+    accept(source, 'aaa1')
+    assert.is_truthy(read_target():find('@article{aaa1', 1, true))
+  end)
+end)
