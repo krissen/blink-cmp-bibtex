@@ -1,5 +1,6 @@
 --- Characterization tests for local bibliography management.
 
+local assert = require('luassert')
 local local_bib = require('blink-cmp-bibtex.local_bib')
 local helpers = require('tests.helpers')
 

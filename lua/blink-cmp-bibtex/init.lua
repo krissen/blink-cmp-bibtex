@@ -1,6 +1,6 @@
 --- blink-cmp-bibtex completion source
 --- Provides BibTeX citation completion for blink.cmp
---- @module blink-cmp-bibtex
+--- @module 'blink-cmp-bibtex'
 
 local config = require('blink-cmp-bibtex.config')
 local scan = require('blink-cmp-bibtex.scan')
@@ -12,8 +12,14 @@ local local_bib = require('blink-cmp-bibtex.local_bib')
 local Source = {}
 Source.__index = Source
 
+--- A cached entry, remembered so it can later be copied to a local bib file
+--- @class BibEntryRef
+--- @field raw string The raw BibTeX text of the entry
+--- @field source_path string The file the entry was read from
+--- @field is_global boolean Whether source_path is one of the configured global files
+
 --- Global lookup table for entry raw text, keyed by citation key
---- @type table<string, {raw: string, source_path: string}>
+--- @type table<string, BibEntryRef>
 local entry_lookup = {}
 
 --- Default completion kind (fallback to 1 if blink.cmp types unavailable)
@@ -727,6 +733,7 @@ function Source.copy_to_local_bib(key)
   end
 
   -- Look up the entry in our cache, validating source_path is current
+  --- @type BibEntryRef|nil
   local entry_data = entry_lookup[key]
   if entry_data and entry_data.source_path then
     local normalized = vim.fs.normalize(entry_data.source_path)
@@ -763,7 +770,7 @@ function Source.copy_to_local_bib(key)
 end
 
 --- Get the entry lookup table (for debugging/testing)
---- @return table<string, {raw: string, source_path: string}>
+--- @return table<string, BibEntryRef>
 function Source.get_entry_lookup()
   return entry_lookup
 end

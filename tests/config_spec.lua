@@ -1,5 +1,6 @@
 --- Characterization tests for configuration merging.
 
+local assert = require('luassert')
 local config = require('blink-cmp-bibtex.config')
 
 describe('config', function()

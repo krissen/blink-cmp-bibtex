@@ -1,6 +1,6 @@
 --- BibTeX file scanner module
 --- Discovers and resolves BibTeX file paths from buffers and configuration
---- @module blink-cmp-bibtex.scan
+--- @module 'blink-cmp-bibtex.scan'
 
 local M = {}
 
@@ -285,7 +285,7 @@ local function joinpath(base, relative)
 end
 
 --- Normalize a path, expanding home directory and resolving relative paths
---- @param path string The path to normalize
+--- @param path string|nil The path to normalize
 --- @return string|nil The normalized path or nil if invalid
 local function normalize_path(path)
   if not path or path == '' then
@@ -324,7 +324,7 @@ local function find_typst_bibliography(lines, base_dir, visited)
     for path in line:gmatch('#bibliography%s*%(%s*"([^"]+)"%s*%)') do
       path = trim(path)
       if not is_absolute(path) and base_dir then
-        path = joinpath(base_dir, path)
+        path = joinpath(base_dir, path) --[[@as string]]
       end
       resources[#resources + 1] = path
     end
@@ -332,7 +332,7 @@ local function find_typst_bibliography(lines, base_dir, visited)
     for path in line:gmatch("#bibliography%s*%(%s*'([^']+)'%s*%)") do
       path = trim(path)
       if not is_absolute(path) and base_dir then
-        path = joinpath(base_dir, path)
+        path = joinpath(base_dir, path) --[[@as string]]
       end
       resources[#resources + 1] = path
     end
@@ -358,7 +358,7 @@ local function find_typst_bibliography(lines, base_dir, visited)
           for _, resource in ipairs(imported_resources) do
             -- Resolve imported resource paths relative to the imported file's directory
             if not is_absolute(resource) then
-              resource = joinpath(import_dir, resource)
+              resource = joinpath(import_dir, resource) --[[@as string]]
             end
             resources[#resources + 1] = resource
           end

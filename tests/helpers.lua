@@ -1,5 +1,5 @@
 --- Shared helpers for the blink-cmp-bibtex test suite.
---- @module tests.helpers
+--- @module 'tests.helpers'
 
 local M = {}
 
@@ -10,7 +10,7 @@ local tests_dir = vim.fs.normalize(vim.fn.fnamemodify(debug.getinfo(1, 'S').sour
 
 --- Absolute path to a file under tests/fixtures.
 --- @param rel string Path relative to tests/fixtures
---- @return string Absolute, normalized path
+--- @return string The absolute normalized path
 function M.fixture(rel)
   return vim.fs.normalize(vim.fs.joinpath(tests_dir, 'fixtures', rel))
 end

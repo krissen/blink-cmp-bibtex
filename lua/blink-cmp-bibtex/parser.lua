@@ -1,6 +1,6 @@
 --- BibTeX parser module
 --- Parses BibTeX files and normalizes LaTeX commands to UTF-8
---- @module blink-cmp-bibtex.parser
+--- @module 'blink-cmp-bibtex.parser'
 
 local M = {}
 
@@ -241,8 +241,8 @@ end
 --- Read a balanced block of text (e.g., matching braces)
 --- @param str string The input string
 --- @param start number Starting position
---- @param open_char string Opening character
---- @param close_char string Closing character
+--- @param open_char string|nil Opening character
+--- @param close_char string|nil Closing character
 --- @return string|nil, number The extracted block and next position
 local function read_balanced_block(str, start, open_char, close_char)
   if not open_char or not close_char then

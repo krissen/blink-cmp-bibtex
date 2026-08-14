@@ -1,5 +1,6 @@
 --- Characterization tests for bibliography file discovery.
 
+local assert = require('luassert')
 local scan = require('blink-cmp-bibtex.scan')
 local helpers = require('tests.helpers')
 

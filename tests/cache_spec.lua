@@ -1,5 +1,6 @@
 --- Characterization tests for the mtime-based entry cache.
 
+local assert = require('luassert')
 local cache = require('blink-cmp-bibtex.cache')
 local parser = require('blink-cmp-bibtex.parser')
 local helpers = require('tests.helpers')
@@ -10,12 +11,13 @@ local helpers = require('tests.helpers')
 local function count_parses(fn)
   local original = parser.parse_file
   local calls = 0
-  parser.parse_file = function(...)
+  -- rawset installs the spy without redeclaring the module's own field.
+  rawset(parser, 'parse_file', function(...)
     calls = calls + 1
     return original(...)
-  end
+  end)
   local ok, err = pcall(fn)
-  parser.parse_file = original
+  rawset(parser, 'parse_file', original)
   if not ok then
     error(err, 0)
   end

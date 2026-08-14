@@ -1,5 +1,6 @@
 --- Integration tests for the blink.cmp source surface.
 
+local assert = require('luassert')
 local Source = require('blink-cmp-bibtex')
 local cache = require('blink-cmp-bibtex.cache')
 local helpers = require('tests.helpers')

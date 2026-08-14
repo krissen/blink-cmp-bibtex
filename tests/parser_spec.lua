@@ -1,5 +1,6 @@
 --- Characterization tests for the BibTeX and Hayagriva parsers.
 
+local assert = require('luassert')
 local parser = require('blink-cmp-bibtex.parser')
 local helpers = require('tests.helpers')
 

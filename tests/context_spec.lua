@@ -1,6 +1,7 @@
 --- Characterization tests for citation context extraction.
 --- These assert the CURRENT behavior of the matchers, including quirks.
 
+local assert = require('luassert')
 local Source = require('blink-cmp-bibtex')
 local config = require('blink-cmp-bibtex.config')
 local helpers = require('tests.helpers')

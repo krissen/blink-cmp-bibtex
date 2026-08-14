@@ -15,6 +15,5 @@ files['tests/**/*.lua'] = {
     'before_each',
     'after_each',
     'MiniTest',
-    'assert',
   },
 }
