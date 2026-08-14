@@ -687,6 +687,9 @@ end
 --- Setup function exposed for user configuration
 Source.setup = config.setup
 
+--- Internal helpers exposed for testing. Not part of the public API.
+Source.__test = { extract_context = extract_context, sanitize_prefix = sanitize_prefix }
+
 --- Copy a BibTeX entry to the local bib file
 --- @param key string|nil The citation key to copy (if nil, try to detect from cursor)
 --- @return boolean True if entry was copied successfully
