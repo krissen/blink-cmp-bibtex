@@ -78,14 +78,21 @@ describe('parser LaTeX normalization', function()
     assert.are.equal(5, vim.tbl_count(keyed))
   end)
 
-  it('treats a @comment block as an entry when its first word is followed by a comma', function()
-    -- current behavior (quirk): @string and @comment are not skipped by type.
-    -- They are skipped only because their content rarely matches
-    -- '<single-token> ,', so prose beginning 'Note, ...' becomes a bogus entry.
-    local entries = parser.parse('@comment{Note, that Smith says}')
+  it('skips a @comment block whose prose looks like a key', function()
+    -- Regression: these blocks used to be parsed by shape, so prose starting
+    -- 'Note, ...' produced a bogus entry with the key 'Note'.
+    assert.are.same({}, parser.parse('@comment{Note, that Smith says}'))
+  end)
+
+  it('skips @string and @preamble blocks with a key-like shape', function()
+    assert.are.same({}, parser.parse('@STRING{jot, "Journal of Things"}'))
+    assert.are.same({}, parser.parse('@preamble{macro, "\\newcommand"}'))
+  end)
+
+  it('keeps parsing entries that follow a skipped block', function()
+    local entries = parser.parse('@comment{Note, ignored}\n@article{after2020, title = {After}}')
     assert.are.equal(1, #entries)
-    assert.are.equal('Note', entries[1].key)
-    assert.are.equal('comment', entries[1].entrytype)
+    assert.are.equal('after2020', entries[1].key)
   end)
 
   it('converts umlaut accents to UTF-8', function()

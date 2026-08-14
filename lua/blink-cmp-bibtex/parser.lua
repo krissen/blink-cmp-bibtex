@@ -338,6 +338,14 @@ local function parse_fields(body)
   return fields
 end
 
+--- Block types that carry no reference and are skipped while parsing
+--- @type table<string, boolean>
+local non_entry_types = {
+  comment = true,
+  string = true,
+  preamble = true,
+}
+
 --- Parse a single BibTeX entry
 --- @param raw_entry string The raw entry text
 --- @return table|nil Parsed entry with key and fields, or nil if invalid
@@ -379,7 +387,9 @@ function M.parse(content)
     end
     local block, next_index = read_balanced_block(content, pos, opener, closer)
     if block then
-      local parsed = parse_entry(block)
+      -- @comment, @string and @preamble are not references; their content can
+      -- otherwise be mistaken for an entry with a key.
+      local parsed = not non_entry_types[entrytype:lower()] and parse_entry(block) or nil
       if parsed then
         parsed.entrytype = entrytype:lower()
         -- Store raw BibTeX text for later use (e.g., copying to local bib file)
