@@ -11,6 +11,9 @@ nvim-cmp) with a fresh, MIT-licensed codebase that targets blink.cmp directly.
 - Discover BibTeX files via multiple mechanisms:
   - `\addbibresource{}` declarations in the current buffer.
   - YAML metadata in Markdown (e.g. `bibliography: references.bib`).
+  - Typst `#bibliography()` declarations, including those in imported files.
+  - GAPDoc `<Bibliography Databases="..."/>` declarations, whose comma-separated
+    names carry no `.bib` extension.
   - Glob search relative to the project root (`opts.search_paths`).
   - Manually supplied file list via `opts.files`.
   - Resolve buffer-discovered paths relative to the buffer's directory, with the

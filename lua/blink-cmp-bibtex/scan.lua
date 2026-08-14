@@ -418,6 +418,133 @@ local function expand_search_path(path, root)
   return resolved
 end
 
+--- Find bibliography databases in GAPDoc <Bibliography Databases="..."/> declarations
+--- Per the GAPDoc DTD the element is EMPTY with a required Databases attribute
+--- and an optional Style attribute; several databases are separated by commas.
+--- BibTeX databases are named without their .bib extension, while BibXMLext
+--- databases carry their full .xml name and are skipped here, since this plugin
+--- reads BibTeX and Hayagriva rather than BibXMLext.
+--- The opening of a GAPDoc bibliography declaration
+--- @type string
+local BIBLIOGRAPHY_TAG = '<Bibliography'
+
+--- Blank out the XML regions whose contents are not live markup
+--- Comments, CDATA sections and processing instructions all hold text that an
+--- XML processor never reads as markup, so a declaration inside one names a
+--- bibliography that is not in use. An unterminated opener runs to the end of
+--- the document, which is what an editor shows while such a region is being
+--- typed. Regions are replaced by a space rather than removed so that the
+--- markup around them cannot be glued together.
+--- @param text string The document text
+--- @return string The text with inactive regions blanked out
+local function strip_inactive_regions(text)
+  text = text:gsub('<!%-%-.-%-%->', ' ')
+  text = text:gsub('<!%[CDATA%[.-%]%]>', ' ')
+  text = text:gsub('<%?.-%?>', ' ')
+  -- A DOCTYPE may carry an internal subset, whose entity declarations hold
+  -- replacement text that is not markup until an entity is referenced. The
+  -- '[^>%[]*' guard keeps this from reaching past the DOCTYPE's own '>' into a
+  -- later element that happens to contain brackets.
+  text = text:gsub('<!DOCTYPE[^>%[]*%[.-%]%s*>', ' ')
+  text = text:gsub('<!DOCTYPE[^>]*>', ' ')
+  text = text:gsub('<!%-%-.*$', ' ')
+  text = text:gsub('<!%[CDATA%[.*$', ' ')
+  text = text:gsub('<%?.*$', ' ')
+  text = text:gsub('<!DOCTYPE.*$', ' ')
+  return text
+end
+
+--- The character references XML predefines, which need no DTD declaration
+--- @type table<string, string>
+local xml_entities = {
+  amp = '&',
+  lt = '<',
+  gt = '>',
+  quot = '"',
+  apos = "'",
+}
+
+--- Resolve one XML character reference to the character it stands for
+--- @param reference string The reference body, without the '&' and ';'
+--- @return string|nil The character, or nil when the reference is not resolvable
+local function resolve_xml_reference(reference)
+  local code = tonumber(reference:match('^#[xX](%x+)$') or '', 16) or tonumber(reference:match('^#(%d+)$') or '')
+  if code then
+    if code < 1 or code > 0x10FFFF then
+      return nil
+    end
+    return vim.fn.nr2char(code, 1)
+  end
+  -- Entity names are case sensitive in XML, so they are looked up as written.
+  return xml_entities[reference]
+end
+
+--- Decode the XML character references in an attribute value
+--- An XML processor resolves these before GAPDoc ever sees the value, so this
+--- runs before the value is split on commas. References that are not the five
+--- predefined entities or a numeric escape are left as written.
+--- @param value string The raw attribute value
+--- @return string The decoded value
+local function decode_xml_references(value)
+  return (value:gsub('&(#?%w+);', resolve_xml_reference))
+end
+
+--- Read the Databases attribute of a single <Bibliography> element
+--- @param element string The element text, from '<Bibliography' to its '>'
+--- @return string|nil The attribute value, or nil when the element has none
+local function read_databases_attribute(element)
+  return element:match('Databases%s*=%s*"([^"]*)"') or element:match("Databases%s*=%s*'([^']*)'")
+end
+
+--- @param lines string[] Buffer lines to search
+--- @return string[] File names as written in the Databases attribute with '.bib'
+---   appended; entries may carry a directory part and may contain dots
+local function find_gapdoc_bibliography(lines)
+  -- Every buffer is scanned regardless of filetype, so the cost of joining the
+  -- lines is only paid once a declaration can actually be present.
+  local marked = false
+  for _, line in ipairs(lines) do
+    if line:find(BIBLIOGRAPHY_TAG, 1, true) then
+      marked = true
+      break
+    end
+  end
+  if not marked then
+    return {}
+  end
+
+  -- Joined so that a declaration split across lines is still found.
+  local text = strip_inactive_regions(table.concat(lines, '\n'))
+
+  local resources = {}
+  -- One pass in source order, reading both attribute quote styles as they come,
+  -- so that the returned list follows the document rather than the quoting.
+  local cursor = 1
+  while true do
+    local start_pos = text:find(BIBLIOGRAPHY_TAG .. '%s', cursor)
+    if not start_pos then
+      break
+    end
+    local rest = text:sub(start_pos)
+    -- Bounded by the element's own '>', so a Databases attribute belonging to a
+    -- later element is never read. The second form covers an element still
+    -- being typed at the end of the document, where no '>' exists yet.
+    local element = rest:match('^<Bibliography%s[^>]*>') or rest:match('^<Bibliography%s[^>]*$')
+    local databases = element and read_databases_attribute(element)
+    databases = databases and decode_xml_references(databases)
+    for _, name in ipairs(databases and split_resources(databases) or {}) do
+      -- BibXMLext databases carry their full .xml name and are skipped; every
+      -- other name is a BibTeX database, which the DTD defines as being
+      -- written without its .bib extension, so it is always appended.
+      if not name:lower():match('%.xml$') then
+        resources[#resources + 1] = name .. '.bib'
+      end
+    end
+    cursor = start_pos + #BIBLIOGRAPHY_TAG
+  end
+  return resources
+end
+
 --- Ensure a path has a bibliography extension (.bib, .yml, or .yaml)
 --- @param path string|nil The path to check
 --- @return string|nil The path with .bib extension if needed (unless it already has .yml or .yaml)
@@ -471,6 +598,12 @@ function M.find_bib_files_from_buffer(bufnr)
   local typst_resources = find_typst_bibliography(lines, buffer_dir)
   for _, resource in ipairs(typst_resources) do
     resources[#resources + 1] = ensure_bib_extension(resource)
+  end
+  -- Already carries its .bib extension: GAPDoc names are extensionless by
+  -- definition, so ensure_bib_extension's dotted-name heuristics do not apply.
+  local gapdoc_resources = find_gapdoc_bibliography(lines)
+  for _, resource in ipairs(gapdoc_resources) do
+    resources[#resources + 1] = resource
   end
   return resources
 end

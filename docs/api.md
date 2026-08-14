@@ -455,7 +455,9 @@ BibTeX file discovery and path resolution.
 
 ### `scan.find_bib_files_from_buffer(bufnr)`
 
-Find BibTeX files referenced in a buffer.
+Find BibTeX files referenced in a buffer, from LaTeX commands, Markdown YAML
+front matter, Typst `#bibliography()` declarations and GAPDoc `<Bibliography>`
+declarations. See [Buffer Discovery](#buffer-discovery) for the exact forms.
 
 **Parameters:**
 - `bufnr` (number): Buffer number
@@ -659,5 +661,16 @@ The plugin automatically discovers BibTeX files from:
    ---
    ```
 
-3. **Configured search paths** relative to project root
-4. **Manual file paths** from configuration
+3. **Typst declarations** in `.typ` files:
+   - `#bibliography("refs.bib")`, including declarations inside `#import`ed files
+
+4. **GAPDoc declarations** in XML documents:
+   ```xml
+   <Bibliography Databases="manual, gapdoc" Style="alpha"/>
+   ```
+   Names are comma-separated and given without the `.bib` extension, which is
+   appended automatically. `Style` is ignored, and BibXMLext databases (named
+   with their full `.xml` name) are skipped.
+
+5. **Configured search paths** relative to project root
+6. **Manual file paths** from configuration
