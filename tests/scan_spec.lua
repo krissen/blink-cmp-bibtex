@@ -137,3 +137,42 @@ describe('scan.resolve_bib_paths', function()
     end)
   end)
 end)
+
+describe('scan.resolve_option_list', function()
+  it('wraps a bare string into a list', function()
+    assert.are.same({ 'refs.bib' }, scan.resolve_option_list('refs.bib'))
+  end)
+
+  it('passes a list through unchanged', function()
+    assert.are.same({ 'a.bib', 'b.bib' }, scan.resolve_option_list({ 'a.bib', 'b.bib' }))
+  end)
+
+  it('calls a function option with the given arguments', function()
+    local seen
+    local result = scan.resolve_option_list(function(bufnr)
+      seen = bufnr
+      return { 'from-fn.bib' }
+    end, 7)
+    assert.are.same({ 'from-fn.bib' }, result)
+    assert.are.equal(7, seen)
+  end)
+
+  it('wraps a function returning a bare string', function()
+    assert.are.same(
+      { 'one.bib' },
+      scan.resolve_option_list(function()
+        return 'one.bib'
+      end)
+    )
+  end)
+
+  it('returns an empty list for nil and for a function that raises', function()
+    assert.are.same({}, scan.resolve_option_list(nil))
+    assert.are.same(
+      {},
+      scan.resolve_option_list(function()
+        error('boom')
+      end)
+    )
+  end)
+end)

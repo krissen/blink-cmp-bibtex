@@ -53,6 +53,16 @@ local function normalize_list(value)
   return { value }
 end
 
+--- Resolve a path option to a list of paths
+--- Accepts a list, a bare string, or a function returning either; a function
+--- that raises is treated as configuring nothing.
+--- @param value any The option value
+--- @param ... any Arguments passed to value when it is a function
+--- @return table A list-like table of paths
+function M.resolve_option_list(value, ...)
+  return normalize_list(resolve_option(value, ...))
+end
+
 --- BibTeX bibliography command names to recognize
 --- @type table<string, boolean>
 local bibliography_commands = {
@@ -472,9 +482,9 @@ end
 --- @return string[] List of resolved absolute file paths
 function M.resolve_bib_paths(bufnr, opts)
   opts = opts or {}
-  local manual_files = normalize_list(resolve_option(opts.files, bufnr))
-  local global_files = normalize_list(resolve_option(opts.global_files, bufnr))
-  local search_paths = normalize_list(resolve_option(opts.search_paths, bufnr))
+  local manual_files = M.resolve_option_list(opts.files, bufnr)
+  local global_files = M.resolve_option_list(opts.global_files, bufnr)
+  local search_paths = M.resolve_option_list(opts.search_paths, bufnr)
   local buffer_files = M.find_bib_files_from_buffer(bufnr)
   local bufname = vim.api.nvim_buf_get_name(bufnr)
   local root = find_root(bufname, opts.root_markers or {})

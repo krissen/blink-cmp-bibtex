@@ -4,15 +4,9 @@
 
 local config = require('blink-cmp-bibtex.config')
 local matchers = require('blink-cmp-bibtex.matchers')
+local scan = require('blink-cmp-bibtex.scan')
 
 local M = {}
-
--- Neovim 0.9 exposes the older report_* names.
-local health = vim.health
-local h_start = health.start or health.report_start
-local h_ok = health.ok or health.report_ok
-local h_warn = health.warn or health.report_warn
-local h_info = health.info or health.report_info
 
 --- Describe a matcher chain as a readable string
 --- @param chain BibtexMatcherSpec[]
@@ -31,6 +25,15 @@ end
 --- Run the health check
 function M.check()
   local opts = config.get()
+  local bufnr = vim.api.nvim_get_current_buf()
+
+  -- Resolved per call so that Neovim 0.9's report_* names are honoured and the
+  -- reporters stay stubbable from tests.
+  local health = vim.health
+  local h_start = health.start or health.report_start
+  local h_ok = health.ok or health.report_ok
+  local h_warn = health.warn or health.report_warn
+  local h_info = health.info or health.report_info
 
   h_start('blink-cmp-bibtex')
 
@@ -41,8 +44,10 @@ function M.check()
     h_ok('filetypes: ' .. table.concat(filetypes, ', '))
   end
   h_info(string.format('preview_style: %s, max_entries: %d', opts.preview_style, opts.max_entries))
-  h_info(string.format('files: %d configured', #(opts.files or {})))
-  h_info(string.format('global_files: %d configured', #(opts.global_files or {})))
+  -- files and global_files may be a list, a bare string, or a function, so they
+  -- are resolved the same way the scanner resolves them before being counted.
+  h_info(string.format('files: %d configured', #scan.resolve_option_list(opts.files, bufnr)))
+  h_info(string.format('global_files: %d configured', #scan.resolve_option_list(opts.global_files, bufnr)))
 
   h_start('blink-cmp-bibtex: matchers')
 
