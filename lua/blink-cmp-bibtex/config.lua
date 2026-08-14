@@ -51,9 +51,11 @@ local defaults = {
   },
 }
 
---- Deep copy a table to avoid mutation
---- @param tbl table The table to copy
---- @return table A deep copy of the table
+--- Deep copy a value, so that callers cannot mutate what they were given
+--- Anything that is not a table is returned as-is, which is what lets the
+--- option repair below copy a default without knowing its shape.
+--- @param tbl any The value to copy
+--- @return any A deep copy, for a table, or the value itself
 local function deep_copy(tbl)
   if type(tbl) ~= 'table' then
     return tbl

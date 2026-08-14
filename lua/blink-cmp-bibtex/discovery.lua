@@ -663,7 +663,9 @@ function M.chain(filetype, opts)
     registry.warn_once('discovery', 'option', string.format('discovery is %s, which cannot be used', type(configured)))
     configured = nil
   end
-  configured = (configured == true or configured == nil) and M.defaults or configured
+  if configured == nil or configured == true then
+    configured = M.defaults
+  end
   local shared = configured['*'] or {}
   local per_filetype = filetype and configured[filetype] or {}
 
