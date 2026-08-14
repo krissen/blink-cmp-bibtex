@@ -167,6 +167,69 @@ describe('Source source indicators', function()
   end)
 end)
 
+describe('Source GAPDoc support', function()
+  local bufnr, source
+
+  before_each(function()
+    bufnr = vim.fn.bufadd(helpers.fixture('project/doc.xml'))
+    vim.fn.bufload(bufnr)
+    vim.api.nvim_set_option_value('filetype', 'gap', { buf = bufnr })
+    source = Source.new({
+      files = { helpers.fixture('project/bib/refs.bib') },
+      filetypes = { 'gap' },
+    })
+    cache.invalidate(helpers.fixture('project/bib/refs.bib'))
+  end)
+
+  it('completes citation keys inside <Cite Key="', function()
+    local response = complete(source, helpers.ctx('As shown in <Cite Key="', nil, bufnr))
+    assert.are.same({ 'project2020', 'projectbook2018' }, vim.fn.sort(labels(response)))
+  end)
+
+  it('filters by the typed prefix', function()
+    local response = complete(source, helpers.ctx('<Cite Key="projectb', nil, bufnr))
+    assert.are.same({ 'projectbook2018' }, labels(response))
+  end)
+
+  it('leaves a comma in the prefix unsanitized', function()
+    -- GAPDoc keys are used verbatim, so 'a,b' must not be narrowed to 'b'.
+    local response = complete(source, helpers.ctx('<Cite Key="project2020,projectb', nil, bufnr))
+    assert.are.same({}, response.items)
+  end)
+
+  it('returns an empty response once the attribute is closed', function()
+    local response = complete(source, helpers.ctx('<Cite Key="project2020"/>', nil, bufnr))
+    assert.are.same({}, response.items)
+  end)
+
+  it('is enabled in a gap buffer and reports the quote as a trigger character', function()
+    vim.api.nvim_buf_call(bufnr, function()
+      assert.is_true(source:enabled())
+      assert.are.same({ '"' }, source:get_trigger_characters())
+    end)
+  end)
+
+  it('is disabled in filetypes outside the configured list', function()
+    local scratch = helpers.make_buf({ lines = {}, filetype = 'python' })
+    vim.api.nvim_buf_call(scratch, function()
+      assert.is_false(source:enabled())
+    end)
+    vim.api.nvim_buf_delete(scratch, { force = true })
+  end)
+end)
+
+describe('Source:get_trigger_characters', function()
+  it('is empty for the default citation filetypes', function()
+    local source = Source.new({})
+    local scratch = helpers.make_buf({ lines = {}, filetype = 'tex' })
+    vim.api.nvim_buf_call(scratch, function()
+      assert.are.same({}, source:get_trigger_characters())
+      assert.is_true(source:enabled())
+    end)
+    vim.api.nvim_buf_delete(scratch, { force = true })
+  end)
+end)
+
 describe('Source:resolve', function()
   it('passes the item through unchanged', function()
     local source = Source.new({})
