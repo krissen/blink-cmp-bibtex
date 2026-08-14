@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- GAPDoc-style document. Not yet consumed by the source; kept as a
+     fixture for manual inspection of GAPDoc citation syntax. -->
+<Book Name="ProjectDoc">
+  <Chapter>
+    <Heading>Introduction</Heading>
+    <P/>
+    As shown in <Cite Key="project2020"/> and <Cite Key="projectbook2018"/>,
+    the result holds.
+  </Chapter>
+  <Bibliography Databases="refs"/>
+</Book>
