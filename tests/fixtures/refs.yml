@@ -1,0 +1,17 @@
+hayagriva-one:
+  type: Article
+  title: "A Hayagriva Article"
+  author:
+    - Lindgren, Astrid
+    - Blyton, Enid
+  date: 2021
+  parent:
+    type: Periodical
+    title: The Periodical
+
+hayagriva-two:
+  type: Book
+  title: 'A Hayagriva Book'
+  author: Tolkien, J. R. R.
+  date: 1954
+  publisher: Allen and Unwin

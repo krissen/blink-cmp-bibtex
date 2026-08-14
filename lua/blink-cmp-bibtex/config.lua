@@ -1,29 +1,42 @@
 --- Configuration module for blink-cmp-bibtex
 --- Manages default settings and allows customization through setup() and extend()
---- @module blink-cmp-bibtex.config
+--- @module 'blink-cmp-bibtex.config'
+
+local matchers = require('blink-cmp-bibtex.matchers')
 
 local M = {}
 
 --- Default configuration options
 --- @type table
 local defaults = {
-  filetypes = { "tex", "plaintex", "markdown", "rmd", "typst" },
+  filetypes = { 'tex', 'plaintex', 'markdown', 'rmd', 'typst' },
   files = {},
   global_files = {},
   search_paths = {},
-  root_markers = { ".git", "latexmkrc", "texmf.cnf" },
+  root_markers = { '.git', 'latexmkrc', 'texmf.cnf' },
   citation_commands = {
-    "cite", "parencite", "textcite", "footcite", "smartcite",
-    "autocite", "nocite", "citep", "citet",
+    'cite',
+    'parencite',
+    'textcite',
+    'footcite',
+    'smartcite',
+    'autocite',
+    'nocite',
+    'citep',
+    'citet',
   },
-  preview_style = "apa",
+  -- Citation matchers per filetype. Entries under a filetype key override
+  -- same-named entries under '*'. The shipped dispatch and the accepted entry
+  -- forms both live in matchers.lua, which owns this default.
+  matchers = vim.deepcopy(matchers.defaults),
+  preview_style = 'apa',
   source_indicator = true,
   max_entries = 4000,
   local_bib = {
     enabled = false,
     target = nil,
     targets = {},
-    patterns = { "local.bib", "references.bib" },
+    patterns = { 'local.bib', 'references.bib' },
     auto_add = false,
     notify_on_add = true,
     notify_on_duplicate = false,
@@ -48,7 +61,23 @@ end
 
 local options = deep_copy(defaults)
 
---- Merge two tables with override taking precedence
+--- Whether a value is a list, and therefore replaced rather than merged
+--- @param value any The value to inspect
+--- @return boolean
+local function is_list(value)
+  if type(value) ~= 'table' or next(value) == nil then
+    -- An empty table is ambiguous; treating it as a map keeps `local_bib = {}`
+    -- from wiping the nested defaults, while an empty override against a
+    -- non-empty list still replaces that list.
+    return false
+  end
+  local islist = vim.islist or vim.tbl_islist
+  return islist(value)
+end
+
+--- Deep merge two tables with override taking precedence
+--- Maps are merged key by key; lists are replaced wholesale, so a user who
+--- configures three citation_commands does not inherit the remaining defaults.
 --- @param base table The base table
 --- @param override table|nil The override table
 --- @return table The merged table
@@ -56,7 +85,16 @@ local function merge_tables(base, override)
   if not override then
     return base
   end
-  return vim.tbl_deep_extend("force", {}, base, override)
+  local result = deep_copy(base)
+  for key, value in pairs(override) do
+    local current = result[key]
+    if type(value) == 'table' and type(current) == 'table' and not is_list(value) and not is_list(current) then
+      result[key] = merge_tables(current, value)
+    else
+      result[key] = type(value) == 'table' and deep_copy(value) or value
+    end
+  end
+  return result
 end
 
 --- Setup configuration with custom options

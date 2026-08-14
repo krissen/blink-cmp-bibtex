@@ -7,9 +7,20 @@
       "$VIMRUNTIME/lua",
       "${3rd}/luv/library"
     ],
-    "checkThirdParty": false
+    "checkThirdParty": false,
+    "ignoreDir": [
+      ".tests",
+      ".repro"
+    ]
   },
   "diagnostics": {
-    "globals": ["vim"]
+    "globals": [
+      "vim",
+      "describe",
+      "it",
+      "before_each",
+      "after_each",
+      "MiniTest"
+    ]
   }
 }

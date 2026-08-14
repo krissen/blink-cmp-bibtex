@@ -7,7 +7,7 @@ Markdown and R Markdown buffers.
 
 ---
 
-[Features](#features) · [Installation](#installation) · [Configuration](#configuration) · [Usage](#usage) · [Alternatives](#alternatives)
+[Features](#features) · [Installation](#installation) · [Configuration](#configuration) · [Custom citation matchers](#custom-citation-matchers) · [Usage](#usage) · [Health check](#health-check) · [Alternatives](#alternatives)
 
 ---
 
@@ -29,14 +29,18 @@ Markdown and R Markdown buffers.
 - Parses entries lazily, normalizes common LaTeX accents (e.g. `{"a}`, `\aa`)
   and caches the results with modification-time tracking.
 - Supports common citation commands (`\cite`, `\parencite`, `\textcite`,
-  `\smartcite`, `\footcite`, `\nocite`, Pandoc `[@key]`, Typst `@key` and `#cite(<key>)`, …) including optional
-  pre/post notes.
+  `\smartcite`, `\footcite`, `\nocite`, Pandoc `[@key]`, …) including optional
+  pre/post notes. Typst syntax (`@key`, `#cite(<key>)`) applies in `typst`
+  buffers, where it takes precedence over the Pandoc forms.
 - Generates APA-inspired previews showing author, year, title and container data
   with selectable templates (APA default, IEEE optional).
 - Shows `[L]`/`[G]` source indicators to distinguish local (project) from global
   (shared) bibliography files.
 - Ships with sane defaults yet allows overriding behavior via
   `require("blink-cmp-bibtex").setup()` or provider-level `opts`.
+- Lets you add citation syntaxes per filetype through the `matchers` option
+  (GAPDoc's `<Cite Key="…"/>` is included), without patching the plugin.
+- Reports the resolved configuration through `:checkhealth blink-cmp-bibtex`.
 
 ## Installation
 
@@ -88,6 +92,160 @@ require("blink-cmp-bibtex").setup({
   source_indicator = true,     -- Show source indicators (default: true)
 })
 ```
+
+**List options replace the defaults.** `filetypes`, `citation_commands`,
+`files`, `global_files`, `search_paths` and `root_markers` are lists, and a list
+you configure is used as-is instead of being merged into the built-in one. The
+`citation_commands = { "cite", "parencite", "textcite" }` above therefore leaves
+`\footcite` and friends unrecognized. Table options that are keyed maps (such as
+`local_bib` and `matchers`) are still merged key by key, so you only need to
+spell out the keys you want to change.
+
+### Custom citation matchers
+
+A *matcher* inspects the text before the cursor and decides whether the cursor
+sits inside a citation, and which key prefix has been typed so far. The
+`matchers` option maps a filetype to the matchers used in that filetype; the
+`'*'` key applies to every filetype. Entries under a filetype key override
+same-named entries under `'*'`.
+
+The defaults, which live in
+`require("blink-cmp-bibtex.matchers").defaults`, are:
+
+```lua
+matchers = {
+  ['*'] = {
+    latex = { priority = 10 },   -- \cite{key}, \parencite[see][p. 42]{key}
+    pandoc = { priority = 30 },  -- [@key], @key
+  },
+  typst = {
+    typst = { priority = 20 },   -- @key, #cite(<key>)
+  },
+  -- Shipped but dormant: 'gap', 'xml' and 'autodoc' are not in the default
+  -- `filetypes`, so these only activate once you opt in (see below).
+  gap = { gapdoc = { priority = 5, trigger_characters = { '"' } } },
+  xml = { gapdoc = { priority = 5, trigger_characters = { '"' } } },
+  autodoc = { gapdoc = { priority = 5, trigger_characters = { '"' } } },
+}
+```
+
+Every value is normalized into a matcher spec. The accepted forms are:
+
+| Value | Meaning |
+|-------|---------|
+| `false` | Disable the matcher for this filetype |
+| `true` | Enable the built-in matcher with the same name |
+| `"pandoc"` | Use the named built-in matcher under a different key |
+| `function(text, opts, ctx)` | Use this function as the matcher |
+| `{ match = fn, ... }` | A spec table; without `match` the built-in of the same name is used |
+
+Whenever the match function comes from a built-in, the spec fields you leave out
+are inherited from what the plugin ships for that matcher — first the entry for
+this filetype, then the one under `'*'`. Re-enabling `gapdoc` with `true` in an
+`xml` buffer therefore keeps its priority of 5 and its `"` trigger character
+rather than falling back to bare defaults. Fields you do spell out always win.
+
+Spec fields:
+
+- `match` (function) – the matcher function itself.
+- `priority` (number, default `50` when neither you nor the built-in supplies
+  one) – lower runs first; the first matcher that returns a result wins. Ties
+  are broken by name.
+- `sanitize` (boolean) – whether a matched prefix is reduced to the key being
+  typed. Sanitization splits on `,`/`;`, keeps the last segment, trims
+  whitespace and strips a leading `@`, which is what makes `\cite{a,b,c` and
+  `[@a; @b` complete the final key. Set `sanitize = false` when keys are used
+  verbatim (the built-in `gapdoc` matcher does this).
+- `trigger_characters` (string[]) – characters that should open the completion
+  menu in buffers of this filetype. They are only offered while the source is
+  enabled, so a `"` trigger for XML never fires in a LaTeX buffer.
+
+A matcher receives the line text up to the cursor, the resolved options, and a
+context table with `bufnr`, `filetype`, `line` and `col`. It returns `nil` for
+no match, or a table with:
+
+- `prefix` (string, required) – the citation-key prefix typed so far.
+- `trigger` (string) – a name for the syntax that matched.
+- `command` (string) – the citation command that matched, when applicable.
+- `sanitize` (boolean) – override the spec's sanitization for this match.
+
+Matchers are called through `pcall`. One that raises is reported once and
+skipped for the rest of the session, so a broken matcher never breaks
+completion.
+
+**Disabling a built-in:**
+
+```lua
+require("blink-cmp-bibtex").setup({
+  matchers = {
+    ['*'] = { pandoc = false },  -- no Pandoc citations anywhere
+    markdown = { pandoc = true }, -- except in Markdown
+  },
+})
+```
+
+**Reusing a built-in matcher:**
+
+```lua
+local matchers = require("blink-cmp-bibtex.matchers")
+
+require("blink-cmp-bibtex").setup({
+  matchers = {
+    mytype = {
+      -- matchers.latex, matchers.pandoc, matchers.typst and matchers.gapdoc
+      -- are all callable directly; matchers.builtin maps names to functions.
+      brackets = { match = matchers.pandoc, priority = 20 },
+    },
+  },
+})
+```
+
+#### Example: GAPDoc
+
+[GAPDoc](https://github.com/frankluebeck/GAPDoc) documentation is XML and cites
+with `<Cite Key="CR1" Where="(5.22)"/>`. The `gapdoc` matcher for that syntax
+ships with the plugin but is dormant, because `gap`, `xml` and `autodoc` are not
+in the default `filetypes`. Adding them is all the configuration needed:
+
+```lua
+require("blink-cmp-bibtex").setup({
+  -- `filetypes` is a list, so repeat the defaults you still want.
+  filetypes = { "tex", "plaintex", "markdown", "rmd", "typst", "gap", "xml" },
+  -- GAPDoc's <Bibliography Databases="..."/> is not scanned, so point at the
+  -- bibliography explicitly.
+  files = { "doc/manual.bib" },
+})
+```
+
+Typing `<Cite Key="CR` then completes the key, and `"` opens the menu.
+
+If your citation syntax differs, register your own matcher instead:
+
+```lua
+require("blink-cmp-bibtex").setup({
+  filetypes = { "tex", "markdown", "xml" },
+  files = { "doc/manual.bib" },
+  matchers = {
+    xml = {
+      -- Complete <Ref BibKey="..."/> as well as GAPDoc's own <Cite Key="..."/>.
+      refkey = {
+        priority = 5,
+        sanitize = false,
+        trigger_characters = { '"' },
+        match = function(text)
+          local prefix = text:match('<Ref%s+[^>]-BibKey%s*=%s*"([^"]*)$')
+          if prefix then
+            return { prefix = prefix, trigger = "refkey" }
+          end
+        end,
+      },
+    },
+  },
+})
+```
+
+Run `:checkhealth blink-cmp-bibtex` to see the matcher chain that a filetype
+actually resolves to.
 
 ### Source indicators
 
@@ -245,7 +403,8 @@ in LaTeX mode.
 
 ### In Typst files
 
-Typst supports both simple `@key` citations and the more explicit `#cite(<key>)` syntax:
+Typst supports both simple `@key` citations and the more explicit `#cite(<key>)`
+syntax. Both are completed in buffers with the `typst` filetype only:
 
 ```typst
 @Nie
@@ -256,6 +415,12 @@ Or using the cite function:
 ```typst
 #cite(<Nie
 ```
+
+The restriction to `typst` buffers is deliberate. In Markdown and R Markdown
+only the Pandoc forms (`@key` at a word boundary and `[@key`) apply, so an
+address such as `user@example` no longer opens the completion menu. To use the
+Typst forms in another filetype, add the `typst` matcher to it — see
+[Custom citation matchers](#custom-citation-matchers).
 
 #### Typst bibliography formats
 
@@ -286,6 +451,24 @@ The plugin automatically follows Typst `#import` statements to find bibliography
 
 The plugin will detect the `bibliography()` call in `refs.typ` and index the entries from `references.bib`, even though it's not directly declared in the main file.
 
+### In GAPDoc / XML files
+
+GAPDoc documentation cites with an XML tag, optionally carrying a `Where`
+attribute:
+
+```xml
+<Cite Key="Nie
+```
+
+The matcher for this syntax ships with the plugin but stays dormant until you
+add `gap`, `xml` or `autodoc` to `filetypes` — see
+[Custom citation matchers](#custom-citation-matchers). Typing `"` opens the
+menu, and keys are inserted verbatim (no multi-key splitting).
+
+Bibliography discovery is not implemented for GAPDoc: the
+`<Bibliography Databases="manual"/>` declaration is not scanned. List the
+bibliography under `files` or `search_paths` instead.
+
 ### Completion details
 
 blink.cmp renders two panes for each matched item:
@@ -302,6 +485,19 @@ Each completion item exposes:
 - `labelDetails.description`: source indicator (`[L]`, `[G]`, `[L=G]`, `[L≠G]`).
 - `documentation`: multi-line APA preview covering author/editor, year, title,
   container, publisher and DOI/URL when available.
+
+## Health check
+
+```vim
+:checkhealth blink-cmp-bibtex
+```
+
+The report shows the resolved `filetypes`, preview style and file counts, and
+lists the matcher chain each configured filetype resolves to, in the order the
+matchers run. A filetype that has matchers but is missing from `filetypes` is
+warned about, since those matchers can never fire — except for the ones shipped
+dormant with the plugin (`gap`, `xml`, `autodoc`), which are reported as
+information.
 
 ## Documentation
 

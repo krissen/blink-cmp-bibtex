@@ -1,6 +1,6 @@
 --- BibTeX file scanner module
 --- Discovers and resolves BibTeX file paths from buffers and configuration
---- @module blink-cmp-bibtex.scan
+--- @module 'blink-cmp-bibtex.scan'
 
 local M = {}
 
@@ -51,6 +51,16 @@ local function normalize_list(value)
     return value
   end
   return { value }
+end
+
+--- Resolve a path option to a list of paths
+--- Accepts a list, a bare string, or a function returning either; a function
+--- that raises is treated as configuring nothing.
+--- @param value any The option value
+--- @param ... any Arguments passed to value when it is a function
+--- @return table A list-like table of paths
+function M.resolve_option_list(value, ...)
+  return normalize_list(resolve_option(value, ...))
 end
 
 --- BibTeX bibliography command names to recognize
@@ -285,7 +295,7 @@ local function joinpath(base, relative)
 end
 
 --- Normalize a path, expanding home directory and resolving relative paths
---- @param path string The path to normalize
+--- @param path string|nil The path to normalize
 --- @return string|nil The normalized path or nil if invalid
 local function normalize_path(path)
   if not path or path == '' then
@@ -324,7 +334,7 @@ local function find_typst_bibliography(lines, base_dir, visited)
     for path in line:gmatch('#bibliography%s*%(%s*"([^"]+)"%s*%)') do
       path = trim(path)
       if not is_absolute(path) and base_dir then
-        path = joinpath(base_dir, path)
+        path = joinpath(base_dir, path) --[[@as string]]
       end
       resources[#resources + 1] = path
     end
@@ -332,7 +342,7 @@ local function find_typst_bibliography(lines, base_dir, visited)
     for path in line:gmatch("#bibliography%s*%(%s*'([^']+)'%s*%)") do
       path = trim(path)
       if not is_absolute(path) and base_dir then
-        path = joinpath(base_dir, path)
+        path = joinpath(base_dir, path) --[[@as string]]
       end
       resources[#resources + 1] = path
     end
@@ -358,7 +368,7 @@ local function find_typst_bibliography(lines, base_dir, visited)
           for _, resource in ipairs(imported_resources) do
             -- Resolve imported resource paths relative to the imported file's directory
             if not is_absolute(resource) then
-              resource = joinpath(import_dir, resource)
+              resource = joinpath(import_dir, resource) --[[@as string]]
             end
             resources[#resources + 1] = resource
           end
@@ -472,9 +482,9 @@ end
 --- @return string[] List of resolved absolute file paths
 function M.resolve_bib_paths(bufnr, opts)
   opts = opts or {}
-  local manual_files = normalize_list(resolve_option(opts.files, bufnr))
-  local global_files = normalize_list(resolve_option(opts.global_files, bufnr))
-  local search_paths = normalize_list(resolve_option(opts.search_paths, bufnr))
+  local manual_files = M.resolve_option_list(opts.files, bufnr)
+  local global_files = M.resolve_option_list(opts.global_files, bufnr)
+  local search_paths = M.resolve_option_list(opts.search_paths, bufnr)
   local buffer_files = M.find_bib_files_from_buffer(bufnr)
   local bufname = vim.api.nvim_buf_get_name(bufnr)
   local root = find_root(bufname, opts.root_markers or {})

@@ -1,19 +1,26 @@
 --- blink-cmp-bibtex completion source
 --- Provides BibTeX citation completion for blink.cmp
---- @module blink-cmp-bibtex
+--- @module 'blink-cmp-bibtex'
 
 local config = require('blink-cmp-bibtex.config')
 local scan = require('blink-cmp-bibtex.scan')
 local cache = require('blink-cmp-bibtex.cache')
 local local_bib = require('blink-cmp-bibtex.local_bib')
+local matchers = require('blink-cmp-bibtex.matchers')
 
 --- @class Source
 --- @field opts table Configuration options for this source instance
 local Source = {}
 Source.__index = Source
 
+--- A cached entry, remembered so it can later be copied to a local bib file
+--- @class BibEntryRef
+--- @field raw string The raw BibTeX text of the entry
+--- @field source_path string The file the entry was read from
+--- @field is_global boolean Whether source_path is one of the configured global files
+
 --- Global lookup table for entry raw text, keyed by citation key
---- @type table<string, {raw: string, source_path: string}>
+--- @type table<string, BibEntryRef>
 local entry_lookup = {}
 
 --- Default completion kind (fallback to 1 if blink.cmp types unavailable)
@@ -65,7 +72,8 @@ local function normalize_whitespace(s)
   if not s then
     return ''
   end
-  return s:gsub('%s+', ' '):gsub('^%s+', ''):gsub('%s+$', '')
+  -- Parenthesized so the gsub replacement count is not returned alongside the string.
+  return (s:gsub('%s+', ' '):gsub('^%s+', ''):gsub('%s+$', ''))
 end
 
 --- Source status for an entry
@@ -386,129 +394,22 @@ local function get_preview_style(name)
   return preview_styles[name] or preview_styles.apa
 end
 
---- Match LaTeX citation commands in text
---- @param text string The text to search
---- @param opts table Configuration options with citation_commands
---- @return table|nil Citation detection result or nil if no match
-local function match_latex_citation(text, opts)
-  local brace_start = text:match('()%{[^{}]*$')
-  if not brace_start then
-    return nil
-  end
-  local prefix = text:sub(brace_start + 1)
-  local before = text:sub(1, brace_start - 1)
-  local cursor = #before
-  while cursor > 0 and before:sub(cursor, cursor):match('%s') do
-    cursor = cursor - 1
-  end
-  local function skip_optional()
-    while cursor > 0 and before:sub(cursor, cursor) == ']' do
-      cursor = cursor - 1
-      local depth = 1
-      while cursor > 0 and depth > 0 do
-        local ch = before:sub(cursor, cursor)
-        if ch == '[' then
-          depth = depth - 1
-        elseif ch == ']' then
-          depth = depth + 1
-        end
-        cursor = cursor - 1
-      end
-      while cursor > 0 and before:sub(cursor, cursor):match('%s') do
-        cursor = cursor - 1
-      end
-    end
-  end
-  skip_optional()
-  local command_segment = before:sub(1, cursor)
-  local command, modifier = command_segment:match('\\([%a@]+)(%*?)$')
-  if not command then
-    return nil
-  end
-  for _, allowed in ipairs(opts.citation_commands or {}) do
-    if command == allowed then
-      return {
-        prefix = prefix,
-        command = command .. (modifier or ''),
-        trigger = 'latex',
-      }
-    end
-  end
-  return nil
-end
-
---- Match Pandoc-style citation syntax
---- @param text string The text to search
---- @return table|nil Citation detection result or nil if no match
-local function match_pandoc_citation(text)
-  local prefix = text:match('%[@([^%]]*)$')
-  if prefix then
-    return { prefix = prefix, trigger = 'pandoc' }
-  end
-  local boundary = text:match('[^%w@]@([%w:_%-%.,]*)$')
-  if boundary then
-    return { prefix = boundary, trigger = 'pandoc' }
-  end
-  local line_start = text:match('^@([%w:_%-%.,]*)$')
-  if line_start then
-    return { prefix = line_start, trigger = 'pandoc' }
-  end
-  return nil
-end
-
---- Match Typst-style citation syntax
---- @param text string The text to search
---- @return table|nil Citation detection result or nil if no match
-local function match_typst_citation(text)
-  -- Match Typst citation patterns: after word/underscore, after non-word, or at line start
-  local prefix = text:match("[%w_]@([%w:_%-%.,]*)$") -- match word@abc
-  if prefix then
-    return { prefix = prefix, trigger = "typst" }
-  end
-  local prefix_after_nonword = text:match("[^%w@]@([%w:_%-%.,]*)$") -- match after non-word character
-  if prefix_after_nonword then
-    return { prefix = prefix_after_nonword, trigger = "typst" }
-  end
-  local prefix_at_start = text:match("^@([%w:_%-%.,]*)$") -- match at line start
-  if prefix_at_start then
-    return { prefix = prefix_at_start, trigger = "typst" }
-  end
-  local prefix_cite = text:match("#cite%s*%(%s*<([^>]*)$") -- match #cite(<abc
-  if prefix_cite then
-    return { prefix = prefix_cite, trigger = "typst" }
-  end
-  return nil
-end
-
 --- Extract citation context from the current line and cursor position
 --- @param context table Completion context from blink.cmp
 --- @param opts table Configuration options
 --- @param filetype string|nil The filetype of the current buffer
---- @return table|nil Detection result with prefix and trigger type
+--- @return BibtexMatchResult|nil result Detection result with prefix and trigger type
+--- @return BibtexMatcherSpec|nil spec The matcher that produced the result
 local function extract_context(context, opts, filetype)
   local line = context.line or ''
   local col = context.cursor and context.cursor[2] or #line
   local text = line:sub(1, col)
-  local latex = match_latex_citation(text, opts)
-  if latex then
-    return latex
-  end
-  -- Check Typst patterns first for Typst files to prevent Pandoc interception
-  if filetype == 'typst' then
-    local typst = match_typst_citation(text)
-    if typst then
-      return typst
-    end
-  end
-  local pandoc = match_pandoc_citation(text)
-  if pandoc then
-    return pandoc
-  end
-  -- Check Typst patterns for other filetypes as fallback
-  if filetype ~= 'typst' then
-    return match_typst_citation(text)
-  end
-  return nil
+  return matchers.detect(text, opts, {
+    bufnr = context.bufnr,
+    filetype = filetype,
+    line = line,
+    col = col,
+  })
 end
 
 --- Filter entries by prefix match
@@ -545,6 +446,21 @@ function Source.new(opts)
   return self
 end
 
+--- Whether the source is active in the current buffer
+--- blink.cmp collects trigger characters only from enabled providers, which is
+--- what keeps matcher trigger characters scoped to their filetypes.
+--- @return boolean
+function Source:enabled()
+  local ft = vim.bo.filetype
+  return #self.opts.filetypes == 0 or vim.tbl_contains(self.opts.filetypes, ft)
+end
+
+--- Characters that should open the completion menu in the current buffer
+--- @return string[]
+function Source:get_trigger_characters()
+  return matchers.trigger_characters(vim.bo.filetype, self.opts)
+end
+
 --- Get completion items for the current context
 --- @param context table Completion context from blink.cmp
 --- @param callback function Callback to invoke with completion results
@@ -556,12 +472,20 @@ function Source:get_completions(context, callback)
     callback(empty_response())
     return function() end
   end
-  local detection = extract_context(context, self.opts, ft)
+  local detection, spec = extract_context(context, self.opts, ft)
   if not detection then
     callback(empty_response())
     return function() end
   end
-  local prefix = sanitize_prefix(detection.prefix)
+  -- A match may opt out of prefix sanitization, either per match or per matcher.
+  local should_sanitize = detection.sanitize
+  if should_sanitize == nil then
+    should_sanitize = spec and spec.sanitize
+  end
+  if should_sanitize == nil then
+    should_sanitize = true
+  end
+  local prefix = should_sanitize and sanitize_prefix(detection.prefix) or (detection.prefix or '')
   local paths = scan.resolve_bib_paths(bufnr, self.opts)
   if table_is_empty(paths) then
     callback(empty_response())
@@ -687,6 +611,9 @@ end
 --- Setup function exposed for user configuration
 Source.setup = config.setup
 
+--- Internal helpers exposed for testing. Not part of the public API.
+Source.__test = { extract_context = extract_context, sanitize_prefix = sanitize_prefix }
+
 --- Copy a BibTeX entry to the local bib file
 --- @param key string|nil The citation key to copy (if nil, try to detect from cursor)
 --- @return boolean True if entry was copied successfully
@@ -705,9 +632,7 @@ function Source.copy_to_local_bib(key)
     -- Try to extract citation key under/before cursor
     local text = line:sub(1, col + 1)
     -- Match citation key patterns (word chars, colon, underscore, dot, hyphen)
-    key = text:match('@([%w:_%.%-]+)$')
-      or text:match('{([%w:_%.%-]+)$')
-      or text:match(',([%w:_%.%-]+)$')
+    key = text:match('@([%w:_%.%-]+)$') or text:match('{([%w:_%.%-]+)$') or text:match(',([%w:_%.%-]+)$')
     if not key then
       vim.notify('No citation key found at cursor', vim.log.levels.WARN, { title = 'blink-cmp-bibtex' })
       return false
@@ -725,6 +650,7 @@ function Source.copy_to_local_bib(key)
   end
 
   -- Look up the entry in our cache, validating source_path is current
+  --- @type BibEntryRef|nil
   local entry_data = entry_lookup[key]
   if entry_data and entry_data.source_path then
     local normalized = vim.fs.normalize(entry_data.source_path)
@@ -761,7 +687,7 @@ function Source.copy_to_local_bib(key)
 end
 
 --- Get the entry lookup table (for debugging/testing)
---- @return table<string, {raw: string, source_path: string}>
+--- @return table<string, BibEntryRef>
 function Source.get_entry_lookup()
   return entry_lookup
 end

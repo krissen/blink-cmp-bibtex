@@ -1,6 +1,6 @@
 --- Local BibTeX file management module
 --- Provides functionality to copy BibTeX entries to a local project-specific file
---- @module blink-cmp-bibtex.local_bib
+--- @module 'blink-cmp-bibtex.local_bib'
 
 local M = {}
 

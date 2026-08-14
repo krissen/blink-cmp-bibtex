@@ -23,6 +23,25 @@ local source = require('blink-cmp-bibtex').new({
 })
 ```
 
+### `Source:enabled()`
+
+Whether the source is active in the current buffer.
+
+**Returns:**
+- `boolean`: True when `opts.filetypes` is empty, or contains the current
+  buffer's filetype
+
+blink.cmp collects trigger characters only from enabled providers, which is what
+keeps matcher trigger characters scoped to their filetypes.
+
+### `Source:get_trigger_characters()`
+
+Characters that should open the completion menu in the current buffer.
+
+**Returns:**
+- `string[]`: The deduplicated `trigger_characters` declared by the matcher
+  chain for the current buffer's filetype
+
 ### `Source:get_completions(context, callback)`
 
 Get completion items for the current context.
@@ -105,6 +124,9 @@ Configure global default settings.
   - `search_paths` (string[]): Glob patterns or paths to search for BibTeX files
   - `root_markers` (string[]): Files/directories indicating project root (default: `{".git", "latexmkrc", "texmf.cnf"}`)
   - `citation_commands` (string[]): LaTeX citation commands to recognize
+  - `matchers` (table): Citation matchers per filetype, keyed by filetype with
+    `'*'` applying everywhere (see
+    [Module: blink-cmp-bibtex.matchers](#module-blink-cmp-bibtexmatchers))
   - `preview_style` (string): Preview template name (`"apa"` or `"ieee"`, default: `"apa"`)
   - `source_indicator` (boolean): Show source indicators when mixing local and global files (default: `true`)
   - `max_entries` (number): Maximum entries to collect (default: 4000)
@@ -168,6 +190,195 @@ Get the default configuration.
 
 **Returns:**
 - `table`: Default configuration options
+
+### Merge semantics
+
+`setup()` and `extend()` merge user options into the defaults key by key, with
+one exception: list-like tables are replaced wholesale rather than merged by
+index. Configuring `citation_commands`, `filetypes`, `files`, `global_files`,
+`search_paths` or `root_markers` therefore discards the built-in list instead of
+producing a mixture of both. Keyed maps such as `local_bib` and `matchers` are
+merged, so an empty table leaves the nested defaults intact.
+
+## Module: blink-cmp-bibtex.matchers
+
+Citation matchers decide whether the cursor sits inside a citation and which key
+prefix has been typed. The module never requires `config`; it only receives
+options.
+
+### Types
+
+**`BibtexMatchResult`** — returned by a matcher on a match:
+
+- `prefix` (string): The citation key prefix typed so far
+- `trigger` (string|nil): Name of the syntax that matched
+- `command` (string|nil): The citation command that matched, when applicable
+- `sanitize` (boolean|nil): Override prefix sanitization for this match
+
+**`BibtexMatcherFn`** — `fun(text: string, opts: table, ctx: table|nil): BibtexMatchResult|nil`.
+`text` is the line up to the cursor, `opts` the resolved configuration, and
+`ctx` a table with `bufnr`, `filetype`, `line` and `col`.
+
+**`BibtexMatcherSpec`** — a normalized matcher entry:
+
+- `name` (string): The matcher name
+- `match` (BibtexMatcherFn): The matching function
+- `priority` (number): Lower runs first (default `50`)
+- `sanitize` (boolean|nil): Whether matched prefixes are sanitized
+- `trigger_characters` (string[]|nil): Characters that should open the menu
+
+### `matchers.latex(text, opts)`
+
+Match LaTeX citation commands, including optional arguments
+(`\parencite[see][p. 42]{key`) and starred variants. Only commands listed in
+`opts.citation_commands` match.
+
+**Returns:**
+- `BibtexMatchResult|nil`: `{ prefix, command, trigger = 'latex' }`, or nil
+
+### `matchers.pandoc(text)`
+
+Match Pandoc citation syntax: `[@key`, `@key` at a word boundary, and `@key` at
+the start of the line.
+
+**Returns:**
+- `BibtexMatchResult|nil`: `{ prefix, trigger = 'pandoc' }`, or nil
+
+### `matchers.typst(text)`
+
+Match Typst citation syntax: `@key` (also directly after a word character) and
+`#cite(<key`.
+
+**Returns:**
+- `BibtexMatchResult|nil`: `{ prefix, trigger = 'typst' }`, or nil
+
+### `matchers.gapdoc(text)`
+
+Match GAPDoc's `<Cite Key="key` (single quotes accepted). GAPDoc keys are used
+verbatim, so the result opts out of prefix sanitization.
+
+**Returns:**
+- `BibtexMatchResult|nil`: `{ prefix, trigger = 'gapdoc', sanitize = false }`, or nil
+
+### `matchers.builtin`
+
+Table mapping the built-in names `latex`, `pandoc`, `typst` and `gapdoc` to
+their matcher functions. Configuration values may refer to these by name.
+
+### `matchers.defaults`
+
+The per-filetype dispatch shipped with the plugin, keyed by filetype with `'*'`
+applying everywhere. It is the source of the `matchers` configuration default
+(`config.lua` deep-copies it) and the source of the inherited spec fields in
+`normalize`. It lives here rather than in `config.lua` so that the two modules
+do not depend on each other.
+
+### `matchers.normalize(name, value, filetype)`
+
+Normalize a configured matcher value into a spec.
+
+**Parameters:**
+- `name` (string): The configuration key the value was found under
+- `value` (any): `false`/`nil` (disabled), `true` (built-in of the same name), a
+  string (named built-in), a function, or a spec table
+- `filetype` (string|nil): The filetype whose chain is being built, used to
+  resolve inherited spec fields
+
+**Returns:**
+- `BibtexMatcherSpec|nil`: The normalized spec, or nil when disabled or invalid
+
+When the match function comes from a built-in, `priority`, `sanitize` and
+`trigger_characters` are resolved in this order:
+
+1. the field spelled out in the user's own spec table
+2. the field this filetype ships for that built-in in `matchers.defaults`
+3. the field `'*'` ships for that built-in in `matchers.defaults`
+4. `50` for `priority`, `nil` for the rest
+
+This is what lets `gapdoc = true` in an `xml` buffer keep the shipped priority
+and trigger character. Invalid values are reported once per name through
+`vim.notify` and skipped.
+
+### `matchers.chain(filetype, opts)`
+
+Build the ordered matcher chain for a filetype. Entries under the filetype key
+override same-named entries under `'*'`.
+
+**Parameters:**
+- `filetype` (string|nil): The buffer filetype
+- `opts` (table): Configuration options
+
+**Returns:**
+- `BibtexMatcherSpec[]`: The matchers to run, sorted by priority then name
+
+### `matchers.detect(text, opts, ctx)`
+
+Run the matcher chain against the text before the cursor and return the first
+match.
+
+**Parameters:**
+- `text` (string): The text up to the cursor
+- `opts` (table): Configuration options
+- `ctx` (table|nil): Context with `bufnr`, `filetype`, `line` and `col`
+
+**Returns:**
+- `BibtexMatchResult|nil`: The first match, or nil
+- `BibtexMatcherSpec|nil`: The matcher that produced the result
+
+Matchers are called through `pcall`. A matcher that raises is reported once and
+disabled for the rest of the session.
+
+### `matchers.trigger_characters(filetype, opts)`
+
+Collect the trigger characters declared by a filetype's matcher chain.
+
+**Parameters:**
+- `filetype` (string|nil): The buffer filetype
+- `opts` (table): Configuration options
+
+**Returns:**
+- `string[]`: Deduplicated trigger characters
+
+**Example:**
+```lua
+local matchers = require('blink-cmp-bibtex.matchers')
+
+require('blink-cmp-bibtex').setup({
+  filetypes = { 'tex', 'markdown', 'xml' },
+  matchers = {
+    xml = {
+      refkey = {
+        priority = 5,
+        sanitize = false,
+        trigger_characters = { '"' },
+        match = function(text)
+          local prefix = text:match('<Ref%s+[^>]-BibKey%s*=%s*"([^"]*)$')
+          if prefix then
+            return { prefix = prefix, trigger = 'refkey' }
+          end
+        end,
+      },
+    },
+  },
+})
+```
+
+## Module: blink-cmp-bibtex.health
+
+Health check registered for `:checkhealth blink-cmp-bibtex`.
+
+### `health.check()`
+
+Report the resolved configuration and flag matcher setups that can never fire.
+
+**Reports:**
+- `filetypes`, `preview_style`, `max_entries` and the number of configured
+  `files` and `global_files`
+- The matcher chain for `'*'` and for each configured filetype, with priorities
+- A warning when a filetype has matchers configured but is missing from
+  `filetypes`; matchers shipped with the plugin that are dormant for this reason
+  are reported as information instead
+- A warning when no matchers are configured at all
 
 ## Module: blink-cmp-bibtex.cache
 
@@ -392,7 +603,8 @@ The following citation commands are supported:
 - Standard: `\cite`, `\citep`, `\citet`
 - BibLaTeX: `\parencite`, `\textcite`, `\footcite`, `\smartcite`, `\autocite`, `\nocite`
 - Pandoc: `[@key]`, `@key`
-- Typst: `@key`, `#cite(<key>)`
+- Typst: `@key`, `#cite(<key>)` (Typst buffers only)
+- GAPDoc: `<Cite Key="key"/>` (after opting `gap`, `xml` or `autodoc` into `filetypes`)
 
 All LaTeX commands support optional arguments for pre/post notes:
 ```latex

@@ -1,12 +1,12 @@
 --- Cache module for blink-cmp-bibtex
 --- Provides memoized storage of parsed BibTeX entries with modification time tracking
---- @module blink-cmp-bibtex.cache
+--- @module 'blink-cmp-bibtex.cache'
 
 local parser = require('blink-cmp-bibtex.parser')
 
 local M = {}
 --- Cache storage keyed by file path
---- @type table<string, {mtime: number, size: number, entries: table[]}>
+--- @type table<string, {mtime: number|nil, size: number, entries: table[]}>
 local store = {}
 
 --- Notify user of warnings
