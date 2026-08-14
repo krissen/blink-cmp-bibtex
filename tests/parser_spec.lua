@@ -77,6 +77,16 @@ describe('parser LaTeX normalization', function()
     assert.are.equal(5, vim.tbl_count(keyed))
   end)
 
+  it('treats a @comment block as an entry when its first word is followed by a comma', function()
+    -- current behavior (quirk): @string and @comment are not skipped by type.
+    -- They are skipped only because their content rarely matches
+    -- '<single-token> ,', so prose beginning 'Note, ...' becomes a bogus entry.
+    local entries = parser.parse('@comment{Note, that Smith says}')
+    assert.are.equal(1, #entries)
+    assert.are.equal('Note', entries[1].key)
+    assert.are.equal('comment', entries[1].entrytype)
+  end)
+
   it('converts umlaut accents to UTF-8', function()
     assert.are.equal('Möller, Sören', keyed.umlaut2020.fields.author)
     assert.are.equal('Über die Ströme', keyed.umlaut2020.fields.title)
