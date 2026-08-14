@@ -211,13 +211,13 @@ in the default `filetypes`. Adding them is all the configuration needed:
 require("blink-cmp-bibtex").setup({
   -- `filetypes` is a list, so repeat the defaults you still want.
   filetypes = { "tex", "plaintex", "markdown", "rmd", "typst", "gap", "xml" },
-  -- GAPDoc's <Bibliography Databases="..."/> is not scanned, so point at the
-  -- bibliography explicitly.
-  files = { "doc/manual.bib" },
 })
 ```
 
-Typing `<Cite Key="CR` then completes the key, and `"` opens the menu.
+Typing `<Cite Key="CR` then completes the key, and `"` opens the menu. The
+document's own `<Bibliography Databases="..."/>` declaration is scanned, so the
+bibliography needs no configuration; `files` and `search_paths` remain available
+for bibliographies that live elsewhere.
 
 If your citation syntax differs, register your own matcher instead:
 
@@ -335,6 +335,9 @@ Custom styles can be added by extending `require("blink-cmp-bibtex").setup()` wi
 - Markdown YAML metadata lines such as `bibliography: references.bib` are
   respected.
 - Typst `#bibliography()` declarations are detected, including those in imported files via `#import` statements.
+- GAPDoc `<Bibliography Databases="manual, gapdoc"/>` declarations are scanned in
+  XML documents. Names are comma-separated and carry no `.bib` extension, which
+  is appended automatically; `.xml` (BibXMLext) databases are skipped.
 - Both BibTeX (`.bib`) and Hayagriva (`.yml`, `.yaml`) bibliography files are supported and automatically detected based on file extension.
 - `opts.search_paths` accepts either file paths or glob patterns relative to the
   detected project root (based on `opts.root_markers`). These are treated as
@@ -465,9 +468,18 @@ add `gap`, `xml` or `autodoc` to `filetypes` — see
 [Custom citation matchers](#custom-citation-matchers). Typing `"` opens the
 menu, and keys are inserted verbatim (no multi-key splitting).
 
-Bibliography discovery is not implemented for GAPDoc: the
-`<Bibliography Databases="manual"/>` declaration is not scanned. List the
-bibliography under `files` or `search_paths` instead.
+The bibliography is discovered from the document itself. A declaration such as
+
+```xml
+<Bibliography Databases="manual, gapdoc" Style="alpha"/>
+```
+
+resolves to `manual.bib` and `gapdoc.bib` next to the document, following
+GAPDoc's rule that BibTeX databases are named without their `.bib` extension.
+The optional `Style` attribute is ignored, and BibXMLext databases (named with
+their full `.xml` name) are skipped, since this plugin reads BibTeX and
+Hayagriva. If your bibliography lives elsewhere, list it under `files` or
+`search_paths` as usual.
 
 ### Completion details
 
