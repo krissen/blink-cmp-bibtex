@@ -337,7 +337,8 @@ Custom styles can be added by extending `require("blink-cmp-bibtex").setup()` wi
 - Typst `#bibliography()` declarations are detected, including those in imported files via `#import` statements.
 - GAPDoc `<Bibliography Databases="manual, gapdoc"/>` declarations are scanned in
   XML documents. Names are comma-separated and carry no `.bib` extension, which
-  is appended automatically; `.xml` (BibXMLext) databases are skipped.
+  is appended automatically; `.xml` (BibXMLext) databases are skipped, as are
+  declarations inside XML comments.
 - Both BibTeX (`.bib`) and Hayagriva (`.yml`, `.yaml`) bibliography files are supported and automatically detected based on file extension.
 - `opts.search_paths` accepts either file paths or glob patterns relative to the
   detected project root (based on `opts.root_markers`). These are treated as
