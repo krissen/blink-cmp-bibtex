@@ -186,9 +186,9 @@ Every push and pull request runs the same command in CI against Neovim
 `luacheck` and `stylua --check`:
 
 ```sh
-make lint      # luacheck lua/ tests/ repro.lua
-make fmt       # stylua lua/ tests/ repro.lua
-make fmt-check # stylua --check lua/ tests/ repro.lua
+make lint      # luacheck lua/ plugin/ tests/ repro.lua
+make fmt       # stylua lua/ plugin/ tests/ repro.lua
+make fmt-check # stylua --check lua/ plugin/ tests/ repro.lua
 ```
 
 ### Layout

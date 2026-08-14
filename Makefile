@@ -4,10 +4,10 @@ test:
 	./scripts/test
 
 lint:
-	luacheck lua/ tests/ repro.lua
+	luacheck lua/ plugin/ tests/ repro.lua
 
 fmt:
-	stylua lua/ tests/ repro.lua
+	stylua lua/ plugin/ tests/ repro.lua
 
 fmt-check:
-	stylua --check lua/ tests/ repro.lua
+	stylua --check lua/ plugin/ tests/ repro.lua

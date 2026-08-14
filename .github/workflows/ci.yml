@@ -65,7 +65,7 @@ jobs:
         run: luarocks install luacheck
 
       - name: Run luacheck
-        run: luacheck lua/ tests/ repro.lua
+        run: luacheck lua/ plugin/ tests/ repro.lua
 
   format:
     name: stylua
@@ -77,4 +77,4 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           version: latest
-          args: --check lua/ tests/ repro.lua
+          args: --check lua/ plugin/ tests/ repro.lua

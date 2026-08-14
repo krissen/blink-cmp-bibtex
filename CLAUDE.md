@@ -17,9 +17,9 @@ first run needs network access and `python3` on `PATH` (hererocks).
 
 ### Linting and formatting
 ```sh
-make lint        # luacheck lua/ tests/ repro.lua
-make fmt         # stylua lua/ tests/ repro.lua
-make fmt-check   # stylua --check lua/ tests/ repro.lua
+make lint        # luacheck lua/ plugin/ tests/ repro.lua
+make fmt         # stylua lua/ plugin/ tests/ repro.lua
+make fmt-check   # stylua --check lua/ plugin/ tests/ repro.lua
 ```
 Both are enforced in CI (`.github/workflows/ci.yml`), together with the test
 suite on Neovim v0.10.4, stable and nightly.

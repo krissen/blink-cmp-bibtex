@@ -22,8 +22,8 @@ vision outlined in `docs/spec.md`.
 3. Run the test suite, the linter and the formatter before committing:
    ```sh
    ./scripts/test   # or: make test
-   make lint        # luacheck lua/ tests/ repro.lua
-   make fmt         # stylua lua/ tests/ repro.lua
+   make lint        # luacheck lua/ plugin/ tests/ repro.lua
+   make fmt         # stylua lua/ plugin/ tests/ repro.lua
    ```
    The first test run downloads lazy.nvim, blink.cmp and luassert into
    `.tests/`, so it needs network access. CI runs the same three commands
