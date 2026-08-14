@@ -109,7 +109,8 @@ sits inside a citation, and which key prefix has been typed so far. The
 `'*'` key applies to every filetype. Entries under a filetype key override
 same-named entries under `'*'`.
 
-The defaults are:
+The defaults, which live in
+`require("blink-cmp-bibtex.matchers").defaults`, are:
 
 ```lua
 matchers = {
@@ -138,11 +139,18 @@ Every value is normalized into a matcher spec. The accepted forms are:
 | `function(text, opts, ctx)` | Use this function as the matcher |
 | `{ match = fn, ... }` | A spec table; without `match` the built-in of the same name is used |
 
+Whenever the match function comes from a built-in, the spec fields you leave out
+are inherited from what the plugin ships for that matcher — first the entry for
+this filetype, then the one under `'*'`. Re-enabling `gapdoc` with `true` in an
+`xml` buffer therefore keeps its priority of 5 and its `"` trigger character
+rather than falling back to bare defaults. Fields you do spell out always win.
+
 Spec fields:
 
 - `match` (function) – the matcher function itself.
-- `priority` (number, default `50`) – lower runs first; the first matcher that
-  returns a result wins. Ties are broken by name.
+- `priority` (number, default `50` when neither you nor the built-in supplies
+  one) – lower runs first; the first matcher that returns a result wins. Ties
+  are broken by name.
 - `sanitize` (boolean) – whether a matched prefix is reduced to the key being
   typed. Sanitization splits on `,`/`;`, keeps the last segment, trims
   whitespace and strips a leading `@`, which is what makes `\cite{a,b,c` and

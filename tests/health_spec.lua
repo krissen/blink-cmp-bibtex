@@ -84,8 +84,7 @@ describe('health.check', function()
     config.setup(nil)
     local calls = run_check()
     for _, filetype in ipairs({ 'gap', 'xml', 'autodoc' }) do
-      local message = find(calls.info, filetype .. ': ')
-      assert.is_truthy(message, 'no info line for ' .. filetype)
+      local message = assert(find(calls.info, filetype .. ': '), 'no info line for ' .. filetype)
       assert.is_truthy(message:find('dormant', 1, true))
       assert.is_truthy(message:find('gapdoc (priority 5)', 1, true))
       assert.is_nil(find(calls.warn, filetype))
@@ -95,16 +94,14 @@ describe('health.check', function()
   it('reports an enabled matcher filetype as OK with its chain', function()
     config.setup({ filetypes = { 'tex', 'gap' } })
     local calls = run_check()
-    local message = find(calls.ok, 'gap: ')
-    assert.is_truthy(message, 'no ok line for gap')
+    local message = assert(find(calls.ok, 'gap: '), 'no ok line for gap')
     assert.is_truthy(message:find('gapdoc (priority 5)', 1, true))
     assert.are.same({}, calls.warn)
   end)
 
   it('reports the shared chain', function()
     config.setup(nil)
-    local message = find(run_check().info, 'shared')
-    assert.is_truthy(message)
+    local message = assert(find(run_check().info, 'shared'))
     assert.is_truthy(message:find('latex (priority 10), pandoc (priority 30)', 1, true))
   end)
 
@@ -112,6 +109,7 @@ describe('health.check', function()
     -- Not reachable through setup(), which always merges the shipped matchers
     -- back in, so the options are stubbed to reach the defensive branch.
     local original = config.get
+    --- @diagnostic disable-next-line: duplicate-set-field
     config.get = function()
       local opts = vim.deepcopy(original())
       opts.matchers = {}

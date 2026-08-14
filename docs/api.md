@@ -265,7 +265,15 @@ verbatim, so the result opts out of prefix sanitization.
 Table mapping the built-in names `latex`, `pandoc`, `typst` and `gapdoc` to
 their matcher functions. Configuration values may refer to these by name.
 
-### `matchers.normalize(name, value)`
+### `matchers.defaults`
+
+The per-filetype dispatch shipped with the plugin, keyed by filetype with `'*'`
+applying everywhere. It is the source of the `matchers` configuration default
+(`config.lua` deep-copies it) and the source of the inherited spec fields in
+`normalize`. It lives here rather than in `config.lua` so that the two modules
+do not depend on each other.
+
+### `matchers.normalize(name, value, filetype)`
 
 Normalize a configured matcher value into a spec.
 
@@ -273,11 +281,23 @@ Normalize a configured matcher value into a spec.
 - `name` (string): The configuration key the value was found under
 - `value` (any): `false`/`nil` (disabled), `true` (built-in of the same name), a
   string (named built-in), a function, or a spec table
+- `filetype` (string|nil): The filetype whose chain is being built, used to
+  resolve inherited spec fields
 
 **Returns:**
 - `BibtexMatcherSpec|nil`: The normalized spec, or nil when disabled or invalid
 
-Invalid values are reported once per name through `vim.notify` and skipped.
+When the match function comes from a built-in, `priority`, `sanitize` and
+`trigger_characters` are resolved in this order:
+
+1. the field spelled out in the user's own spec table
+2. the field this filetype ships for that built-in in `matchers.defaults`
+3. the field `'*'` ships for that built-in in `matchers.defaults`
+4. `50` for `priority`, `nil` for the rest
+
+This is what lets `gapdoc = true` in an `xml` buffer keep the shipped priority
+and trigger character. Invalid values are reported once per name through
+`vim.notify` and skipped.
 
 ### `matchers.chain(filetype, opts)`
 

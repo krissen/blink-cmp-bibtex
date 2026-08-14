@@ -296,7 +296,7 @@ function M.normalize(name, value, filetype)
   end
 
   --- Read a spec field, preferring the user's own value over the shipped one
-  --- @param field string
+  --- @param field_name string The spec field to read
   --- @return any
   local function field(field_name)
     if extra and extra[field_name] ~= nil then

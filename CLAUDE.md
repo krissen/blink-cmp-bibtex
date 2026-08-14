@@ -37,7 +37,7 @@ Eight modules under `lua/blink-cmp-bibtex/`:
 2. **parser.lua** - BibTeX/Hayagriva parsing with LaTeX accent normalization to UTF-8
 3. **scan.lua** - File discovery from `\addbibresource{}`, YAML metadata, Typst `#bibliography()`, `#import` statements, and glob patterns
 4. **cache.lua** - Mtime-based caching of parsed entries
-5. **matchers.lua** - Citation matchers (`latex`, `pandoc`, `typst`, `gapdoc`), normalization of user-configured matchers, priority ordering and dispatch
+5. **matchers.lua** - Citation matchers (`latex`, `pandoc`, `typst`, `gapdoc`), the shipped per-filetype dispatch (`M.defaults`, which config.lua copies), normalization of user-configured matchers, priority ordering and dispatch
 6. **local_bib.lua** - Local bibliography management (copy entries from global to project-local files)
 7. **health.lua** - `:checkhealth blink-cmp-bibtex`, reports the resolved config and matcher chains
 8. **init.lua** - blink.cmp source implementation (`Source:enabled`, `Source:get_trigger_characters`, `Source:get_completions`, `Source:resolve`, `Source:execute`)

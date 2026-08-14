@@ -371,11 +371,13 @@ M.builtin = { latex = M.latex, pandoc = M.pandoc, typst = M.typst, gapdoc = M.ga
    Set `sanitize = false` when keys are used verbatim rather than in
    comma-separated lists.
 
-2. Wire it into the `matchers` defaults in `config.lua`, under `'*'` if it
-   applies everywhere or under a filetype key otherwise. Pick a `priority`
-   (lower runs first) that places it correctly relative to the existing chain,
-   and declare `trigger_characters` if the syntax needs a character other than a
-   keyword to open the menu.
+2. Wire it into `M.defaults` in the same file, under `'*'` if it applies
+   everywhere or under a filetype key otherwise. `config.lua` deep-copies that
+   table for its `matchers` default, and `normalize` reads it to fill in the
+   fields a user leaves out, so an entry here is both the default *and* what
+   `gapdoc = true` inherits. Pick a `priority` (lower runs first) that places it
+   correctly relative to the existing chain, and declare `trigger_characters` if
+   the syntax needs a character other than a keyword to open the menu.
 
 3. If the matcher's filetype is not in the default `filetypes`, it stays dormant
    until users opt in. `health.lua` reports shipped dormant matchers as
