@@ -43,7 +43,6 @@ describe('Source:get_completions', function()
 
   it('completes citation keys inside \\cite{}', function()
     local response = complete(source, helpers.ctx('\\cite{', nil, bufnr))
-    table.sort(labels(response))
     assert.are.same({ 'project2020', 'projectbook2018' }, vim.fn.sort(labels(response)))
   end)
 
