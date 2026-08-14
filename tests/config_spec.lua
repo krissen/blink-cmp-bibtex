@@ -63,6 +63,43 @@ describe('config', function()
     assert.are.equal('ieee', config.extend(nil).preview_style)
   end)
 
+  it('replaces list options instead of merging them by index', function()
+    -- A user who narrows citation_commands must not inherit the default tail.
+    local opts = config.setup({ citation_commands = { 'cite', 'textcite' } })
+    assert.are.same({ 'cite', 'textcite' }, opts.citation_commands)
+    assert.are.same({ 'tex', 'plaintex', 'markdown', 'rmd', 'typst' }, config.defaults().filetypes)
+  end)
+
+  it('replaces a list with an empty one when asked to', function()
+    assert.are.same({}, config.setup({ root_markers = {} }).root_markers)
+  end)
+
+  it('keeps nested map defaults when the override is an empty table', function()
+    local opts = config.setup({ local_bib = {} })
+    assert.are.same({ 'local.bib', 'references.bib' }, opts.local_bib.patterns)
+  end)
+
+  it('merges a user matcher filetype without clobbering the shared entries', function()
+    local opts = config.setup({ matchers = { gap = { gapdoc = { priority = 5 } } } })
+    assert.are.equal(10, opts.matchers['*'].latex.priority)
+    assert.are.equal(20, opts.matchers.typst.typst.priority)
+    assert.are.equal(5, opts.matchers.gap.gapdoc.priority)
+  end)
+
+  it('keeps a disabled matcher across setup and extend', function()
+    config.setup({ matchers = { markdown = { pandoc = false } } })
+    local extended = config.extend({ preview_style = 'ieee' })
+    assert.is_false(extended.matchers.markdown.pandoc)
+  end)
+
+  it('leaves the matcher chains at their defaults when nothing is configured', function()
+    local matchers = require('blink-cmp-bibtex.matchers')
+    local opts = config.setup({ preview_style = 'ieee' })
+    for _, filetype in ipairs({ 'tex', 'markdown', 'typst', 'gap' }) do
+      assert.are.same(matchers.chain(filetype, config.defaults()), matchers.chain(filetype, opts))
+    end
+  end)
+
   it('setup with nil resets to the defaults', function()
     config.setup({ preview_style = 'ieee' })
     local reset = config.setup(nil)

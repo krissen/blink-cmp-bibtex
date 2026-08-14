@@ -78,7 +78,23 @@ end
 
 local options = deep_copy(defaults)
 
---- Merge two tables with override taking precedence
+--- Whether a value is a list, and therefore replaced rather than merged
+--- @param value any The value to inspect
+--- @return boolean
+local function is_list(value)
+  if type(value) ~= 'table' or next(value) == nil then
+    -- An empty table is ambiguous; treating it as a map keeps `local_bib = {}`
+    -- from wiping the nested defaults, while an empty override against a
+    -- non-empty list still replaces that list.
+    return false
+  end
+  local islist = vim.islist or vim.tbl_islist
+  return islist(value)
+end
+
+--- Deep merge two tables with override taking precedence
+--- Maps are merged key by key; lists are replaced wholesale, so a user who
+--- configures three citation_commands does not inherit the remaining defaults.
 --- @param base table The base table
 --- @param override table|nil The override table
 --- @return table The merged table
@@ -86,7 +102,16 @@ local function merge_tables(base, override)
   if not override then
     return base
   end
-  return vim.tbl_deep_extend('force', {}, base, override)
+  local result = deep_copy(base)
+  for key, value in pairs(override) do
+    local current = result[key]
+    if type(value) == 'table' and type(current) == 'table' and not is_list(value) and not is_list(current) then
+      result[key] = merge_tables(current, value)
+    else
+      result[key] = type(value) == 'table' and deep_copy(value) or value
+    end
+  end
+  return result
 end
 
 --- Setup configuration with custom options
