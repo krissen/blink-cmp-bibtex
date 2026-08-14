@@ -182,7 +182,15 @@ describe('Source GAPDoc support', function()
 
   it('completes citation keys inside <Cite Key="', function()
     local response = complete(source, helpers.ctx('As shown in <Cite Key="', nil, bufnr))
-    assert.are.same({ 'project2020', 'projectbook2018' }, vim.fn.sort(labels(response)))
+    -- shared2015 comes from the <Bibliography Databases="shared"/> declaration
+    -- in doc.xml, which is discovered from the buffer, not from opts.files.
+    assert.are.same({ 'project2020', 'projectbook2018', 'shared2015' }, vim.fn.sort(labels(response)))
+  end)
+
+  it('completes from the declared bibliography without any configured files', function()
+    local discovered = Source.new({ files = {}, filetypes = { 'gap' } })
+    local response = complete(discovered, helpers.ctx('<Cite Key="shared', nil, bufnr))
+    assert.are.same({ 'shared2015' }, labels(response))
   end)
 
   it('filters by the typed prefix', function()

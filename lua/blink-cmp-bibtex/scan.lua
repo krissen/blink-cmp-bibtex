@@ -418,6 +418,33 @@ local function expand_search_path(path, root)
   return resolved
 end
 
+--- Find bibliography databases in GAPDoc <Bibliography Databases="..."/> declarations
+--- Per the GAPDoc DTD the element is EMPTY with a required Databases attribute
+--- and an optional Style attribute; several databases are separated by commas.
+--- BibTeX databases are named without their .bib extension, while BibXMLext
+--- databases carry their full .xml name and are skipped here, since this plugin
+--- reads BibTeX and Hayagriva rather than BibXMLext.
+--- @param lines string[] Buffer lines to search
+--- @return string[] List of database names, without extensions
+local function find_gapdoc_bibliography(lines)
+  -- Joined so that a declaration split across lines is still found; the
+  -- attribute pattern cannot cross a '>' and so cannot leave its own element.
+  local text = table.concat(lines, '\n')
+  local resources = {}
+  local function collect(pattern)
+    for databases in text:gmatch(pattern) do
+      for _, name in ipairs(split_resources(databases)) do
+        if not name:lower():match('%.xml$') then
+          resources[#resources + 1] = name
+        end
+      end
+    end
+  end
+  collect('<Bibliography%s+[^>]-Databases%s*=%s*"([^"]*)"')
+  collect("<Bibliography%s+[^>]-Databases%s*=%s*'([^']*)'")
+  return resources
+end
+
 --- Ensure a path has a bibliography extension (.bib, .yml, or .yaml)
 --- @param path string|nil The path to check
 --- @return string|nil The path with .bib extension if needed (unless it already has .yml or .yaml)
@@ -470,6 +497,10 @@ function M.find_bib_files_from_buffer(bufnr)
   end
   local typst_resources = find_typst_bibliography(lines, buffer_dir)
   for _, resource in ipairs(typst_resources) do
+    resources[#resources + 1] = ensure_bib_extension(resource)
+  end
+  local gapdoc_resources = find_gapdoc_bibliography(lines)
+  for _, resource in ipairs(gapdoc_resources) do
     resources[#resources + 1] = ensure_bib_extension(resource)
   end
   return resources

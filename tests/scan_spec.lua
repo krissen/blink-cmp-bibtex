@@ -55,8 +55,17 @@ describe('scan.resolve_bib_paths', function()
     }, paths)
   end)
 
+  it('resolves a GAPDoc <Bibliography> declaration', function()
+    -- Deliberate change: doc.xml used to stand in for a buffer without any
+    -- bibliography declaration, since its <Bibliography> element was not read.
+    local paths = scan.resolve_bib_paths(open_fixture('project/doc.xml', 'xml'), {})
+    assert.are.same({ helpers.fixture('project/shared.bib') }, paths)
+  end)
+
   it('finds nothing in a buffer without bibliography declarations', function()
-    assert.are.same({}, scan.resolve_bib_paths(open_fixture('project/doc.xml', 'xml'), {}))
+    local bufnr = helpers.make_buf({ lines = { '<Book Name="Empty"><Chapter/></Book>' }, filetype = 'xml' })
+    assert.are.same({}, scan.resolve_bib_paths(bufnr, {}))
+    vim.api.nvim_buf_delete(bufnr, { force = true })
   end)
 
   describe('with a scratch buffer', function()
@@ -174,5 +183,65 @@ describe('scan.resolve_option_list', function()
         error('boom')
       end)
     )
+  end)
+end)
+
+describe('scan.find_bib_files_from_buffer with GAPDoc declarations', function()
+  --- Discover bibliography names from a one-off XML buffer.
+  --- @param lines string[]
+  --- @return string[]
+  local function discover(lines)
+    local bufnr = helpers.make_buf({ lines = lines, filetype = 'xml' })
+    local resources = scan.find_bib_files_from_buffer(bufnr)
+    vim.api.nvim_buf_delete(bufnr, { force = true })
+    return resources
+  end
+
+  it('appends .bib to a single database name', function()
+    assert.are.same({ 'mybib.bib' }, discover({ '<Bibliography Databases="mybib"/>' }))
+  end)
+
+  it('splits several comma-separated databases and trims them', function()
+    assert.are.same({ 'gapdoc.bib', 'mybib.bib' }, discover({ '<Bibliography Databases="gapdoc, mybib"/>' }))
+  end)
+
+  it('reads a single-quoted attribute', function()
+    assert.are.same({ 'mybib.bib' }, discover({ "<Bibliography Databases='mybib'/>" }))
+  end)
+
+  it('ignores the optional Style attribute, before or after Databases', function()
+    assert.are.same({ 'mybib.bib' }, discover({ '<Bibliography Databases="mybib" Style="alpha"/>' }))
+    assert.are.same({ 'mybib.bib' }, discover({ '<Bibliography Style="alpha" Databases="mybib"/>' }))
+  end)
+
+  it('reads a declaration split across lines', function()
+    assert.are.same({ 'mybib.bib' }, discover({ '<Bibliography', '   Databases="mybib"/>' }))
+  end)
+
+  it('reads several declarations in one document', function()
+    assert.are.same(
+      { 'first.bib', 'second.bib' },
+      discover({ '<Bibliography Databases="first"/>', '<Bibliography Databases="second"/>' })
+    )
+  end)
+
+  it('keeps a database name that already carries a path', function()
+    assert.are.same({ 'bib/refs.bib' }, discover({ '<Bibliography Databases="bib/refs"/>' }))
+  end)
+
+  it('skips BibXMLext databases, which are named with their .xml extension', function()
+    assert.are.same({ 'mybib.bib' }, discover({ '<Bibliography Databases="mybib, gapdoc.xml"/>' }))
+  end)
+
+  it('does not match a different element with a similar name', function()
+    assert.are.same({}, discover({ '<BibliographyIndex Databases="mybib"/>' }))
+  end)
+
+  it('does not match a Cite element', function()
+    assert.are.same({}, discover({ '<Cite Key="mybib"/>' }))
+  end)
+
+  it('does not read a Databases attribute from a following element', function()
+    assert.are.same({}, discover({ '<Bibliography/> <Other Databases="mybib"/>' }))
   end)
 end)
