@@ -29,8 +29,9 @@ Markdown and R Markdown buffers.
 - Parses entries lazily, normalizes common LaTeX accents (e.g. `{"a}`, `\aa`)
   and caches the results with modification-time tracking.
 - Supports common citation commands (`\cite`, `\parencite`, `\textcite`,
-  `\smartcite`, `\footcite`, `\nocite`, Pandoc `[@key]`, Typst `@key` and `#cite(<key>)`, …) including optional
-  pre/post notes.
+  `\smartcite`, `\footcite`, `\nocite`, Pandoc `[@key]`, …) including optional
+  pre/post notes. Typst syntax (`@key`, `#cite(<key>)`) applies in `typst`
+  buffers, where it takes precedence over the Pandoc forms.
 - Generates APA-inspired previews showing author, year, title and container data
   with selectable templates (APA default, IEEE optional).
 - Shows `[L]`/`[G]` source indicators to distinguish local (project) from global
@@ -394,7 +395,8 @@ in LaTeX mode.
 
 ### In Typst files
 
-Typst supports both simple `@key` citations and the more explicit `#cite(<key>)` syntax:
+Typst supports both simple `@key` citations and the more explicit `#cite(<key>)`
+syntax. Both are completed in buffers with the `typst` filetype only:
 
 ```typst
 @Nie
@@ -406,9 +408,11 @@ Or using the cite function:
 #cite(<Nie
 ```
 
-The bare `@key` form is deliberately limited to Typst buffers. In Markdown and
-R Markdown only the Pandoc forms (`@key` at a word boundary and `[@key`) apply,
-so an address such as `user@example` no longer opens the completion menu.
+The restriction to `typst` buffers is deliberate. In Markdown and R Markdown
+only the Pandoc forms (`@key` at a word boundary and `[@key`) apply, so an
+address such as `user@example` no longer opens the completion menu. To use the
+Typst forms in another filetype, add the `typst` matcher to it — see
+[Custom citation matchers](#custom-citation-matchers).
 
 #### Typst bibliography formats
 
