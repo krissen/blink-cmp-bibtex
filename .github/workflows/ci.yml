@@ -37,9 +37,9 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: .tests
-          key: ${{ runner.os }}-tests-${{ matrix.nvim }}-${{ hashFiles('tests/minit.lua') }}
-          restore-keys: |
-            ${{ runner.os }}-tests-${{ matrix.nvim }}-
+          # The workflow file is part of the key so that changes to the
+          # toolchain setup below do not restore a sandbox built without it.
+          key: ${{ runner.os }}-tests-${{ matrix.nvim }}-${{ hashFiles('tests/minit.lua', '.github/workflows/ci.yml') }}
 
       # hererocks builds Lua 5.1 from source, which links against readline.
       - name: Install readline headers
