@@ -255,23 +255,70 @@ describe('scan.find_bib_files_from_buffer with GAPDoc declarations', function()
     assert.are.same({ 'refs.bib.bib' }, discover({ '<Bibliography Databases="refs.bib"/>' }))
   end)
 
-  it('ignores a declaration inside an XML comment', function()
-    assert.are.same({}, discover({ '<!-- <Bibliography Databases="old"/> -->' }))
+  describe('inactive regions', function()
+    -- A declaration inside a region an XML processor does not read as markup
+    -- names a bibliography that is not in use, whatever kind of region it is.
+    local regions = {
+      { name = 'a comment', open = '<!--', close = '-->' },
+      { name = 'a CDATA section', open = '<![CDATA[', close = ']]>' },
+      { name = 'a processing instruction', open = '<?gapdoc', close = '?>' },
+    }
+
+    for _, region in ipairs(regions) do
+      local wrapped = region.open .. ' <Bibliography Databases="old"/> ' .. region.close
+
+      it('ignores a declaration inside ' .. region.name, function()
+        assert.are.same({}, discover({ wrapped }))
+      end)
+
+      it('ignores a declaration inside ' .. region.name .. ' spanning several lines', function()
+        assert.are.same({}, discover({ region.open, '  <Bibliography Databases="old"/>', region.close }))
+      end)
+
+      it('still reads a live declaration before ' .. region.name, function()
+        assert.are.same({ 'current.bib' }, discover({ '<Bibliography Databases="current"/>', wrapped }))
+      end)
+
+      it('still reads a live declaration after ' .. region.name, function()
+        assert.are.same({ 'current.bib' }, discover({ wrapped, '<Bibliography Databases="current"/>' }))
+      end)
+
+      it('still reads live declarations on both sides of ' .. region.name, function()
+        assert.are.same(
+          { 'first.bib', 'second.bib' },
+          discover({ '<Bibliography Databases="first"/>', wrapped, '<Bibliography Databases="second"/>' })
+        )
+      end)
+
+      it('treats the rest of the document as inactive after an unterminated ' .. region.name, function()
+        -- Documented behavior: an opener without its closer runs to the end of
+        -- the document, which is what the region looks like while it is typed.
+        assert.are.same({}, discover({ region.open .. ' retired', '<Bibliography Databases="old"/>' }))
+      end)
+    end
+
+    it('reads a declaration before an unterminated region', function()
+      assert.are.same({ 'current.bib' }, discover({ '<Bibliography Databases="current"/>', '<!-- retired' }))
+    end)
+
+    it('is unaffected by the XML declaration of a normal document', function()
+      assert.are.same(
+        { 'mybib.bib' },
+        discover({ '<?xml version="1.0" encoding="UTF-8"?>', '<Bibliography Databases="mybib"/>' })
+      )
+    end)
   end)
 
-  it('ignores a declaration inside a comment spanning several lines', function()
-    assert.are.same({}, discover({ '<!--', '  <Bibliography Databases="old"/>', '-->' }))
-  end)
-
-  it('still reads a live declaration following a commented-out one', function()
+  it('returns declarations in source order regardless of quote style', function()
     assert.are.same(
-      { 'current.bib' },
-      discover({ '<!-- <Bibliography Databases="old"/> -->', '<Bibliography Databases="current"/>' })
+      { 'first.bib', 'second.bib', 'third.bib', 'fourth.bib' },
+      discover({
+        "<Bibliography Databases='first'/>",
+        '<Bibliography Databases="second"/>',
+        "<Bibliography Databases='third'/>",
+        '<Bibliography Databases="fourth"/>',
+      })
     )
-  end)
-
-  it('ignores a declaration after an unterminated comment opener', function()
-    assert.are.same({}, discover({ '<!-- retired', '<Bibliography Databases="old"/>' }))
   end)
 
   it('does not join the buffer when no declaration marker is present', function()

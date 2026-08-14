@@ -424,6 +424,36 @@ end
 --- BibTeX databases are named without their .bib extension, while BibXMLext
 --- databases carry their full .xml name and are skipped here, since this plugin
 --- reads BibTeX and Hayagriva rather than BibXMLext.
+--- The opening of a GAPDoc bibliography declaration
+--- @type string
+local BIBLIOGRAPHY_TAG = '<Bibliography'
+
+--- Blank out the XML regions whose contents are not live markup
+--- Comments, CDATA sections and processing instructions all hold text that an
+--- XML processor never reads as markup, so a declaration inside one names a
+--- bibliography that is not in use. An unterminated opener runs to the end of
+--- the document, which is what an editor shows while such a region is being
+--- typed. Regions are replaced by a space rather than removed so that the
+--- markup around them cannot be glued together.
+--- @param text string The document text
+--- @return string The text with inactive regions blanked out
+local function strip_inactive_regions(text)
+  text = text:gsub('<!%-%-.-%-%->', ' ')
+  text = text:gsub('<!%[CDATA%[.-%]%]>', ' ')
+  text = text:gsub('<%?.-%?>', ' ')
+  text = text:gsub('<!%-%-.*$', ' ')
+  text = text:gsub('<!%[CDATA%[.*$', ' ')
+  text = text:gsub('<%?.*$', ' ')
+  return text
+end
+
+--- Read the Databases attribute of a single <Bibliography> element
+--- @param element string The element text, from '<Bibliography' to its '>'
+--- @return string|nil The attribute value, or nil when the element has none
+local function read_databases_attribute(element)
+  return element:match('Databases%s*=%s*"([^"]*)"') or element:match("Databases%s*=%s*'([^']*)'")
+end
+
 --- @param lines string[] Buffer lines to search
 --- @return string[] File names as written in the Databases attribute with '.bib'
 ---   appended; entries may carry a directory part and may contain dots
@@ -432,7 +462,7 @@ local function find_gapdoc_bibliography(lines)
   -- lines is only paid once a declaration can actually be present.
   local marked = false
   for _, line in ipairs(lines) do
-    if line:find('<Bibliography', 1, true) then
+    if line:find(BIBLIOGRAPHY_TAG, 1, true) then
       marked = true
       break
     end
@@ -441,30 +471,34 @@ local function find_gapdoc_bibliography(lines)
     return {}
   end
 
-  -- Joined so that a declaration split across lines is still found; the
-  -- attribute pattern cannot cross a '>' and so cannot leave its own element.
-  local text = table.concat(lines, '\n')
-  -- Commented-out declarations name retired bibliographies. Replaced by a space
-  -- rather than removed so that surrounding markup cannot be glued together.
-  text = text:gsub('<!%-%-.-%-%->', ' ')
-  -- An unterminated comment opener comments out the rest of the document.
-  text = text:gsub('<!%-%-.*$', ' ')
+  -- Joined so that a declaration split across lines is still found.
+  local text = strip_inactive_regions(table.concat(lines, '\n'))
 
   local resources = {}
-  local function collect(pattern)
-    for databases in text:gmatch(pattern) do
-      for _, name in ipairs(split_resources(databases)) do
-        -- BibXMLext databases carry their full .xml name and are skipped; every
-        -- other name is a BibTeX database, which the DTD defines as being
-        -- written without its .bib extension, so it is always appended.
-        if not name:lower():match('%.xml$') then
-          resources[#resources + 1] = name .. '.bib'
-        end
+  -- One pass in source order, reading both attribute quote styles as they come,
+  -- so that the returned list follows the document rather than the quoting.
+  local cursor = 1
+  while true do
+    local start_pos = text:find(BIBLIOGRAPHY_TAG .. '%s', cursor)
+    if not start_pos then
+      break
+    end
+    local rest = text:sub(start_pos)
+    -- Bounded by the element's own '>', so a Databases attribute belonging to a
+    -- later element is never read. The second form covers an element still
+    -- being typed at the end of the document, where no '>' exists yet.
+    local element = rest:match('^<Bibliography%s[^>]*>') or rest:match('^<Bibliography%s[^>]*$')
+    local databases = element and read_databases_attribute(element)
+    for _, name in ipairs(databases and split_resources(databases) or {}) do
+      -- BibXMLext databases carry their full .xml name and are skipped; every
+      -- other name is a BibTeX database, which the DTD defines as being
+      -- written without its .bib extension, so it is always appended.
+      if not name:lower():match('%.xml$') then
+        resources[#resources + 1] = name .. '.bib'
       end
     end
+    cursor = start_pos + #BIBLIOGRAPHY_TAG
   end
-  collect('<Bibliography%s+[^>]-Databases%s*=%s*"([^"]*)"')
-  collect("<Bibliography%s+[^>]-Databases%s*=%s*'([^']*)'")
   return resources
 end
 
