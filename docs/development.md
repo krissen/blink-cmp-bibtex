@@ -461,6 +461,17 @@ messages on `master` are the release input — see
 5. Merging the release PR tags `vx.y.z` and publishes the GitHub release from
    the changelog entry.
 
+**Two caveats when merging the release PR:**
+
+- The release PR carries no CI checks. It is opened by the workflow's
+  `GITHUB_TOKEN`, and events from that token do not trigger other workflows, so
+  the `pull_request` runs of `ci.yml` never start. Confirm that CI was green on
+  the `master` commit the release PR is based on before merging it.
+- The workflow can only open the PR if **Settings → Actions → General → Allow
+  GitHub Actions to create and approve pull requests** is enabled. Without it the
+  workflow run fails with a permissions error even though the job has
+  `pull-requests: write`.
+
 **Configuration:**
 
 - `release-please-config.json` – release type `simple` (no package manifest to
