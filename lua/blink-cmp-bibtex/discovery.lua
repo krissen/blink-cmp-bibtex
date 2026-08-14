@@ -697,6 +697,14 @@ end
 --- @return string[] File names, in chain order
 function M.collect(ctx)
   local resources = {}
+
+  --- Record one reported name, applying the hook's extension rule
+  --- @param spec BibtexDiscoverySpec The hook that reported it
+  --- @param name string The file name reported
+  local function remember(spec, name)
+    resources[#resources + 1] = spec.extension == false and name or ensure_bib_extension(name)
+  end
+
   for _, spec in ipairs(M.chain(ctx.filetype, ctx.opts)) do
     if not registry.has_failed(spec.find, ctx.filetype) then
       local ok, result = pcall(spec.find, ctx)
@@ -717,10 +725,11 @@ function M.collect(ctx)
             ctx.filetype or 'unset'
           )
         )
+      elseif type(result) == 'string' then
+        remember(spec, result)
       elseif result then
-        local found = type(result) == 'string' and { result } or result
-        for _, name in ipairs(found) do
-          resources[#resources + 1] = spec.extension == false and name or ensure_bib_extension(name)
+        for _, name in ipairs(result) do
+          remember(spec, name)
         end
       end
     end
