@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.11.0](https://github.com/krissen/blink-cmp-bibtex/compare/v0.10.0...v0.11.0) (2026-08-14)
+
+
+### Features
+
+* **health:** report discovery chains ([15052ec](https://github.com/krissen/blink-cmp-bibtex/commit/15052ec12e45c239880751c61004c9890fce3d24)), closes [#27](https://github.com/krissen/blink-cmp-bibtex/issues/27)
+* **scan:** register bib discovery hooks per filetype ([ae53a8d](https://github.com/krissen/blink-cmp-bibtex/commit/ae53a8d7aa735897408ccb49d1376142628a8c22)), closes [#27](https://github.com/krissen/blink-cmp-bibtex/issues/27)
+* **scan:** turn buffer discovery off with discovery = false ([93289ec](https://github.com/krissen/blink-cmp-bibtex/commit/93289ec42fc81eb57060c9b03b0ccab9913e00d5)), closes [#27](https://github.com/krissen/blink-cmp-bibtex/issues/27)
+
+
+### Bug Fixes
+
+* **config:** tolerate non-table option values ([751792b](https://github.com/krissen/blink-cmp-bibtex/commit/751792ba546fab92fc0fd16edbc74d8845ebc9db)), closes [#27](https://github.com/krissen/blink-cmp-bibtex/issues/27)
+* **init:** bound the entry lookup to two completion rounds ([803f6a2](https://github.com/krissen/blink-cmp-bibtex/commit/803f6a24ab1f2a704866b1b9e512602eb612cf78)), closes [#25](https://github.com/krissen/blink-cmp-bibtex/issues/25)
+* **init:** detect citation keys through the matcher chain ([62f75a6](https://github.com/krissen/blink-cmp-bibtex/commit/62f75a67d143c74368f745a46cdd7c163744c0c1)), closes [#26](https://github.com/krissen/blink-cmp-bibtex/issues/26)
+
 ## [0.10.0](https://github.com/krissen/blink-cmp-bibtex/compare/v0.9.0...v0.10.0) (2026-08-14)
 
 
