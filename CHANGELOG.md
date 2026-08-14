@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.0](https://github.com/krissen/blink-cmp-bibtex/compare/v0.9.0...v0.10.0) (2026-08-14)
+
+
+### Features
+
+* **scan:** discover GAPDoc bibliography declarations ([#20](https://github.com/krissen/blink-cmp-bibtex/issues/20)) ([ad7e10c](https://github.com/krissen/blink-cmp-bibtex/commit/ad7e10cc4cca64306ed2d174ecf7aaca2e60514a))
+
 ## [0.9.0](https://github.com/krissen/blink-cmp-bibtex/compare/v0.8.0...v0.9.0) (2026-08-14)
 
 
