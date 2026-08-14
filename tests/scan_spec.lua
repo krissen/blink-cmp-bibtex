@@ -244,4 +244,56 @@ describe('scan.find_bib_files_from_buffer with GAPDoc declarations', function()
   it('does not read a Databases attribute from a following element', function()
     assert.are.same({}, discover({ '<Bibliography/> <Other Databases="mybib"/>' }))
   end)
+
+  it('appends .bib to a dotted name, which GAPDoc treats as extensionless', function()
+    assert.are.same({ 'references.v2.bib' }, discover({ '<Bibliography Databases="references.v2"/>' }))
+  end)
+
+  it('appends .bib even to a name that already spells it out', function()
+    -- Characterizes the rule rather than second-guessing it: GAPDoc itself
+    -- appends .bib to whatever is written, so 'refs.bib' names refs.bib.bib.
+    assert.are.same({ 'refs.bib.bib' }, discover({ '<Bibliography Databases="refs.bib"/>' }))
+  end)
+
+  it('ignores a declaration inside an XML comment', function()
+    assert.are.same({}, discover({ '<!-- <Bibliography Databases="old"/> -->' }))
+  end)
+
+  it('ignores a declaration inside a comment spanning several lines', function()
+    assert.are.same({}, discover({ '<!--', '  <Bibliography Databases="old"/>', '-->' }))
+  end)
+
+  it('still reads a live declaration following a commented-out one', function()
+    assert.are.same(
+      { 'current.bib' },
+      discover({ '<!-- <Bibliography Databases="old"/> -->', '<Bibliography Databases="current"/>' })
+    )
+  end)
+
+  it('ignores a declaration after an unterminated comment opener', function()
+    assert.are.same({}, discover({ '<!-- retired', '<Bibliography Databases="old"/>' }))
+  end)
+
+  it('does not join the buffer when no declaration marker is present', function()
+    -- The extractor runs for every filetype, so the scan must stay cheap in
+    -- buffers that cannot contain a declaration at all.
+    -- Counting the joins is the only way to observe the guard from outside,
+    -- so table.concat is stubbed for the duration of this test and restored
+    -- below even when an assertion fails.
+    local original = table.concat
+    local calls = 0
+    --- @diagnostic disable-next-line: duplicate-set-field
+    table.concat = function(...) -- luacheck: ignore
+      calls = calls + 1
+      return original(...)
+    end
+    local ok, err = pcall(function()
+      assert.are.same({ 'bib/refs.bib' }, discover({ '\\addbibresource{bib/refs.bib}' }))
+      assert.are.equal(0, calls, 'joined the buffer without a <Bibliography marker')
+      discover({ '<Bibliography Databases="mybib"/>' })
+      assert.is_true(calls > 0, 'never joined the buffer despite a marker')
+    end)
+    table.concat = original -- luacheck: ignore
+    assert.is_true(ok, tostring(err))
+  end)
 end)

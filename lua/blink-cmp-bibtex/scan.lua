@@ -425,17 +425,40 @@ end
 --- databases carry their full .xml name and are skipped here, since this plugin
 --- reads BibTeX and Hayagriva rather than BibXMLext.
 --- @param lines string[] Buffer lines to search
---- @return string[] List of database names, without extensions
+--- @return string[] File names as written in the Databases attribute with '.bib'
+---   appended; entries may carry a directory part and may contain dots
 local function find_gapdoc_bibliography(lines)
+  -- Every buffer is scanned regardless of filetype, so the cost of joining the
+  -- lines is only paid once a declaration can actually be present.
+  local marked = false
+  for _, line in ipairs(lines) do
+    if line:find('<Bibliography', 1, true) then
+      marked = true
+      break
+    end
+  end
+  if not marked then
+    return {}
+  end
+
   -- Joined so that a declaration split across lines is still found; the
   -- attribute pattern cannot cross a '>' and so cannot leave its own element.
   local text = table.concat(lines, '\n')
+  -- Commented-out declarations name retired bibliographies. Replaced by a space
+  -- rather than removed so that surrounding markup cannot be glued together.
+  text = text:gsub('<!%-%-.-%-%->', ' ')
+  -- An unterminated comment opener comments out the rest of the document.
+  text = text:gsub('<!%-%-.*$', ' ')
+
   local resources = {}
   local function collect(pattern)
     for databases in text:gmatch(pattern) do
       for _, name in ipairs(split_resources(databases)) do
+        -- BibXMLext databases carry their full .xml name and are skipped; every
+        -- other name is a BibTeX database, which the DTD defines as being
+        -- written without its .bib extension, so it is always appended.
         if not name:lower():match('%.xml$') then
-          resources[#resources + 1] = name
+          resources[#resources + 1] = name .. '.bib'
         end
       end
     end
@@ -499,9 +522,11 @@ function M.find_bib_files_from_buffer(bufnr)
   for _, resource in ipairs(typst_resources) do
     resources[#resources + 1] = ensure_bib_extension(resource)
   end
+  -- Already carries its .bib extension: GAPDoc names are extensionless by
+  -- definition, so ensure_bib_extension's dotted-name heuristics do not apply.
   local gapdoc_resources = find_gapdoc_bibliography(lines)
   for _, resource in ipairs(gapdoc_resources) do
-    resources[#resources + 1] = ensure_bib_extension(resource)
+    resources[#resources + 1] = resource
   end
   return resources
 end
