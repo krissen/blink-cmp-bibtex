@@ -449,18 +449,109 @@ Parse a BibTeX file and return all entries.
 **Errors:**
 - Throws an error if the file cannot be opened
 
+## Module: blink-cmp-bibtex.discovery
+
+Bibliography discovery from the current buffer. A *hook* reads the buffer and
+reports the files it declares; the hooks that run in a filetype are configured
+through the `discovery` option, whose default is `discovery.defaults`.
+
+### `discovery.latex(ctx)` / `discovery.yaml(ctx)` / `discovery.typst(ctx)` / `discovery.gapdoc(ctx)`
+
+The hooks shipped with the plugin, reading `\addbibresource{}` and friends,
+Markdown YAML front matter, Typst `#bibliography()` (following `#import`), and
+GAPDoc `<Bibliography Databases="…"/>` respectively.
+
+**Parameters:**
+- `ctx` (BibtexDiscoveryContext): The buffer being scanned
+
+**Returns:**
+- `string[]`: File names, unresolved
+
+### `discovery.builtin`
+
+Table mapping the built-in names `latex`, `yaml`, `typst` and `gapdoc` to their
+functions.
+
+### `discovery.defaults`
+
+The dispatch shipped with the plugin, and the value `config` copies into
+`discovery`. Every hook sits under `'*'`: discovery is filetype agnostic, unlike
+`matchers.defaults`, where the filetype decides which citation syntax applies.
+
+### `discovery.normalize(name, value, filetype)`
+
+Normalize a configured value into a spec, accepting the same forms as
+`matchers.normalize` (`false`, `true`, a built-in name, a function, or a spec
+table) with the same inheritance of shipped fields. Invalid values are skipped
+with one warning per name.
+
+**Returns:**
+- `BibtexDiscoverySpec|nil`
+
+### `discovery.chain(filetype, opts)`
+
+Build the ordered hook chain for a filetype. Entries under the filetype key
+override same-named `'*'` entries; ties break on the name.
+
+Unlike `matchers.chain`, this falls back to `discovery.defaults` when `opts` or
+`opts.discovery` is absent, because `find_bib_files_from_buffer` is public and
+is called without options. Pass `discovery = false` to run no hooks at all.
+
+**Returns:**
+- `BibtexDiscoverySpec[]`
+
+### `discovery.collect(ctx)`
+
+Run the chain and concatenate what the hooks report, in chain order. Each hook
+is called inside `pcall`; one that raises, or returns something other than a
+string or a list of strings, is reported once and skipped for that filetype.
+Names are returned unresolved — `resolve_bib_paths` resolves and deduplicates
+them.
+
+**Returns:**
+- `string[]`
+
+### Types
+
+```lua
+--- @class BibtexDiscoveryContext
+--- @field bufnr number
+--- @field filetype string|nil
+--- @field lines string[]      -- shared between hooks; read-only
+--- @field bufname string|nil
+--- @field dir string|nil      -- the buffer's directory
+--- @field opts table
+
+--- @alias BibtexDiscoveryFn fun(ctx: BibtexDiscoveryContext): string[]|string|nil
+
+--- @class BibtexDiscoverySpec
+--- @field name string
+--- @field find BibtexDiscoveryFn
+--- @field priority number       -- lower runs first (default 50); output order only
+--- @field extension boolean|nil -- when not false, extensionless results get '.bib'
+```
+
+A hook takes only the context, with no leading subject argument. This differs
+from a matcher, which takes the text it inspects as its first parameter: the
+lines a hook reads are already part of its context.
+
 ## Module: blink-cmp-bibtex.scan
 
 BibTeX file discovery and path resolution.
 
-### `scan.find_bib_files_from_buffer(bufnr)`
+### `scan.find_bib_files_from_buffer(bufnr, opts)`
 
-Find BibTeX files referenced in a buffer, from LaTeX commands, Markdown YAML
-front matter, Typst `#bibliography()` declarations and GAPDoc `<Bibliography>`
-declarations. See [Buffer Discovery](#buffer-discovery) for the exact forms.
+Find BibTeX files referenced in a buffer by running the discovery hooks
+configured for its filetype. See [Buffer Discovery](#buffer-discovery) for the
+forms the built-in hooks understand, and
+[Module: blink-cmp-bibtex.discovery](#module-blink-cmp-bibtexdiscovery) for
+registering your own.
 
 **Parameters:**
 - `bufnr` (number): Buffer number
+- `opts` (table|nil): Configuration options. When omitted, the hooks shipped
+  with the plugin are used, so callers that only want the built-in behavior can
+  keep calling this with a buffer alone.
 
 **Returns:**
 - `string[]`: List of bibliography file names (not full paths)
@@ -674,3 +765,7 @@ The plugin automatically discovers BibTeX files from:
 
 5. **Configured search paths** relative to project root
 6. **Manual file paths** from configuration
+
+Items 1-4 are discovery hooks and can be reordered, disabled per filetype, or
+joined by your own; see
+[Module: blink-cmp-bibtex.discovery](#module-blink-cmp-bibtexdiscovery).

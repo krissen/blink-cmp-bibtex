@@ -7,7 +7,7 @@ Markdown and R Markdown buffers.
 
 ---
 
-[Features](#features) · [Installation](#installation) · [Configuration](#configuration) · [Custom citation matchers](#custom-citation-matchers) · [Usage](#usage) · [Health check](#health-check) · [Alternatives](#alternatives)
+[Features](#features) · [Installation](#installation) · [Configuration](#configuration) · [Custom citation matchers](#custom-citation-matchers) · [Custom bib discovery](#custom-bib-discovery) · [Usage](#usage) · [Health check](#health-check) · [Alternatives](#alternatives)
 
 ---
 
@@ -40,6 +40,9 @@ Markdown and R Markdown buffers.
   `require("blink-cmp-bibtex").setup()` or provider-level `opts`.
 - Lets you add citation syntaxes per filetype through the `matchers` option
   (GAPDoc's `<Cite Key="…"/>` is included), without patching the plugin.
+- Lets you add bibliography discovery for your own conventions through the
+  `discovery` option, alongside the built-in LaTeX, YAML, Typst and GAPDoc
+  declarations.
 - Reports the resolved configuration through `:checkhealth blink-cmp-bibtex`.
 
 ## Installation
@@ -247,6 +250,87 @@ require("blink-cmp-bibtex").setup({
 Run `:checkhealth blink-cmp-bibtex` to see the matcher chain that a filetype
 actually resolves to.
 
+### Custom bib discovery
+
+A *discovery hook* reads the current buffer and reports the bibliography files
+it declares. This is what finds `\addbibresource{refs.bib}` in a LaTeX file or
+`bibliography: refs.bib` in Markdown front matter, and it is the same kind of
+registry as the matchers above: the `discovery` option maps a filetype to the
+hooks that run in it, and `'*'` applies to every filetype.
+
+The defaults, which live in
+`require("blink-cmp-bibtex.discovery").defaults`, are:
+
+```lua
+discovery = {
+  ['*'] = {
+    latex = { priority = 10 },   -- \addbibresource{}, \bibliography{}
+    yaml = { priority = 20 },    -- bibliography: in Markdown front matter
+    typst = { priority = 30 },   -- #bibliography(), following #import
+    gapdoc = { priority = 40, extension = false }, -- <Bibliography Databases="">
+  },
+}
+```
+
+Note the contrast with `matchers`: **every** discovery hook sits under `'*'`,
+because a declaration is worth finding wherever it appears — an
+`\addbibresource` in a Markdown buffer is found today, and moving the LaTeX
+hook under `tex` would silently stop finding it. Only narrow a hook to a
+filetype when the syntax genuinely cannot occur elsewhere.
+
+A hook receives a context and returns the file names it found, as a list, a
+single string, or nil:
+
+```lua
+require("blink-cmp-bibtex").setup({
+  discovery = {
+    ['*'] = {
+      -- Read a project convention: a plain-text file listing bibliographies.
+      manifest = {
+        priority = 5,
+        find = function(ctx)
+          -- Cheap guard first: hooks run on every completion request, so scan
+          -- for a literal marker before doing anything expensive.
+          for _, line in ipairs(ctx.lines) do
+            local path = line:match('^%%%% bib: (.+)$')
+            if path then
+              return path
+            end
+          end
+          return nil
+        end,
+      },
+    },
+    -- Markdown documents in this project never use LaTeX declarations.
+    markdown = { latex = false },
+  },
+})
+```
+
+The context carries `bufnr`, `filetype`, `lines`, `bufname`, `dir` (the
+buffer's directory, for resolving relative paths) and `opts`. Its `lines` table
+is shared with the other hooks, so treat it as read-only.
+
+Values are normalized exactly as matcher values are — `false` disables, `true`
+enables the built-in of the same name, a string names a built-in, a function is
+the hook itself, and a table is a spec — with the same inheritance of shipped
+fields. Spec fields:
+
+- `find` (function) — the hook itself.
+- `priority` (number, default `50`) — lower runs first. Unlike matchers, every
+  hook runs; priority decides only the order of the results.
+- `extension` (boolean) — when not `false`, a name without an extension gets
+  `.bib` appended, so `\bibliography{references}` resolves to `references.bib`.
+  Set `extension = false` when the hook returns finished file names.
+
+Relative paths are resolved against the buffer's directory, with the project
+root as a fallback, exactly like the built-in results. `discovery = false`
+turns buffer discovery off entirely, leaving `files`, `global_files` and
+`search_paths` as the only sources.
+
+Run `:checkhealth blink-cmp-bibtex` to see the discovery chain that a filetype
+actually resolves to.
+
 ### Source indicators
 
 When you have both local (project) and global (shared) bibliography files,
@@ -340,6 +424,9 @@ Custom styles can be added by extending `require("blink-cmp-bibtex").setup()` wi
   is appended automatically; `.xml` (BibXMLext) databases are skipped, as are
   declarations inside XML comments, CDATA sections and processing instructions.
 - Both BibTeX (`.bib`) and Hayagriva (`.yml`, `.yaml`) bibliography files are supported and automatically detected based on file extension.
+- Every one of these is a discovery hook, and the set is configurable: see
+  [Custom bib discovery](#custom-bib-discovery) to add a syntax, reorder the
+  hooks, or disable one per filetype.
 - `opts.search_paths` accepts either file paths or glob patterns relative to the
   detected project root (based on `opts.root_markers`). These are treated as
   **local** sources.
