@@ -322,7 +322,18 @@ end
 --- @param opts table Configuration options
 --- @return BibtexMatcherSpec[] The matchers to run, in order
 function M.chain(filetype, opts)
-  local configured = opts and opts.matchers or {}
+  local configured = opts and opts.matchers
+  if configured == true then
+    configured = M.defaults
+  elseif configured ~= nil and type(configured) ~= 'table' then
+    -- false disables every matcher; anything else is unusable and is reported
+    -- once, then treated as though nothing had been configured.
+    if configured ~= false then
+      registry.warn_once('matcher', 'option', string.format('matchers is %s, which cannot be used', type(configured)))
+    end
+    configured = {}
+  end
+  configured = configured or {}
   local shared = configured['*'] or {}
   local per_filetype = filetype and configured[filetype] or {}
 

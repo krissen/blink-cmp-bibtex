@@ -653,10 +653,17 @@ end
 --- @param opts table|nil Configuration options
 --- @return BibtexDiscoverySpec[] The hooks to run, in order
 function M.chain(filetype, opts)
-  if opts and opts.discovery == false then
+  local configured = opts and opts.discovery
+  if configured == false then
     return {}
   end
-  local configured = opts and opts.discovery or M.defaults
+  if configured ~= nil and configured ~= true and type(configured) ~= 'table' then
+    -- Unusable: reported once, then treated as though nothing was configured,
+    -- which for discovery means the shipped hooks.
+    registry.warn_once('discovery', 'option', string.format('discovery is %s, which cannot be used', type(configured)))
+    configured = nil
+  end
+  configured = (configured == true or configured == nil) and M.defaults or configured
   local shared = configured['*'] or {}
   local per_filetype = filetype and configured[filetype] or {}
 

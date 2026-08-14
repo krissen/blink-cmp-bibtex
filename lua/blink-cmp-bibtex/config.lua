@@ -3,6 +3,7 @@
 --- @module 'blink-cmp-bibtex.config'
 
 local discovery = require('blink-cmp-bibtex.discovery')
+local registry = require('blink-cmp-bibtex.registry')
 local matchers = require('blink-cmp-bibtex.matchers')
 
 local M = {}
@@ -102,11 +103,61 @@ local function merge_tables(base, override)
   return result
 end
 
+--- How each option that must not be a scalar is repaired when it is one
+--- 'registry' options accept true (the shipped entries) and false (none of
+--- them) as shorthands; every other option only ever holds a table, except the
+--- path options, which have always accepted a string or a function as well.
+--- @type table<string, string>
+local option_kinds = {
+  matchers = 'registry',
+  discovery = 'registry',
+  local_bib = 'map',
+  filetypes = 'list',
+  citation_commands = 'list',
+  root_markers = 'list',
+  files = 'path',
+  global_files = 'path',
+  search_paths = 'path',
+}
+
+--- Replace option values of a type the plugin cannot use
+--- Everything downstream indexes these values, iterates them or takes their
+--- length, so a scalar left in place would crash a completion round, the
+--- scanner or the health check. Repairing them here means each consumer can
+--- keep reading the option directly, and the user is told once what happened.
+--- @param resolved table The merged options, modified in place
+--- @return table The same table
+local function sanitize(resolved)
+  for name, kind in pairs(option_kinds) do
+    local value = resolved[name]
+    local usable = type(value) == 'table'
+      or (kind == 'path' and (type(value) == 'string' or type(value) == 'function'))
+      -- Only false passes through, disabling the registry; true means "what the
+      -- plugin ships" and is expanded into the default below.
+      or (kind == 'registry' and value == false)
+
+    if not usable and value ~= nil then
+      if kind == 'registry' and value == true then
+        -- Reads as "use what the plugin ships", which is what the default is.
+        resolved[name] = deep_copy(defaults[name])
+      else
+        registry.warn_once(
+          'config',
+          name,
+          string.format("option '%s' is %s, which cannot be used; the default applies", name, type(value))
+        )
+        resolved[name] = deep_copy(defaults[name])
+      end
+    end
+  end
+  return resolved
+end
+
 --- Setup configuration with custom options
 --- @param opts table|nil User-provided configuration options
 --- @return table The final merged configuration
 function M.setup(opts)
-  options = merge_tables(defaults, opts)
+  options = sanitize(merge_tables(defaults, opts))
   return options
 end
 
@@ -114,7 +165,7 @@ end
 --- @param opts table|nil Additional options to merge
 --- @return table The extended configuration
 function M.extend(opts)
-  return merge_tables(options, opts)
+  return sanitize(merge_tables(options, opts))
 end
 
 --- Get the current configuration

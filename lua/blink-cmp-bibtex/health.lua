@@ -44,13 +44,13 @@ function M.check()
 
   h_start('blink-cmp-bibtex')
 
-  local filetypes = opts.filetypes or {}
+  local filetypes = type(opts.filetypes) == 'table' and opts.filetypes or {}
   if #filetypes == 0 then
     h_info('filetypes: (empty) — the source is offered in every buffer')
   else
     h_ok('filetypes: ' .. table.concat(filetypes, ', '))
   end
-  h_info(string.format('preview_style: %s, max_entries: %d', opts.preview_style, opts.max_entries))
+  h_info(string.format('preview_style: %s, max_entries: %s', tostring(opts.preview_style), tostring(opts.max_entries)))
   -- files and global_files may be a list, a bare string, or a function, so they
   -- are resolved the same way the scanner resolves them before being counted.
   h_info(string.format('files: %d configured', #scan.resolve_option_list(opts.files, bufnr)))
@@ -66,7 +66,7 @@ function M.check()
   local function report_section(section, configured, chain_for, shipped, empty_message, consequence)
     h_start('blink-cmp-bibtex: ' .. section)
 
-    if vim.tbl_isempty(configured) then
+    if type(configured) ~= 'table' or vim.tbl_isempty(configured) then
       h_warn(empty_message)
       return
     end
@@ -107,7 +107,7 @@ function M.check()
 
   report_section(
     'matchers',
-    opts.matchers or {},
+    type(opts.matchers) == 'table' and opts.matchers or {},
     function(filetype)
       return matchers.chain(filetype, opts)
     end,
@@ -119,7 +119,7 @@ function M.check()
   -- Absent means the shipped hooks are in force; false, or anything else that
   -- is not a table, means discovery is off.
   local discovery_configured = opts.discovery
-  if discovery_configured == nil then
+  if discovery_configured == nil or discovery_configured == true then
     discovery_configured = defaults.discovery or {}
   elseif type(discovery_configured) ~= 'table' then
     discovery_configured = {}
