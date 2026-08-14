@@ -25,6 +25,65 @@ describe('scan.find_bib_files_from_buffer', function()
   end)
 end)
 
+describe('scan.find_bib_files_from_buffer built-in order', function()
+  -- Pins the behavior the discovery hooks must reproduce: which syntaxes are
+  -- read, in which order, and which names come back with an extension.
+
+  it('returns raw names, LaTeX before YAML, for a buffer declaring both', function()
+    local bufnr = open_fixture('project/mixed.md', 'markdown')
+    assert.are.same({ 'bib/refs.bib', 'shared.bib' }, scan.find_bib_files_from_buffer(bufnr))
+  end)
+
+  it('appends .bib to extensionless LaTeX, YAML and Typst names', function()
+    local bufnr = helpers.make_buf({
+      lines = {
+        '---',
+        'bibliography: fromyaml',
+        '---',
+        '\\addbibresource{fromlatex}',
+        '#bibliography("fromtypst")',
+      },
+      filetype = 'markdown',
+    })
+    assert.are.same({ 'fromlatex.bib', 'fromyaml.bib', 'fromtypst.bib' }, scan.find_bib_files_from_buffer(bufnr))
+    vim.api.nvim_buf_delete(bufnr, { force = true })
+  end)
+
+  it('leaves a dotted GAPDoc name alone, which already carries its extension', function()
+    local bufnr = helpers.make_buf({ lines = { '<Bibliography Databases="refs.v2"/>' }, filetype = 'xml' })
+    assert.are.same({ 'refs.v2.bib' }, scan.find_bib_files_from_buffer(bufnr))
+    vim.api.nvim_buf_delete(bufnr, { force = true })
+  end)
+
+  it('resolves a Typst import relative to the imported file, not the importer', function()
+    helpers.with_tmpdir(function(dir)
+      local nested = vim.fs.joinpath(dir, 'nested')
+      helpers.write_file(vim.fs.joinpath(nested, 'template.typ'), '#bibliography("refs.bib")\n')
+      helpers.write_file(vim.fs.joinpath(dir, 'main.typ'), '#import "nested/template.typ": *\n')
+      local bufnr = vim.fn.bufadd(vim.fs.joinpath(dir, 'main.typ'))
+      vim.fn.bufload(bufnr)
+      vim.api.nvim_set_option_value('filetype', 'typst', { buf = bufnr })
+      -- Resolved, since the import path is derived from the buffer name and the
+      -- temporary directory reaches it through a symlink on macOS.
+      local expected = vim.fs.joinpath(vim.fs.normalize(vim.fn.resolve(nested)), 'refs.bib')
+      assert.are.same({ expected }, scan.find_bib_files_from_buffer(bufnr))
+      vim.api.nvim_buf_delete(bufnr, { force = true })
+    end)
+  end)
+
+  it('passes an absolute Typst bibliography path through unchanged', function()
+    helpers.with_tmpdir(function(dir)
+      local absolute = vim.fs.joinpath(dir, 'refs.bib')
+      local bufnr = helpers.make_buf({
+        lines = { string.format('#bibliography("%s")', absolute) },
+        filetype = 'typst',
+      })
+      assert.are.same({ absolute }, scan.find_bib_files_from_buffer(bufnr))
+      vim.api.nvim_buf_delete(bufnr, { force = true })
+    end)
+  end)
+end)
+
 describe('scan.resolve_bib_paths', function()
   local fixtures = helpers.fixture('')
 
@@ -49,6 +108,15 @@ describe('scan.resolve_bib_paths', function()
   it('resolves #bibliography() and follows #import statements', function()
     local paths = scan.resolve_bib_paths(open_fixture('project/doc.typ', 'typst'), {})
     -- shared.bib is only declared inside the imported template.typ.
+    assert.are.same({
+      helpers.fixture('project/bib/refs.bib'),
+      helpers.fixture('project/shared.bib'),
+    }, paths)
+  end)
+
+  it('resolves every declaration of a buffer that mixes syntaxes', function()
+    -- Pins that discovery still runs when no options are configured at all.
+    local paths = scan.resolve_bib_paths(open_fixture('project/mixed.md', 'markdown'), {})
     assert.are.same({
       helpers.fixture('project/bib/refs.bib'),
       helpers.fixture('project/shared.bib'),
