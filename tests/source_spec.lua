@@ -420,6 +420,24 @@ describe('Source.__test.key_under_cursor', function()
     assert.are.equal('smith2020', detect('xml', '<Ref BibKey="smi|th2020"/>', opts))
   end)
 
+  it('keeps a slash inside the key', function()
+    assert.are.equal('smith/2020', detect('tex', '\\cite{smi|th/2020}'))
+  end)
+
+  it('keeps a plus inside a GAPDoc key', function()
+    assert.are.equal('a+b', detect('gap', '<Cite Key="a|+b"/>'))
+  end)
+
+  it('keeps punctuation the parser accepts in a key', function()
+    -- The parser takes any run of non-comma, non-whitespace characters, so the
+    -- cursor scan must not stop at the first character outside a short alphabet.
+    assert.are.equal('a/b+c~d!e', detect('tex', '\\cite{a/b|+c~d!e}'))
+  end)
+
+  it('still stops at the delimiter that ends the citation', function()
+    assert.are.equal('smith2020', detect('markdown', 'see [@smi|th2020] and more'))
+  end)
+
   it('returns nil for a plain word', function()
     assert.is_nil(detect('markdown', 'just some wo|rds here'))
   end)

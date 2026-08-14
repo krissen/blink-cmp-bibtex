@@ -211,9 +211,16 @@ local function wants_sanitized_prefix(detection, spec)
   return wanted
 end
 
---- Characters a citation key may contain, used to find its end from the cursor
+--- Characters that end a citation key in one syntax or another
+--- The parser accepts any run of non-comma, non-whitespace characters as a key,
+--- so the cursor scan stops at delimiters rather than at an allowed alphabet:
+--- otherwise a key like smith/2020 or a+b would be cut at its punctuation.
 --- @type string
-local KEY_CHARACTER = '[%w:_%.%-]'
+local KEY_DELIMITERS = [[%s,;{}%[%]()<>"'\]]
+
+--- Matches one character a citation key may contain
+--- @type string
+local KEY_CHARACTER = '[^' .. KEY_DELIMITERS .. ']'
 
 --- Detect the citation key the cursor sits in or after
 --- The matchers read the text up to the cursor, while the cursor here may sit
