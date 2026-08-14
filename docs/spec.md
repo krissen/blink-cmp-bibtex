@@ -33,6 +33,16 @@ nvim-cmp) with a fresh, MIT-licensed codebase that targets blink.cmp directly.
   in the completion menu.
 - Respect filetype restrictions (`opts.filetypes`). Only activate on LaTeX,
   Markdown, R Markdown, and other explicitly configured filetypes.
+- Allow citation syntaxes to be added per filetype without patching the plugin.
+  Citation detection is expressed as named matchers that users register through
+  configuration (`opts.matchers`), keyed by filetype with a `'*'` entry applying
+  everywhere. A matcher is a function of the text before the cursor returning
+  the typed key prefix, so third-party syntaxes — XML-based ones such as
+  GAPDoc's `<Cite Key="key"/>`, for example — are a configuration entry rather
+  than a code change. Built-in matchers must be reusable, overridable and
+  individually disableable, must be ordered by an explicit priority, and must be
+  able to declare their own trigger characters. A failing matcher must not
+  disable completion as a whole.
 - Provide asynchronous completion so that large BibTeX files do not block the UI.
 - Cache parsed BibTeX files and reload them when the modification time changes.
 
@@ -46,6 +56,8 @@ nvim-cmp) with a fresh, MIT-licensed codebase that targets blink.cmp directly.
     performs minimal LaTeX-to-UTF8 conversions.
   - `scan.lua`: buffer/project inspectors that find relevant `.bib` files.
   - `cache.lua`: memoized storage keyed by file path with mtime checks.
+  - `matchers.lua`: built-in citation matchers plus the normalization and
+    dispatch of user-registered ones.
   - `init.lua`: blink.cmp source implementation.
 - Provide a `plugin/blink-cmp-bibtex.lua` entrypoint so that the source can be
   configured automatically when added to the runtime path.
