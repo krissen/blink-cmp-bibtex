@@ -2,6 +2,9 @@
 --- Discovers and resolves BibTeX file paths from buffers and configuration
 --- @module 'blink-cmp-bibtex.scan'
 
+local discovery = require('blink-cmp-bibtex.discovery')
+local path_util = require('blink-cmp-bibtex.path')
+
 local M = {}
 
 --- Resolve an option value (may be a function or static value)
@@ -63,323 +66,6 @@ function M.resolve_option_list(value, ...)
   return normalize_list(resolve_option(value, ...))
 end
 
---- BibTeX bibliography command names to recognize
---- @type table<string, boolean>
-local bibliography_commands = {
-  addbibresource = true,
-  ['addbibresource*'] = true,
-  addglobalbib = true,
-  addsectionbib = true,
-  bibliography = true,
-  nobibliography = true,
-}
-
---- Trim whitespace from a string
---- @param value string The string to trim
---- @return string The trimmed string
-local function trim(value)
-  return value:match('^%s*(.-)%s*$') or ''
-end
-
---- Split a comma-separated resource string into individual entries
---- @param value string The resource string to split
---- @return string[] List of resource names
-local function split_resources(value)
-  local entries = {}
-  for part in value:gmatch('[^,]+') do
-    local cleaned = trim(part)
-    if cleaned ~= '' then
-      entries[#entries + 1] = cleaned
-    end
-  end
-  if #entries == 0 and value ~= '' then
-    entries[1] = trim(value)
-  end
-  return entries
-end
-
---- Skip whitespace in a string starting from a given index
---- @param str string The input string
---- @param idx number Starting index
---- @return number The next non-whitespace index
-local function skip_whitespace(str, idx)
-  while idx <= #str and str:sub(idx, idx):match('%s') do
-    idx = idx + 1
-  end
-  return idx
-end
-
---- Read a balanced block (e.g., braces) from a string
---- @param str string The input string
---- @param idx number Starting index
---- @return string|nil, number The extracted block and next index
-local function read_balanced_block(str, idx)
-  if str:sub(idx, idx) ~= '{' then
-    return nil, idx
-  end
-  local depth = 1
-  local cursor = idx + 1
-  while cursor <= #str and depth > 0 do
-    local ch = str:sub(cursor, cursor)
-    if ch == '{' then
-      depth = depth + 1
-    elseif ch == '}' then
-      depth = depth - 1
-      if depth == 0 then
-        return str:sub(idx + 1, cursor - 1), cursor + 1
-      end
-    elseif ch == '\\' and cursor < #str then
-      cursor = cursor + 1
-    end
-    cursor = cursor + 1
-  end
-  return nil, idx
-end
-
---- Skip optional arguments in a LaTeX command
---- @param str string The input string
---- @param idx number Starting index
---- @return number The index after all optional arguments
-local function skip_optional_arguments(str, idx)
-  local cursor = skip_whitespace(str, idx)
-  while str:sub(cursor, cursor) == '[' do
-    local depth = 1
-    cursor = cursor + 1
-    while cursor <= #str and depth > 0 do
-      local ch = str:sub(cursor, cursor)
-      if ch == '[' then
-        depth = depth + 1
-      elseif ch == ']' then
-        depth = depth - 1
-      end
-      cursor = cursor + 1
-    end
-    cursor = skip_whitespace(str, cursor)
-  end
-  return cursor
-end
-
---- Extract bibliography file paths from a LaTeX command line
---- @param line string The line to parse
---- @return string[] List of extracted file paths
-local function extract_command_paths(line)
-  local results = {}
-  local i = 1
-  while i <= #line do
-    local start_pos, end_pos, command = line:find('\\([%a%@]+%*?)', i)
-    if not start_pos then
-      break
-    end
-    i = end_pos + 1
-    if not bibliography_commands[command] then
-      goto continue
-    end
-    local cursor = skip_optional_arguments(line, i)
-    cursor = skip_whitespace(line, cursor)
-    local value
-    value, i = read_balanced_block(line, cursor)
-    if value and #value > 0 then
-      local resources = split_resources(value)
-      for _, resource in ipairs(resources) do
-        results[#results + 1] = resource
-      end
-    end
-    ::continue::
-  end
-  return results
-end
-
---- Find bibliography files in YAML front matter
---- @param lines string[] Buffer lines to search
---- @return string[] List of bibliography file paths
-local function find_yaml_bibliography(lines)
-  local resources = {}
-  local in_front_matter = false
-  local collecting_list = false
-  for idx, line in ipairs(lines) do
-    if idx == 1 and line:match('^%-%-%-%s*$') then
-      in_front_matter = true
-    elseif in_front_matter and line:match('^%-%-%-%s*$') then
-      break
-    elseif in_front_matter then
-      local inline = line:match('^bibliography:%s*(.+)$')
-      if inline then
-        resources[#resources + 1] = trim(inline)
-        collecting_list = false
-      elseif line:match('^bibliography:%s*$') then
-        collecting_list = true
-      elseif line:match('^%S') and not line:match('^%s') then
-        collecting_list = false
-      end
-      if collecting_list then
-        local list_item = line:match('^%s*%-%s*(.+)%s*$')
-        if list_item then
-          resources[#resources + 1] = trim(list_item)
-        end
-      end
-    end
-  end
-  return resources
-end
-
---- Find Typst import statements
---- @param lines string[] Buffer lines to search
---- @return string[] List of imported file paths
-local function find_typst_imports(lines)
-  local imports = {}
-  for _, line in ipairs(lines) do
-    -- Match #import patterns with double quotes:
-    -- #import "file.typ"
-    -- #import "file.typ": item
-    -- #import "file.typ": *
-    -- Capture the path within double quotes
-    for path in line:gmatch('#import%s+"([^"]+)"') do
-      if path:match('%.typ$') then
-        imports[#imports + 1] = trim(path)
-      end
-    end
-    -- Match #import patterns with single quotes:
-    -- #import 'file.typ'
-    -- #import 'file.typ': item
-    -- #import 'file.typ': *
-    -- Capture the path within single quotes
-    for path in line:gmatch("#import%s+'([^']+)'") do
-      if path:match('%.typ$') then
-        imports[#imports + 1] = trim(path)
-      end
-    end
-  end
-  return imports
-end
-
---- Read lines from a file
---- @param filepath string The file path to read
---- @return string[]|nil List of lines or nil if file cannot be read
-local function read_file_lines(filepath)
-  local fd = io.open(filepath, 'r')
-  if not fd then
-    -- Silently return nil for missing imports - this is expected in many cases
-    -- as users may import files that don't exist yet or are in different locations
-    return nil
-  end
-  local lines = {}
-  for line in fd:lines() do
-    lines[#lines + 1] = line
-  end
-  fd:close()
-  return lines
-end
-
---- Platform-specific path separator
---- @type string
-local path_separator = package.config:sub(1, 1)
-
---- Join two path components
---- @param base string|nil Base path
---- @param relative string|nil Relative path
---- @return string|nil The joined path
-local function joinpath(base, relative)
-  if base == nil or base == '' then
-    return relative
-  end
-  if relative == nil or relative == '' then
-    return base
-  end
-  if vim.fs and vim.fs.joinpath then
-    return vim.fs.joinpath(base, relative)
-  end
-  if base:sub(-1) == path_separator then
-    return base .. relative
-  end
-  return base .. path_separator .. relative
-end
-
---- Normalize a path, expanding home directory and resolving relative paths
---- @param path string|nil The path to normalize
---- @return string|nil The normalized path or nil if invalid
-local function normalize_path(path)
-  if not path or path == '' then
-    return nil
-  end
-  local uv = vim.uv or vim.loop
-  local home = uv.os_homedir()
-  if home then
-    path = path:gsub('^~', home)
-  end
-  path = vim.fn.expand(path)
-  path = vim.fs.normalize(path)
-  return path
-end
-
---- Check if a path is absolute
---- @param path string The path to check
---- @return boolean True if the path is absolute
-local function is_absolute(path)
-  return path:match('^%a:[\\/]') or path:sub(1, 1) == '/'
-end
-
---- Find bibliography files in Typst #bibliography() declarations
---- Recursively follows #import statements to find bibliographies in imported files
---- @param lines string[] Buffer lines to search
---- @param base_dir string|nil Directory to resolve relative imports from
---- @param visited table<string, boolean>|nil Table to track visited files (prevents cycles)
---- @return string[] List of bibliography file paths
-local function find_typst_bibliography(lines, base_dir, visited)
-  visited = visited or {}
-  local resources = {}
-
-  -- Find direct bibliography declarations
-  for _, line in ipairs(lines) do
-    -- Match #bibliography("path/to/file.bib") with double quotes
-    for path in line:gmatch('#bibliography%s*%(%s*"([^"]+)"%s*%)') do
-      path = trim(path)
-      if not is_absolute(path) and base_dir then
-        path = joinpath(base_dir, path) --[[@as string]]
-      end
-      resources[#resources + 1] = path
-    end
-    -- Match #bibliography('path/to/file.bib') with single quotes
-    for path in line:gmatch("#bibliography%s*%(%s*'([^']+)'%s*%)") do
-      path = trim(path)
-      if not is_absolute(path) and base_dir then
-        path = joinpath(base_dir, path) --[[@as string]]
-      end
-      resources[#resources + 1] = path
-    end
-  end
-
-  -- Follow imports to find bibliographies in imported files
-  if base_dir then
-    local imports = find_typst_imports(lines)
-    for _, import_path in ipairs(imports) do
-      local full_path
-      if is_absolute(import_path) then
-        full_path = normalize_path(import_path)
-      else
-        full_path = normalize_path(joinpath(base_dir, import_path))
-      end
-
-      if full_path and not visited[full_path] then
-        visited[full_path] = true
-        local import_lines = read_file_lines(full_path)
-        if import_lines then
-          local import_dir = vim.fs.dirname(full_path)
-          local imported_resources = find_typst_bibliography(import_lines, import_dir, visited)
-          for _, resource in ipairs(imported_resources) do
-            -- Resolve imported resource paths relative to the imported file's directory
-            if not is_absolute(resource) then
-              resource = joinpath(import_dir, resource) --[[@as string]]
-            end
-            resources[#resources + 1] = resource
-          end
-        end
-      end
-    end
-  end
-
-  return resources
-end
-
 --- Find the project root directory based on markers
 --- @param bufname string Buffer file name
 --- @param markers table List of root marker files/directories
@@ -404,7 +90,7 @@ end
 
 local function expand_search_path(path, root)
   local resolved = {}
-  if not is_absolute(path) then
+  if not path_util.is_absolute(path) then
     path = vim.fs.normalize(table.concat({ root, path }, '/'))
   end
   if path:find('[%*%?%[]') then
@@ -418,158 +104,13 @@ local function expand_search_path(path, root)
   return resolved
 end
 
---- Find bibliography databases in GAPDoc <Bibliography Databases="..."/> declarations
---- Per the GAPDoc DTD the element is EMPTY with a required Databases attribute
---- and an optional Style attribute; several databases are separated by commas.
---- BibTeX databases are named without their .bib extension, while BibXMLext
---- databases carry their full .xml name and are skipped here, since this plugin
---- reads BibTeX and Hayagriva rather than BibXMLext.
---- The opening of a GAPDoc bibliography declaration
---- @type string
-local BIBLIOGRAPHY_TAG = '<Bibliography'
-
---- Blank out the XML regions whose contents are not live markup
---- Comments, CDATA sections and processing instructions all hold text that an
---- XML processor never reads as markup, so a declaration inside one names a
---- bibliography that is not in use. An unterminated opener runs to the end of
---- the document, which is what an editor shows while such a region is being
---- typed. Regions are replaced by a space rather than removed so that the
---- markup around them cannot be glued together.
---- @param text string The document text
---- @return string The text with inactive regions blanked out
-local function strip_inactive_regions(text)
-  text = text:gsub('<!%-%-.-%-%->', ' ')
-  text = text:gsub('<!%[CDATA%[.-%]%]>', ' ')
-  text = text:gsub('<%?.-%?>', ' ')
-  -- A DOCTYPE may carry an internal subset, whose entity declarations hold
-  -- replacement text that is not markup until an entity is referenced. The
-  -- '[^>%[]*' guard keeps this from reaching past the DOCTYPE's own '>' into a
-  -- later element that happens to contain brackets.
-  text = text:gsub('<!DOCTYPE[^>%[]*%[.-%]%s*>', ' ')
-  text = text:gsub('<!DOCTYPE[^>]*>', ' ')
-  text = text:gsub('<!%-%-.*$', ' ')
-  text = text:gsub('<!%[CDATA%[.*$', ' ')
-  text = text:gsub('<%?.*$', ' ')
-  text = text:gsub('<!DOCTYPE.*$', ' ')
-  return text
-end
-
---- The character references XML predefines, which need no DTD declaration
---- @type table<string, string>
-local xml_entities = {
-  amp = '&',
-  lt = '<',
-  gt = '>',
-  quot = '"',
-  apos = "'",
-}
-
---- Resolve one XML character reference to the character it stands for
---- @param reference string The reference body, without the '&' and ';'
---- @return string|nil The character, or nil when the reference is not resolvable
-local function resolve_xml_reference(reference)
-  local code = tonumber(reference:match('^#[xX](%x+)$') or '', 16) or tonumber(reference:match('^#(%d+)$') or '')
-  if code then
-    if code < 1 or code > 0x10FFFF then
-      return nil
-    end
-    return vim.fn.nr2char(code, 1)
-  end
-  -- Entity names are case sensitive in XML, so they are looked up as written.
-  return xml_entities[reference]
-end
-
---- Decode the XML character references in an attribute value
---- An XML processor resolves these before GAPDoc ever sees the value, so this
---- runs before the value is split on commas. References that are not the five
---- predefined entities or a numeric escape are left as written.
---- @param value string The raw attribute value
---- @return string The decoded value
-local function decode_xml_references(value)
-  return (value:gsub('&(#?%w+);', resolve_xml_reference))
-end
-
---- Read the Databases attribute of a single <Bibliography> element
---- @param element string The element text, from '<Bibliography' to its '>'
---- @return string|nil The attribute value, or nil when the element has none
-local function read_databases_attribute(element)
-  return element:match('Databases%s*=%s*"([^"]*)"') or element:match("Databases%s*=%s*'([^']*)'")
-end
-
---- @param lines string[] Buffer lines to search
---- @return string[] File names as written in the Databases attribute with '.bib'
----   appended; entries may carry a directory part and may contain dots
-local function find_gapdoc_bibliography(lines)
-  -- Every buffer is scanned regardless of filetype, so the cost of joining the
-  -- lines is only paid once a declaration can actually be present.
-  local marked = false
-  for _, line in ipairs(lines) do
-    if line:find(BIBLIOGRAPHY_TAG, 1, true) then
-      marked = true
-      break
-    end
-  end
-  if not marked then
-    return {}
-  end
-
-  -- Joined so that a declaration split across lines is still found.
-  local text = strip_inactive_regions(table.concat(lines, '\n'))
-
-  local resources = {}
-  -- One pass in source order, reading both attribute quote styles as they come,
-  -- so that the returned list follows the document rather than the quoting.
-  local cursor = 1
-  while true do
-    local start_pos = text:find(BIBLIOGRAPHY_TAG .. '%s', cursor)
-    if not start_pos then
-      break
-    end
-    local rest = text:sub(start_pos)
-    -- Bounded by the element's own '>', so a Databases attribute belonging to a
-    -- later element is never read. The second form covers an element still
-    -- being typed at the end of the document, where no '>' exists yet.
-    local element = rest:match('^<Bibliography%s[^>]*>') or rest:match('^<Bibliography%s[^>]*$')
-    local databases = element and read_databases_attribute(element)
-    databases = databases and decode_xml_references(databases)
-    for _, name in ipairs(databases and split_resources(databases) or {}) do
-      -- BibXMLext databases carry their full .xml name and are skipped; every
-      -- other name is a BibTeX database, which the DTD defines as being
-      -- written without its .bib extension, so it is always appended.
-      if not name:lower():match('%.xml$') then
-        resources[#resources + 1] = name .. '.bib'
-      end
-    end
-    cursor = start_pos + #BIBLIOGRAPHY_TAG
-  end
-  return resources
-end
-
---- Ensure a path has a bibliography extension (.bib, .yml, or .yaml)
---- @param path string|nil The path to check
---- @return string|nil The path with .bib extension if needed (unless it already has .yml or .yaml)
-local function ensure_bib_extension(path)
-  if not path or path == '' then
-    return path
-  end
-  if path:find('[%*%?%[]') then
-    return path
-  end
-  -- Accept .bib, .yml, .yaml extensions as-is
-  if path:match('%.bib$') or path:match('%.ya?ml$') then
-    return path
-  end
-  local filename = path:match('([^/\\]+)$') or path
-  if filename:find('%.') then
-    return path
-  end
-  return path .. '.bib'
-end
-
 --- Find BibTeX files referenced in a buffer
+--- Runs the discovery hooks configured for the buffer's filetype; see
+--- discovery.lua for the hooks shipped with the plugin.
 --- @param bufnr number Buffer number
+--- @param opts table|nil Configuration options; the shipped hooks are used when omitted
 --- @return string[] List of bibliography file names (not full paths)
-function M.find_bib_files_from_buffer(bufnr)
+function M.find_bib_files_from_buffer(bufnr, opts)
   if not bufnr or not vim.api.nvim_buf_is_valid(bufnr) then
     return {}
   end
@@ -585,27 +126,14 @@ function M.find_bib_files_from_buffer(bufnr)
     buffer_dir = vim.fs.dirname(bufname)
   end
 
-  local resources = {}
-  for _, line in ipairs(lines) do
-    for _, resource in ipairs(extract_command_paths(line)) do
-      resources[#resources + 1] = ensure_bib_extension(resource)
-    end
-  end
-  local yaml_resources = find_yaml_bibliography(lines)
-  for _, resource in ipairs(yaml_resources) do
-    resources[#resources + 1] = ensure_bib_extension(resource)
-  end
-  local typst_resources = find_typst_bibliography(lines, buffer_dir)
-  for _, resource in ipairs(typst_resources) do
-    resources[#resources + 1] = ensure_bib_extension(resource)
-  end
-  -- Already carries its .bib extension: GAPDoc names are extensionless by
-  -- definition, so ensure_bib_extension's dotted-name heuristics do not apply.
-  local gapdoc_resources = find_gapdoc_bibliography(lines)
-  for _, resource in ipairs(gapdoc_resources) do
-    resources[#resources + 1] = resource
-  end
-  return resources
+  return discovery.collect({
+    bufnr = bufnr,
+    filetype = vim.bo[bufnr].filetype,
+    lines = lines,
+    bufname = bufname,
+    dir = buffer_dir,
+    opts = opts or {},
+  })
 end
 
 --- Resolve all BibTeX file paths for a buffer
@@ -618,7 +146,7 @@ function M.resolve_bib_paths(bufnr, opts)
   local manual_files = M.resolve_option_list(opts.files, bufnr)
   local global_files = M.resolve_option_list(opts.global_files, bufnr)
   local search_paths = M.resolve_option_list(opts.search_paths, bufnr)
-  local buffer_files = M.find_bib_files_from_buffer(bufnr)
+  local buffer_files = M.find_bib_files_from_buffer(bufnr, opts)
   local bufname = vim.api.nvim_buf_get_name(bufnr)
   local root = find_root(bufname, opts.root_markers or {})
   local buffer_dir = nil
@@ -637,11 +165,11 @@ function M.resolve_bib_paths(bufnr, opts)
       return
     end
     local expanded
-    if is_absolute(path) then
-      expanded = normalize_path(path)
+    if path_util.is_absolute(path) then
+      expanded = path_util.normalize(path)
     else
       local anchor = base_dir or root or buffer_dir
-      expanded = normalize_path(joinpath(anchor, path))
+      expanded = path_util.normalize(path_util.joinpath(anchor, path))
     end
     if expanded and not dedup[expanded] then
       dedup[expanded] = true
