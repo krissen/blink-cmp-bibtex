@@ -48,6 +48,9 @@ nvim-cmp) with a fresh, MIT-licensed codebase that targets blink.cmp directly.
   disable completion as a whole.
 - Provide asynchronous completion so that large BibTeX files do not block the UI.
 - Cache parsed BibTeX files and reload them when the modification time changes.
+- Allow bibliography discovery to be extended: a user must be able to register a
+  hook for a project convention the plugin does not know, reorder the built-in
+  hooks, or disable one per filetype, without patching the plugin.
 
 ## Non-functional requirements
 
@@ -57,7 +60,12 @@ nvim-cmp) with a fresh, MIT-licensed codebase that targets blink.cmp directly.
   - `config.lua`: defaults plus `setup` and merge helpers.
   - `parser.lua`: standalone BibTeX parser that extracts entry metadata and
     performs minimal LaTeX-to-UTF8 conversions.
-  - `scan.lua`: buffer/project inspectors that find relevant `.bib` files.
+  - `scan.lua`: path resolution for the files discovery and configuration name.
+  - `discovery.lua`: built-in buffer discovery hooks plus the normalization and
+    dispatch of user-registered ones.
+  - `registry.lua`: warn-once and failure tracking shared by the matcher and
+    discovery registries.
+  - `path.lua`: path helpers shared by the scanner and the discovery hooks.
   - `cache.lua`: memoized storage keyed by file path with mtime checks.
   - `matchers.lua`: built-in citation matchers plus the normalization and
     dispatch of user-registered ones.
