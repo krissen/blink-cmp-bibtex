@@ -100,6 +100,19 @@ describe('config', function()
     end
   end)
 
+  it('keeps discovery = false through setup, unlike an empty table', function()
+    -- An empty map merges into the shipped hooks and therefore cannot express
+    -- "discover nothing"; false replaces the table outright.
+    assert.is_false(config.setup({ discovery = false }).discovery)
+    assert.is_not_nil(config.setup({ discovery = {} }).discovery['*'])
+  end)
+
+  it('merges a user discovery hook without clobbering the shipped ones', function()
+    local opts = config.setup({ discovery = { rst = { mine = false } } })
+    assert.are.equal(10, opts.discovery['*'].latex.priority)
+    assert.is_false(opts.discovery.rst.mine)
+  end)
+
   it('setup with nil resets to the defaults', function()
     config.setup({ preview_style = 'ieee' })
     local reset = config.setup(nil)

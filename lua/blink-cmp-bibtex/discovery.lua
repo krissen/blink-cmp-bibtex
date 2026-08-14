@@ -630,12 +630,19 @@ end
 --- Unlike matchers.chain, this falls back to the shipped defaults when no
 --- discovery is configured at all. find_bib_files_from_buffer is public and is
 --- called with no options, and buffer discovery has always worked in that case,
---- so an absent discovery key must not mean "discover nothing". Setting
---- discovery to an empty table is what turns discovery off.
+--- so an absent discovery key must not mean "discover nothing".
+---
+--- Turning discovery off is therefore explicit: `discovery = false`. An empty
+--- table means the same thing, but only when the options reach this module
+--- unmerged; setup() merges maps key by key, so an empty table configured there
+--- keeps the shipped hooks. `false` is not a table and survives the merge.
 --- @param filetype string|nil The buffer filetype
 --- @param opts table|nil Configuration options
 --- @return BibtexDiscoverySpec[] The hooks to run, in order
 function M.chain(filetype, opts)
+  if opts and opts.discovery == false then
+    return {}
+  end
   local configured = opts and opts.discovery or M.defaults
   local shared = configured['*'] or {}
   local per_filetype = filetype and configured[filetype] or {}

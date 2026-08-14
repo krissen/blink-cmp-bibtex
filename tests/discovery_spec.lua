@@ -136,7 +136,10 @@ describe('discovery.chain', function()
     assert.are.same(names(discovery.chain('markdown', config.defaults())), names(discovery.chain('markdown', nil)))
   end)
 
-  it('discovers nothing when discovery is configured as empty', function()
+  it('discovers nothing when discovery is turned off', function()
+    assert.are.same({}, discovery.chain('markdown', { discovery = false }))
+    -- An empty table says the same thing, but only survives when the options
+    -- are passed straight through rather than merged by setup().
     assert.are.same({}, discovery.chain('markdown', { discovery = {} }))
   end)
 
