@@ -7,52 +7,156 @@ local M = {}
 --- LaTeX text formatting commands that should be stripped
 --- @type string[]
 local latex_wrappers = {
-  "\\textit",
-  "\\emph",
-  "\\textbf",
-  "\\textsc",
+  '\\textit',
+  '\\emph',
+  '\\textbf',
+  '\\textsc',
 }
 
 local accent_map = {
   ['"'] = {
-    a = 'ä', A = 'Ä', e = 'ë', E = 'Ë', i = 'ï', I = 'Ï', o = 'ö', O = 'Ö', u = 'ü', U = 'Ü', y = 'ÿ', Y = 'Ÿ',
+    a = 'ä',
+    A = 'Ä',
+    e = 'ë',
+    E = 'Ë',
+    i = 'ï',
+    I = 'Ï',
+    o = 'ö',
+    O = 'Ö',
+    u = 'ü',
+    U = 'Ü',
+    y = 'ÿ',
+    Y = 'Ÿ',
   },
   ["'"] = {
-    a = 'á', A = 'Á', e = 'é', E = 'É', i = 'í', I = 'Í', o = 'ó', O = 'Ó', u = 'ú', U = 'Ú', y = 'ý', Y = 'Ý',
-    c = 'ć', C = 'Ć', n = 'ń', N = 'Ń', s = 'ś', S = 'Ś', z = 'ź', Z = 'Ź',
+    a = 'á',
+    A = 'Á',
+    e = 'é',
+    E = 'É',
+    i = 'í',
+    I = 'Í',
+    o = 'ó',
+    O = 'Ó',
+    u = 'ú',
+    U = 'Ú',
+    y = 'ý',
+    Y = 'Ý',
+    c = 'ć',
+    C = 'Ć',
+    n = 'ń',
+    N = 'Ń',
+    s = 'ś',
+    S = 'Ś',
+    z = 'ź',
+    Z = 'Ź',
   },
   ['`'] = {
-    a = 'à', A = 'À', e = 'è', E = 'È', i = 'ì', I = 'Ì', o = 'ò', O = 'Ò', u = 'ù', U = 'Ù',
+    a = 'à',
+    A = 'À',
+    e = 'è',
+    E = 'È',
+    i = 'ì',
+    I = 'Ì',
+    o = 'ò',
+    O = 'Ò',
+    u = 'ù',
+    U = 'Ù',
   },
   ['^'] = {
-    a = 'â', A = 'Â', e = 'ê', E = 'Ê', i = 'î', I = 'Î', o = 'ô', O = 'Ô', u = 'û', U = 'Û', c = 'ĉ', C = 'Ĉ',
+    a = 'â',
+    A = 'Â',
+    e = 'ê',
+    E = 'Ê',
+    i = 'î',
+    I = 'Î',
+    o = 'ô',
+    O = 'Ô',
+    u = 'û',
+    U = 'Û',
+    c = 'ĉ',
+    C = 'Ĉ',
   },
   ['~'] = {
-    a = 'ã', A = 'Ã', n = 'ñ', N = 'Ñ', o = 'õ', O = 'Õ',
+    a = 'ã',
+    A = 'Ã',
+    n = 'ñ',
+    N = 'Ñ',
+    o = 'õ',
+    O = 'Õ',
   },
   ['='] = {
-    a = 'ā', A = 'Ā', e = 'ē', E = 'Ē', i = 'ī', I = 'Ī', o = 'ō', O = 'Ō', u = 'ū', U = 'Ū',
+    a = 'ā',
+    A = 'Ā',
+    e = 'ē',
+    E = 'Ē',
+    i = 'ī',
+    I = 'Ī',
+    o = 'ō',
+    O = 'Ō',
+    u = 'ū',
+    U = 'Ū',
   },
   ['.'] = {
-    c = 'ċ', C = 'Ċ', e = 'ė', E = 'Ė', z = 'ż', Z = 'Ż',
+    c = 'ċ',
+    C = 'Ċ',
+    e = 'ė',
+    E = 'Ė',
+    z = 'ż',
+    Z = 'Ż',
   },
   ['u'] = {
-    a = 'ă', A = 'Ă', e = 'ĕ', E = 'Ĕ', g = 'ğ', G = 'Ğ', i = 'ĭ', I = 'Ĭ', o = 'ŏ', O = 'Ŏ', u = 'ŭ', U = 'Ŭ',
+    a = 'ă',
+    A = 'Ă',
+    e = 'ĕ',
+    E = 'Ĕ',
+    g = 'ğ',
+    G = 'Ğ',
+    i = 'ĭ',
+    I = 'Ĭ',
+    o = 'ŏ',
+    O = 'Ŏ',
+    u = 'ŭ',
+    U = 'Ŭ',
   },
   ['v'] = {
-    c = 'č', C = 'Č', s = 'š', S = 'Š', z = 'ž', Z = 'Ž', r = 'ř', R = 'Ř', n = 'ň', N = 'Ň', e = 'ě', E = 'Ě',
+    c = 'č',
+    C = 'Č',
+    s = 'š',
+    S = 'Š',
+    z = 'ž',
+    Z = 'Ž',
+    r = 'ř',
+    R = 'Ř',
+    n = 'ň',
+    N = 'Ň',
+    e = 'ě',
+    E = 'Ě',
   },
   ['H'] = {
-    o = 'ő', O = 'Ő', u = 'ű', U = 'Ű',
+    o = 'ő',
+    O = 'Ő',
+    u = 'ű',
+    U = 'Ű',
   },
   ['c'] = {
-    c = 'ç', C = 'Ç', s = 'ş', S = 'Ş', t = 'ţ', T = 'Ţ',
+    c = 'ç',
+    C = 'Ç',
+    s = 'ş',
+    S = 'Ş',
+    t = 'ţ',
+    T = 'Ţ',
   },
   ['k'] = {
-    a = 'ą', A = 'Ą', e = 'ę', E = 'Ę',
+    a = 'ą',
+    A = 'Ą',
+    e = 'ę',
+    E = 'Ę',
   },
   ['r'] = {
-    a = 'å', A = 'Å', u = 'ů', U = 'Ů',
+    a = 'å',
+    A = 'Å',
+    u = 'ů',
+    U = 'Ů',
   },
 }
 
@@ -108,29 +212,29 @@ local function strip_latex(value)
     return ''
   end
   for _, wrapper in ipairs(latex_wrappers) do
-    value = value:gsub(wrapper .. "%b{}", function(match)
+    value = value:gsub(wrapper .. '%b{}', function(match)
       return match:sub(#wrapper + 2, -2)
     end)
   end
-  value = value:gsub("\\([\"'`%^~=%.uvHcrk])%s*%{?(\\?%a)%}?", function(accent, letter)
+  value = value:gsub('\\(["\'`%^~=%.uvHcrk])%s*%{?(\\?%a)%}?', function(accent, letter)
     if letter:sub(1, 1) == '\\' then
       letter = accent_letter_aliases[letter] or letter:sub(2)
     end
     return replace_accent(accent, letter) or letter
   end)
-  value = value:gsub("\\(%a+)", function(command)
+  value = value:gsub('\\(%a+)', function(command)
     local replacement = simple_commands[command]
     if replacement then
       return replacement
     end
     return ''
   end)
-  value = value:gsub("%b{}", function(match)
+  value = value:gsub('%b{}', function(match)
     return match:sub(2, -2)
   end)
-  value = value:gsub("~", " ")
-  value = value:gsub("\\", "")
-  value = value:gsub("%s+", " ")
+  value = value:gsub('~', ' ')
+  value = value:gsub('\\', '')
+  value = value:gsub('%s+', ' ')
   return trim(value)
 end
 

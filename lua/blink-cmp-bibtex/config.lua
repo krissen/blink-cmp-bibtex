@@ -7,23 +7,30 @@ local M = {}
 --- Default configuration options
 --- @type table
 local defaults = {
-  filetypes = { "tex", "plaintex", "markdown", "rmd", "typst" },
+  filetypes = { 'tex', 'plaintex', 'markdown', 'rmd', 'typst' },
   files = {},
   global_files = {},
   search_paths = {},
-  root_markers = { ".git", "latexmkrc", "texmf.cnf" },
+  root_markers = { '.git', 'latexmkrc', 'texmf.cnf' },
   citation_commands = {
-    "cite", "parencite", "textcite", "footcite", "smartcite",
-    "autocite", "nocite", "citep", "citet",
+    'cite',
+    'parencite',
+    'textcite',
+    'footcite',
+    'smartcite',
+    'autocite',
+    'nocite',
+    'citep',
+    'citet',
   },
-  preview_style = "apa",
+  preview_style = 'apa',
   source_indicator = true,
   max_entries = 4000,
   local_bib = {
     enabled = false,
     target = nil,
     targets = {},
-    patterns = { "local.bib", "references.bib" },
+    patterns = { 'local.bib', 'references.bib' },
     auto_add = false,
     notify_on_add = true,
     notify_on_duplicate = false,
@@ -56,7 +63,7 @@ local function merge_tables(base, override)
   if not override then
     return base
   end
-  return vim.tbl_deep_extend("force", {}, base, override)
+  return vim.tbl_deep_extend('force', {}, base, override)
 end
 
 --- Setup configuration with custom options
