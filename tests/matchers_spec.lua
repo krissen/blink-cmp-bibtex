@@ -19,10 +19,15 @@ end
 local function with_notify_capture(fn)
   local messages = {}
   local original = vim.notify
-  vim.notify = function(msg)
+  -- The full signature matters: the language server merges every assignment to
+  -- vim.notify across the workspace, so a stub taking one parameter would
+  -- redefine the function project-wide and flag every real three-argument call.
+  --- @diagnostic disable-next-line: duplicate-set-field
+  vim.notify = function(msg, _level, _opts)
     messages[#messages + 1] = msg
   end
   local ok, result = pcall(fn, messages)
+  --- @diagnostic disable-next-line: duplicate-set-field
   vim.notify = original
   if not ok then
     error(result, 0)
@@ -112,6 +117,21 @@ describe('matchers.normalize', function()
     with_notify_capture(function()
       assert.are.same({ 'latex' }, names(matchers.chain('tex', opts)))
     end)
+  end)
+
+  it('rejects a non-string separators field', function()
+    matchers.__test.reset()
+    with_notify_capture(function(messages)
+      assert.is_nil(matchers.normalize('custom', { match = function() end, separators = 42 }))
+      assert.are.equal(1, #messages)
+      assert.is_truthy(messages[1]:find('separators is number', 1, true))
+    end)
+  end)
+
+  it('carries the shipped separators of a built-in', function()
+    -- LaTeX lists keys with commas only, Pandoc also with semicolons.
+    assert.are.equal(',', assert(matchers.normalize('latex', true)).separators)
+    assert.are.equal(',;', assert(matchers.normalize('pandoc', true)).separators)
   end)
 
   it('accepts well formed optional fields', function()

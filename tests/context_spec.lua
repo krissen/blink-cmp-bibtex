@@ -152,6 +152,14 @@ describe('sanitize_prefix', function()
     end)
   end
 
+  it('splits only on the separators it is given', function()
+    -- The separator set is per syntax: a semicolon ends a key in Pandoc but is
+    -- an ordinary character in a LaTeX key.
+    assert.are.equal('a;b', sanitize_prefix('a;b', ','))
+    assert.are.equal('b', sanitize_prefix('a;b', ',;'))
+    assert.are.equal('c', sanitize_prefix('a;b,c', ','))
+  end)
+
   it('returns an empty string for nil', function()
     assert.are.equal('', sanitize_prefix(nil))
   end)

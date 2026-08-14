@@ -210,6 +210,24 @@ end
 2. User's own configuration
 3. Files in project directory
 
+### 4. User-registered matchers and discovery hooks
+
+**Concern**: The `matchers` and `discovery` options accept Lua functions, which
+the plugin then calls.
+
+**Mitigation**:
+- These functions come from the user's own configuration, which Neovim already
+  executes in full. They are inside the trust boundary, not outside it: a
+  configuration that can register a hook can equally call anything directly.
+- The plugin does not load, evaluate or fetch matcher or hook code of its own;
+  it only calls what the configuration handed it.
+- Every call is wrapped in `pcall`, and a function that raises or returns a
+  malformed value is reported once and then skipped for that filetype, so a
+  faulty hook degrades completion rather than breaking the editor.
+
+**Assessment**: No new attack surface. The trust boundary is unchanged from a
+plain `setup()` call.
+
 ## Security Best Practices Followed
 
 1. ✅ Principle of least privilege (read-only file access)

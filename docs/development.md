@@ -401,13 +401,37 @@ citation_commands = {
 }
 ```
 
-### Adding File Discovery
+### Adding a discovery source
 
-Modify `scan.lua`:
+Bibliography discovery is a registry, so a new source is a hook rather than an
+edit to the scanner. Add it to `discovery.lua` next to the built-ins, list it in
+`discovery.builtin` and `discovery.defaults`, and give it a priority that places
+its results where you want them in the output.
 
-1. Add pattern matching in `extract_command_paths` for LaTeX
-2. Add parsing in `find_yaml_bibliography` for Markdown
-3. Update documentation
+```lua
+--- @param ctx BibtexDiscoveryContext
+--- @return string[]
+function M.mysource(ctx)
+  ...
+end
+```
+
+Three things to keep in mind:
+
+1. **Hooks run on every completion request**, once per keystroke in the worst
+   case. Guard expensive work behind a cheap scan for a literal marker, the way
+   the GAPDoc hook checks for `<Bibliography` with a plain-text `find` before
+   joining the buffer.
+2. **The `lines` table is shared** with the other hooks. Treat it as read-only;
+   do not sort it, and do not copy it per hook.
+3. **Return unresolved names.** `resolve_bib_paths` resolves them against the
+   buffer directory and project root and deduplicates the result. Set
+   `extension = false` in the spec if your hook returns finished file names
+   rather than the extensionless form.
+
+Users register hooks the same way through the `discovery` option, so anything
+you can do here they can do without patching the plugin. Update the README's
+"Custom bib discovery" section and `docs/api.md` when the built-in set changes.
 
 ## Debugging
 

@@ -19,9 +19,24 @@ Source.__index = Source
 --- @field source_path string The file the entry was read from
 --- @field is_global boolean Whether source_path is one of the configured global files
 
---- Global lookup table for entry raw text, keyed by citation key
+--- Entry raw text from the most recent completion round, keyed by citation key
 --- @type table<string, BibEntryRef>
 local entry_lookup = {}
+
+--- The same table from the round before it
+--- Two generations are kept so that Source:execute still resolves an accepted
+--- item when a new round has already replaced the lookup, while the memory a
+--- session holds stays bounded by two rounds instead of growing with every key
+--- ever completed.
+--- @type table<string, BibEntryRef>
+local previous_entry_lookup = {}
+
+--- Look up a remembered entry, falling back to the previous round
+--- @param key string The citation key
+--- @return BibEntryRef|nil
+local function recall_entry(key)
+  return entry_lookup[key] or previous_entry_lookup[key]
+end
 
 --- Default completion kind (fallback to 1 if blink.cmp types unavailable)
 --- @type number
@@ -163,21 +178,112 @@ local function format_source_indicator(info)
   return ''
 end
 
+--- Characters that separate keys when a matcher does not say otherwise
+--- @type string
+local DEFAULT_SEPARATORS = ',;'
+
 --- Sanitize a citation key prefix by handling multi-key citations
---- Extracts the last citation key being typed when multiple keys are separated by commas or semicolons
+--- Extracts the last citation key being typed when several keys are listed.
+--- Which characters separate them depends on the syntax: LaTeX and Typst use a
+--- comma, while Pandoc also uses a semicolon. A semicolon is an ordinary
+--- character in a key otherwise, and the parser accepts it as one.
 --- @param prefix string|nil The raw prefix string
+--- @param separators string|nil Separator characters; defaults to a comma and a semicolon
 --- @return string The sanitized prefix for the current key
-local function sanitize_prefix(prefix)
+local function sanitize_prefix(prefix, separators)
   if not prefix or prefix == '' then
     return ''
   end
-  -- Normalize semicolons to commas and extract last segment
-  local normalized = prefix:gsub(';', ',')
-  local segments = vim.split(normalized, ',', { trimempty = false })
+  separators = separators or DEFAULT_SEPARATORS
+  if separators == '' then
+    separators = DEFAULT_SEPARATORS
+  end
+  -- Normalize every separator to the first one, then take the last segment
+  local primary = separators:sub(1, 1)
+  local normalized = prefix
+  for index = 2, #separators do
+    normalized = normalized:gsub('%' .. separators:sub(index, index), primary)
+  end
+  local segments = vim.split(normalized, primary, { plain = true, trimempty = false })
   local candidate = segments[#segments] or ''
   -- Trim whitespace and strip leading @ symbol (for multi-ref Pandoc citations)
   local trimmed = candidate:match('^%s*(.-)%s*$') or ''
   return trimmed:match('^@(.*)$') or trimmed
+end
+
+--- The key separators that apply to a match
+--- @param detection BibtexMatchResult The match result
+--- @param spec BibtexMatcherSpec|nil The matcher that produced it
+--- @return string
+local function separators_for(detection, spec)
+  return detection.separators or (spec and spec.separators) or DEFAULT_SEPARATORS
+end
+
+--- Whether a detected prefix should be reduced to the key being typed
+--- A match may opt out per match or per matcher; sanitizing is the default.
+--- @param detection BibtexMatchResult The match result
+--- @param spec BibtexMatcherSpec|nil The matcher that produced it
+--- @return boolean
+local function wants_sanitized_prefix(detection, spec)
+  local wanted = detection.sanitize
+  if wanted == nil then
+    wanted = spec and spec.sanitize
+  end
+  if wanted == nil then
+    wanted = true
+  end
+  return wanted
+end
+
+--- Characters that end a citation key in one syntax or another
+--- The parser accepts any run of non-comma, non-whitespace characters as a key,
+--- so the cursor scan stops at delimiters rather than at an allowed alphabet:
+--- otherwise a key like smith/2020 or a+b would be cut at its punctuation.
+--- @type string
+local KEY_DELIMITERS = [[%s,{}%[%]()<>"'\]]
+
+--- Matches one character a citation key may contain
+--- @type string
+local KEY_CHARACTER = '[^' .. KEY_DELIMITERS .. ']'
+
+--- Detect the citation key the cursor sits in or after
+--- The matchers read the text up to the cursor, while the cursor here may sit
+--- anywhere inside a finished key, so the text is first extended to the end of
+--- that key. The chain runs for the buffer's filetype, which is what makes the
+--- GAPDoc and user-registered syntaxes work here and not just in completion.
+--- The original patterns remain as a fallback for text no matcher claims.
+--- @param bufnr number The buffer to read the filetype from
+--- @param opts table Configuration options
+--- @return string|nil The citation key, or nil when the cursor is not on one
+local function key_under_cursor(bufnr, opts)
+  local line = vim.api.nvim_get_current_line()
+  local col = vim.api.nvim_win_get_cursor(0)[2]
+  local finish = math.min(col + 1, #line)
+  while finish < #line and line:sub(finish + 1, finish + 1):match(KEY_CHARACTER) do
+    finish = finish + 1
+  end
+  -- A separator the scan swallowed belongs to the next key, not to this one.
+  local text = line:sub(1, finish):gsub('[,;]+$', '')
+
+  local detection, spec = matchers.detect(text, opts, {
+    bufnr = bufnr,
+    filetype = vim.bo[bufnr].filetype,
+    line = line,
+    col = finish,
+  })
+  if detection then
+    local key = detection.prefix
+    if wants_sanitized_prefix(detection, spec) then
+      key = sanitize_prefix(detection.prefix, separators_for(detection, spec))
+    end
+    if key and key ~= '' then
+      return key
+    end
+  end
+
+  return text:match('@(' .. KEY_CHARACTER .. '+)$')
+    or text:match('{(' .. KEY_CHARACTER .. '+)$')
+    or text:match(',(' .. KEY_CHARACTER .. '+)$')
 end
 
 --- Format author/editor list into a readable string
@@ -477,15 +583,10 @@ function Source:get_completions(context, callback)
     callback(empty_response())
     return function() end
   end
-  -- A match may opt out of prefix sanitization, either per match or per matcher.
-  local should_sanitize = detection.sanitize
-  if should_sanitize == nil then
-    should_sanitize = spec and spec.sanitize
+  local prefix = detection.prefix or ''
+  if wants_sanitized_prefix(detection, spec) then
+    prefix = sanitize_prefix(detection.prefix, separators_for(detection, spec))
   end
-  if should_sanitize == nil then
-    should_sanitize = true
-  end
-  local prefix = should_sanitize and sanitize_prefix(detection.prefix) or (detection.prefix or '')
   local paths = scan.resolve_bib_paths(bufnr, self.opts)
   if table_is_empty(paths) then
     callback(empty_response())
@@ -517,6 +618,9 @@ function Source:get_completions(context, callback)
     local items = {}
     local style = get_preview_style(self.opts.preview_style)
     local seen_keys = {}
+    -- Built fresh per round and swapped in below, so a round that is cancelled
+    -- or fails part way leaves the remembered entries untouched.
+    local round_lookup = {}
 
     for _, entry in ipairs(filtered) do
       -- Deduplicate: only process first occurrence (local preferred due to sort)
@@ -538,7 +642,7 @@ function Source:get_completions(context, callback)
 
         -- Store entry in lookup table for later use (e.g., copy to local bib)
         if entry.raw then
-          entry_lookup[entry.key] = {
+          round_lookup[entry.key] = {
             raw = entry.raw,
             source_path = entry.source_path,
             is_global = is_global,
@@ -559,6 +663,8 @@ function Source:get_completions(context, callback)
         }
       end
     end
+    previous_entry_lookup = entry_lookup
+    entry_lookup = round_lookup
     callback({ items = items, is_incomplete_forward = true, is_incomplete_backward = true })
   end)
   return function()
@@ -600,7 +706,7 @@ function Source:execute(context, item, callback, default_implementation)
   end
 
   -- Only auto-add if entry is from a global file
-  local entry_data = entry_lookup[key]
+  local entry_data = recall_entry(key)
   if entry_data and entry_data.is_global then
     local_bib.copy_entry(key, entry_data.raw, opts.local_bib)
   end
@@ -612,7 +718,11 @@ end
 Source.setup = config.setup
 
 --- Internal helpers exposed for testing. Not part of the public API.
-Source.__test = { extract_context = extract_context, sanitize_prefix = sanitize_prefix }
+Source.__test = {
+  extract_context = extract_context,
+  sanitize_prefix = sanitize_prefix,
+  key_under_cursor = key_under_cursor,
+}
 
 --- Copy a BibTeX entry to the local bib file
 --- @param key string|nil The citation key to copy (if nil, try to detect from cursor)
@@ -625,14 +735,11 @@ function Source.copy_to_local_bib(key)
     return false
   end
 
+  local bufnr = vim.api.nvim_get_current_buf()
+
   -- If no key provided, try to detect from cursor position
   if not key or key == '' then
-    local line = vim.api.nvim_get_current_line()
-    local col = vim.api.nvim_win_get_cursor(0)[2]
-    -- Try to extract citation key under/before cursor
-    local text = line:sub(1, col + 1)
-    -- Match citation key patterns (word chars, colon, underscore, dot, hyphen)
-    key = text:match('@([%w:_%.%-]+)$') or text:match('{([%w:_%.%-]+)$') or text:match(',([%w:_%.%-]+)$')
+    key = key_under_cursor(bufnr, opts)
     if not key then
       vim.notify('No citation key found at cursor', vim.log.levels.WARN, { title = 'blink-cmp-bibtex' })
       return false
@@ -640,7 +747,6 @@ function Source.copy_to_local_bib(key)
   end
 
   -- Get current bib paths for validation
-  local bufnr = vim.api.nvim_get_current_buf()
   local paths = scan.resolve_bib_paths(bufnr, opts)
 
   -- Build set of current paths for validation
@@ -651,7 +757,7 @@ function Source.copy_to_local_bib(key)
 
   -- Look up the entry in our cache, validating source_path is current
   --- @type BibEntryRef|nil
-  local entry_data = entry_lookup[key]
+  local entry_data = recall_entry(key)
   if entry_data and entry_data.source_path then
     local normalized = vim.fs.normalize(entry_data.source_path)
     if not current_paths[normalized] then
@@ -686,7 +792,8 @@ function Source.copy_to_local_bib(key)
   return local_bib.copy_entry(key, entry_data.raw, opts.local_bib)
 end
 
---- Get the entry lookup table (for debugging/testing)
+--- Get the entry lookup table of the most recent completion round
+--- The previous round is retained separately and is not included here.
 --- @return table<string, BibEntryRef>
 function Source.get_entry_lookup()
   return entry_lookup

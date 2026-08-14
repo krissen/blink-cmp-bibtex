@@ -4,6 +4,8 @@
 --- This module never requires the config module; it only receives options.
 --- @module 'blink-cmp-bibtex.matchers'
 
+local registry = require('blink-cmp-bibtex.registry')
+
 local M = {}
 
 --- Result returned by a matcher when the cursor sits inside a citation
@@ -12,6 +14,7 @@ local M = {}
 --- @field trigger string|nil Name of the syntax that matched
 --- @field command string|nil The citation command that matched, when applicable
 --- @field sanitize boolean|nil Override the prefix sanitization for this match
+--- @field separators string|nil Override the key separators for this match
 
 --- A matcher function
 --- @alias BibtexMatcherFn fun(text: string, opts: table, ctx: table|nil): BibtexMatchResult|nil
@@ -22,78 +25,12 @@ local M = {}
 --- @field match BibtexMatcherFn The matching function
 --- @field priority number Lower runs first (default 50)
 --- @field sanitize boolean|nil Whether matched prefixes are sanitized
+--- @field separators string|nil Characters separating keys in a multi-key citation
 --- @field trigger_characters string[]|nil Characters that should open the menu
 
 --- Default priority for matchers that do not declare one
 --- @type number
 local DEFAULT_PRIORITY = 50
-
---- Problems already reported, to keep notifications to one per key per session
---- @type table<string, boolean>
-local warned = {}
-
---- Stand-in filetype key for chains built without a filetype
---- @type string
-local NO_FILETYPE = '\0none'
-
---- Match functions that misbehaved, per filetype they misbehaved in
---- Keyed by the function itself so that a broken override in one filetype
---- never disables the same-named matcher elsewhere. Keys are weak so that
---- matchers belonging to discarded configurations can be collected.
---- @type table<function, table<string, boolean>>
-local failed = setmetatable({}, { __mode = 'k' })
-
---- Report a problem once per key per session
---- @param key string Identifies what the message is about
---- @param message string The message to display
-local function warn_once(key, message)
-  if warned[key] then
-    return
-  end
-  warned[key] = true
-  vim.notify(message, vim.log.levels.WARN, { title = 'blink-cmp-bibtex' })
-end
-
---- Whether a match function already misbehaved in this filetype
---- @param match function The match function
---- @param filetype string|nil The buffer filetype
---- @return boolean
-local function has_failed(match, filetype)
-  local per_filetype = failed[match]
-  return per_filetype ~= nil and per_filetype[filetype or NO_FILETYPE] == true
-end
-
---- Remember that a match function misbehaved in this filetype
---- @param match function The match function
---- @param filetype string|nil The buffer filetype
-local function mark_failed(match, filetype)
-  local per_filetype = failed[match]
-  if not per_filetype then
-    per_filetype = {}
-    failed[match] = per_filetype
-  end
-  per_filetype[filetype or NO_FILETYPE] = true
-end
-
---- Render an arbitrary error value as text
---- A matcher may throw anything, including a table whose __tostring itself
---- raises, so every conversion attempt is protected.
---- @param err any The value a matcher threw
---- @return string
-local function describe_error(err)
-  if type(err) == 'string' then
-    return err
-  end
-  local ok, rendered = pcall(vim.inspect, err)
-  if ok and type(rendered) == 'string' then
-    return rendered
-  end
-  ok, rendered = pcall(tostring, err)
-  if ok and type(rendered) == 'string' then
-    return rendered
-  end
-  return '<unprintable error>'
-end
 
 --- Describe why a matcher result is unusable, if it is
 --- @param result any The value a matcher returned
@@ -229,11 +166,13 @@ M.builtin = {
 --- @type table<string, table<string, table>>
 M.defaults = {
   ['*'] = {
-    latex = { priority = 10 },
-    pandoc = { priority = 30 },
+    -- LaTeX separates keys with commas only; a semicolon is an ordinary
+    -- character in a key, which the parser accepts.
+    latex = { priority = 10, separators = ',' },
+    pandoc = { priority = 30, separators = ',;' },
   },
   typst = {
-    typst = { priority = 20 },
+    typst = { priority = 20, separators = ',' },
   },
   -- GAPDoc lives in filetypes that are not enabled by default; add 'gap',
   -- 'xml' or 'autodoc' to `filetypes` to activate these.
@@ -257,6 +196,9 @@ local function malformed_field_reason(spec)
   end
   if spec.sanitize ~= nil and type(spec.sanitize) ~= 'boolean' then
     return string.format('sanitize is %s instead of a boolean', type(spec.sanitize))
+  end
+  if spec.separators ~= nil and type(spec.separators) ~= 'string' then
+    return string.format('separators is %s instead of a string', type(spec.separators))
   end
   if spec.trigger_characters ~= nil then
     if type(spec.trigger_characters) ~= 'table' then
@@ -312,7 +254,11 @@ function M.normalize(name, value, filetype)
   if value == true then
     match = M.builtin[name]
     if not match then
-      warn_once(name, string.format("matcher '%s' is enabled but no built-in matcher has that name", name))
+      registry.warn_once(
+        'matcher',
+        name,
+        string.format("matcher '%s' is enabled but no built-in matcher has that name", name)
+      )
       return nil
     end
     inherited = shipped_spec(name, filetype)
@@ -321,14 +267,18 @@ function M.normalize(name, value, filetype)
   elseif type(value) == 'string' then
     match = M.builtin[value]
     if not match then
-      warn_once(name, string.format("matcher '%s' refers to unknown built-in matcher '%s'", name, value))
+      registry.warn_once(
+        'matcher',
+        name,
+        string.format("matcher '%s' refers to unknown built-in matcher '%s'", name, value)
+      )
       return nil
     end
     inherited = shipped_spec(value, filetype)
   elseif type(value) == 'table' then
     local reason = malformed_field_reason(value)
     if reason then
-      warn_once(name, string.format("matcher '%s' is skipped: %s", name, reason))
+      registry.warn_once('matcher', name, string.format("matcher '%s' is skipped: %s", name, reason))
       return nil
     end
     extra = value
@@ -337,13 +287,17 @@ function M.normalize(name, value, filetype)
     else
       match = M.builtin[name]
       if not match then
-        warn_once(name, string.format("matcher '%s' has no match function and no built-in matcher has that name", name))
+        registry.warn_once(
+          'matcher',
+          name,
+          string.format("matcher '%s' has no match function and no built-in matcher has that name", name)
+        )
         return nil
       end
       inherited = shipped_spec(name, filetype)
     end
   else
-    warn_once(name, string.format("matcher '%s' has unsupported type '%s'", name, type(value)))
+    registry.warn_once('matcher', name, string.format("matcher '%s' has unsupported type '%s'", name, type(value)))
     return nil
   end
 
@@ -365,6 +319,7 @@ function M.normalize(name, value, filetype)
     match = match,
     priority = field('priority') or DEFAULT_PRIORITY,
     sanitize = field('sanitize'),
+    separators = field('separators'),
     trigger_characters = field('trigger_characters'),
   }
 end
@@ -375,7 +330,18 @@ end
 --- @param opts table Configuration options
 --- @return BibtexMatcherSpec[] The matchers to run, in order
 function M.chain(filetype, opts)
-  local configured = opts and opts.matchers or {}
+  local configured = opts and opts.matchers
+  if configured == true then
+    configured = M.defaults
+  elseif configured ~= nil and type(configured) ~= 'table' then
+    -- false disables every matcher; anything else is unusable and is reported
+    -- once, then treated as though nothing had been configured.
+    if configured ~= false then
+      registry.warn_once('matcher', 'option', string.format('matchers is %s, which cannot be used', type(configured)))
+    end
+    configured = {}
+  end
+  configured = configured or {}
   local shared = configured['*'] or {}
   local per_filetype = filetype and configured[filetype] or {}
 
@@ -413,20 +379,21 @@ end
 function M.detect(text, opts, ctx)
   local filetype = ctx and ctx.filetype
   for _, spec in ipairs(M.chain(filetype, opts)) do
-    if not has_failed(spec.match, filetype) then
+    if not registry.has_failed(spec.match, filetype) then
       local ok, result = pcall(spec.match, text, opts, ctx)
       -- A matcher that errors or answers with something unusable is skipped for
       -- this filetype rather than allowed to break completion downstream.
       local problem
       if not ok then
-        problem = string.format('raised an error: %s', describe_error(result))
+        problem = string.format('raised an error: %s', registry.describe_error(result))
       elseif result ~= nil and result ~= false then
         problem = malformed_reason(result)
       end
       if problem then
-        mark_failed(spec.match, filetype)
-        warn_once(
-          string.format('%s@%s', spec.name, filetype or NO_FILETYPE),
+        registry.mark_failed(spec.match, filetype)
+        registry.warn_once(
+          'matcher',
+          string.format('%s@%s', spec.name, filetype or registry.NO_FILETYPE),
           string.format("matcher '%s' %s and is disabled for filetype '%s'", spec.name, problem, filetype or 'unset')
         )
       elseif result then
@@ -458,10 +425,9 @@ end
 --- Internal helpers exposed for testing. Not part of the public API.
 M.__test = {
   --- Forget the per-session warning and failed-matcher state.
-  reset = function()
-    warned = {}
-    failed = setmetatable({}, { __mode = 'k' })
-  end,
+  --- Kept as an entry point of its own even though the state now lives in the
+  --- registry, so callers do not need to know where it is held.
+  reset = registry.reset,
 }
 
 return M

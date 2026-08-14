@@ -3,6 +3,7 @@
 local assert = require('luassert')
 local Source = require('blink-cmp-bibtex')
 local cache = require('blink-cmp-bibtex.cache')
+local config = require('blink-cmp-bibtex.config')
 local helpers = require('tests.helpers')
 
 --- Drive Source:get_completions synchronously.
@@ -246,5 +247,254 @@ describe('Source:resolve', function()
       resolved = result
     end)
     assert.are.equal(item, resolved)
+  end)
+end)
+
+describe('Source:get_completions with semicolons in keys', function()
+  local bufnr, dir, bib
+
+  before_each(function()
+    dir = vim.fs.normalize(vim.fn.tempname())
+    vim.fn.mkdir(dir, 'p')
+    bib = vim.fs.joinpath(dir, 'refs.bib')
+    helpers.write_file(bib, '@article{alpha;beta,\n  title = {Semicolon Key}\n}\n@article{beta,\n  title = {Plain}\n}')
+    cache.invalidate(bib)
+    bufnr = helpers.make_buf({ lines = { '' }, filetype = 'tex' })
+  end)
+
+  after_each(function()
+    vim.api.nvim_buf_delete(bufnr, { force = true })
+    vim.fn.delete(dir, 'rf')
+  end)
+
+  it('filters on the whole key when a LaTeX citation contains a semicolon', function()
+    -- The semicolon used to split the prefix in every syntax, so this filtered
+    -- on 'bet' and offered the wrong entry.
+    local source = Source.new({ files = { bib } })
+    local response = complete(source, helpers.ctx('\\cite{alpha;bet', nil, bufnr))
+    assert.are.same({ 'alpha;beta' }, labels(response))
+  end)
+
+  it('still filters on the last key after a Pandoc semicolon', function()
+    local markdown = helpers.make_buf({ lines = { '' }, filetype = 'markdown' })
+    local source = Source.new({ files = { bib } })
+    local response = complete(source, helpers.ctx('[@alpha;beta; @bet', nil, markdown))
+    assert.are.same({ 'beta' }, labels(response))
+    vim.api.nvim_buf_delete(markdown, { force = true })
+  end)
+end)
+
+describe('Source entry lookup lifetime', function()
+  local bufnr, dir, bib
+
+  before_each(function()
+    dir = vim.fs.normalize(vim.fn.tempname())
+    vim.fn.mkdir(dir, 'p')
+    bib = vim.fs.joinpath(dir, 'refs.bib')
+    local entries = {}
+    for index = 1, 5 do
+      table.insert(entries, string.format('@article{aaa%d,\n  title = {A %d}\n}', index, index))
+      table.insert(entries, string.format('@article{bbb%d,\n  title = {B %d}\n}', index, index))
+    end
+    helpers.write_file(bib, table.concat(entries, '\n'))
+    cache.invalidate(bib)
+    bufnr = helpers.make_buf({ lines = { '' }, filetype = 'tex' })
+  end)
+
+  after_each(function()
+    vim.api.nvim_buf_delete(bufnr, { force = true })
+    vim.fn.delete(dir, 'rf')
+  end)
+
+  it('keeps only the latest round in the lookup instead of accumulating keys', function()
+    local source = Source.new({ files = { bib } })
+    complete(source, helpers.ctx('\\cite{aaa', nil, bufnr))
+    assert.are.equal(5, vim.tbl_count(Source.get_entry_lookup()))
+
+    complete(source, helpers.ctx('\\cite{bbb', nil, bufnr))
+    local lookup = Source.get_entry_lookup()
+    assert.are.equal(5, vim.tbl_count(lookup))
+    assert.is_nil(lookup.aaa1, 'a key from the previous round is still in the current one')
+    assert.is_not_nil(lookup.bbb1)
+  end)
+
+  it('does not grow across many rounds', function()
+    local source = Source.new({ files = { bib } })
+    for _ = 1, 20 do
+      complete(source, helpers.ctx('\\cite{aaa', nil, bufnr))
+      complete(source, helpers.ctx('\\cite{bbb', nil, bufnr))
+    end
+    assert.are.equal(5, vim.tbl_count(Source.get_entry_lookup()))
+  end)
+end)
+
+describe('Source:execute auto_add', function()
+  local bufnr, dir, global_bib, target
+
+  --- Drive Source:execute synchronously.
+  --- @param source table
+  --- @param key string
+  local function accept(source, key)
+    local done = false
+    source:execute({ bufnr = bufnr }, { data = { key = key } }, function()
+      done = true
+    end, nil)
+    vim.wait(2000, function()
+      return done
+    end)
+    assert.is_true(done, 'execute never invoked its callback')
+  end
+
+  before_each(function()
+    dir = vim.fs.normalize(vim.fn.tempname())
+    vim.fn.mkdir(dir, 'p')
+    global_bib = vim.fs.joinpath(dir, 'global.bib')
+    target = vim.fs.joinpath(dir, 'local.bib')
+    helpers.write_file(global_bib, '@article{aaa1,\n  title = {A 1}\n}\n@article{bbb1,\n  title = {B 1}\n}')
+    helpers.write_file(target, '')
+    cache.invalidate(global_bib)
+    bufnr = helpers.make_buf({ lines = { '' }, filetype = 'tex' })
+  end)
+
+  after_each(function()
+    vim.api.nvim_buf_delete(bufnr, { force = true })
+    vim.fn.delete(dir, 'rf')
+  end)
+
+  --- @return table
+  local function make_source()
+    return Source.new({
+      files = { global_bib },
+      global_files = { global_bib },
+      local_bib = { enabled = true, auto_add = true, target = target, notify_on_add = false },
+    })
+  end
+
+  --- @return string
+  local function read_target()
+    local fd = assert(io.open(target, 'r'))
+    local content = fd:read('*a')
+    fd:close()
+    return content
+  end
+
+  it('copies the accepted entry to the local bib', function()
+    local source = make_source()
+    complete(source, helpers.ctx('\\cite{aaa', nil, bufnr))
+    accept(source, 'aaa1')
+    assert.is_truthy(read_target():find('@article{aaa1', 1, true))
+  end)
+
+  it('still resolves the accepted entry when a new round has already run', function()
+    -- The round that produced the item is retained one generation, so an accept
+    -- that lands after the next round has started still finds its entry.
+    local source = make_source()
+    complete(source, helpers.ctx('\\cite{aaa', nil, bufnr))
+    complete(source, helpers.ctx('\\cite{bbb', nil, bufnr))
+    accept(source, 'aaa1')
+    assert.is_truthy(read_target():find('@article{aaa1', 1, true))
+  end)
+end)
+
+describe('Source.__test.key_under_cursor', function()
+  local bufnr
+
+  --- Place the cursor in a scratch buffer and detect the key under it.
+  --- @param filetype string
+  --- @param line string Cursor position is marked with '|'
+  --- @param opts table|nil Configuration options
+  --- @return string|nil
+  local function detect(filetype, line, opts)
+    local col = assert(line:find('|', 1, true), 'the line must mark the cursor with |') - 1
+    bufnr = helpers.make_buf({ lines = { (line:gsub('%|', '')) }, filetype = filetype })
+    vim.api.nvim_set_current_buf(bufnr)
+    vim.api.nvim_win_set_cursor(0, { 1, col })
+    return Source.__test.key_under_cursor(bufnr, opts or config.get())
+  end
+
+  after_each(function()
+    if bufnr and vim.api.nvim_buf_is_valid(bufnr) then
+      vim.api.nvim_buf_delete(bufnr, { force = true })
+    end
+  end)
+
+  it('detects a key the cursor sits inside of in a LaTeX citation', function()
+    assert.are.equal('smith2020', detect('tex', '\\cite{smi|th2020} and more'))
+  end)
+
+  it('detects a key the cursor sits at the end of', function()
+    assert.are.equal('smith2020', detect('tex', '\\cite{smith202|0}'))
+  end)
+
+  it('detects the key being pointed at in a multi-key citation', function()
+    assert.are.equal('doe2019', detect('tex', '\\cite{smith2020,do|e2019}'))
+  end)
+
+  it('detects a Pandoc key', function()
+    assert.are.equal('smith2020', detect('markdown', 'see [@smi|th2020] here'))
+  end)
+
+  it('detects a GAPDoc key, which the ad-hoc patterns never covered', function()
+    assert.are.equal('smith2020', detect('gap', '<Cite Key="smi|th2020"/>'))
+  end)
+
+  it('detects a key through a user-registered matcher', function()
+    local opts = vim.deepcopy(config.get())
+    opts.matchers = vim.deepcopy(opts.matchers)
+    opts.matchers.xml = {
+      refkey = {
+        priority = 5,
+        sanitize = false,
+        match = function(text)
+          local prefix = text:match('<Ref%s+BibKey="([^"]*)$')
+          return prefix and { prefix = prefix, trigger = 'refkey' } or nil
+        end,
+      },
+    }
+    assert.are.equal('smith2020', detect('xml', '<Ref BibKey="smi|th2020"/>', opts))
+  end)
+
+  it('keeps a slash inside the key', function()
+    assert.are.equal('smith/2020', detect('tex', '\\cite{smi|th/2020}'))
+  end)
+
+  it('keeps a plus inside a GAPDoc key', function()
+    assert.are.equal('a+b', detect('gap', '<Cite Key="a|+b"/>'))
+  end)
+
+  it('keeps punctuation the parser accepts in a key', function()
+    -- The parser takes any run of non-comma, non-whitespace characters, so the
+    -- cursor scan must not stop at the first character outside a short alphabet.
+    assert.are.equal('a/b+c~d!e', detect('tex', '\\cite{a/b|+c~d!e}'))
+  end)
+
+  it('still stops at the delimiter that ends the citation', function()
+    assert.are.equal('smith2020', detect('markdown', 'see [@smi|th2020] and more'))
+  end)
+
+  it('keeps a semicolon inside a LaTeX key', function()
+    -- LaTeX separates keys with commas; a semicolon is part of the key, and the
+    -- parser accepts it as one.
+    assert.are.equal('alpha;beta', detect('tex', '\\cite{alp|ha;beta}'))
+  end)
+
+  it('reads the key before a Pandoc semicolon separator', function()
+    assert.are.equal('key1', detect('markdown', 'see [@key|1; @key2] here'))
+  end)
+
+  it('reads the key after a Pandoc semicolon separator', function()
+    assert.are.equal('key2', detect('markdown', 'see [@key1; @key|2] here'))
+  end)
+
+  it('keeps a semicolon inside a GAPDoc key', function()
+    assert.are.equal('a;b', detect('gap', '<Cite Key="a|;b"/>'))
+  end)
+
+  it('returns nil for a plain word', function()
+    assert.is_nil(detect('markdown', 'just some wo|rds here'))
+  end)
+
+  it('returns nil once the citation is closed behind the cursor', function()
+    assert.is_nil(detect('tex', '\\cite{smith2020}|'))
   end)
 end)

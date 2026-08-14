@@ -31,18 +31,21 @@ nvim -u repro.lua   # clean Neovim with blink.cmp and this plugin only
 
 ## Architecture
 
-Eight modules under `lua/blink-cmp-bibtex/`:
+Eleven modules under `lua/blink-cmp-bibtex/`:
 
 1. **config.lua** - Default settings, `setup()` and `extend()` functions for configuration. List options replace defaults; keyed maps are merged
 2. **parser.lua** - BibTeX/Hayagriva parsing with LaTeX accent normalization to UTF-8
-3. **scan.lua** - File discovery from `\addbibresource{}`, YAML metadata, Typst `#bibliography()`, `#import` statements, and glob patterns
+3. **scan.lua** - Path resolution: runs the discovery hooks for the buffer, then resolves, expands globs and deduplicates against `files`, `global_files` and `search_paths`
 4. **cache.lua** - Mtime-based caching of parsed entries
 5. **matchers.lua** - Citation matchers (`latex`, `pandoc`, `typst`, `gapdoc`), the shipped per-filetype dispatch (`M.defaults`, which config.lua copies), normalization of user-configured matchers, priority ordering and dispatch
 6. **local_bib.lua** - Local bibliography management (copy entries from global to project-local files)
-7. **health.lua** - `:checkhealth blink-cmp-bibtex`, reports the resolved config and matcher chains
-8. **init.lua** - blink.cmp source implementation (`Source:enabled`, `Source:get_trigger_characters`, `Source:get_completions`, `Source:resolve`, `Source:execute`)
+7. **health.lua** - `:checkhealth blink-cmp-bibtex`, reports the resolved config and both the matcher and discovery chains
+8. **discovery.lua** - Buffer bibliography discovery (`latex`, `yaml`, `typst`, `gapdoc` hooks), the shipped dispatch (`M.defaults`, which config.lua copies), normalization of user-configured hooks and chain execution
+9. **registry.lua** - Shared bookkeeping for both extension points: warn-once, error rendering and per-filetype failure tracking
+10. **path.lua** - Path helpers (`joinpath`, `normalize`, `is_absolute`) shared by scan.lua and discovery.lua
+11. **init.lua** - blink.cmp source implementation (`Source:enabled`, `Source:get_trigger_characters`, `Source:get_completions`, `Source:resolve`, `Source:execute`)
 
-**Data flow**: Buffer → scan.lua (file discovery) → cache.lua (mtime check) → parser.lua (parse if needed) → matchers.lua (citation prefix at cursor) → init.lua (format & filter) → blink.cmp
+**Data flow**: Buffer → discovery.lua (hooks report declared files) → scan.lua (resolve and deduplicate paths) → cache.lua (mtime check) → parser.lua (parse if needed) → matchers.lua (citation prefix at cursor) → init.lua (format & filter) → blink.cmp
 
 Entry point: `plugin/blink-cmp-bibtex.lua`
 
