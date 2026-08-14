@@ -65,7 +65,8 @@ local function normalize_whitespace(s)
   if not s then
     return ''
   end
-  return s:gsub('%s+', ' '):gsub('^%s+', ''):gsub('%s+$', '')
+  -- Parenthesized so the gsub replacement count is not returned alongside the string.
+  return (s:gsub('%s+', ' '):gsub('^%s+', ''):gsub('%s+$', ''))
 end
 
 --- Source status for an entry
