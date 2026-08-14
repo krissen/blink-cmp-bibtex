@@ -41,6 +41,10 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-tests-${{ matrix.nvim }}-
 
+      # hererocks builds Lua 5.1 from source, which links against readline.
+      - name: Install readline headers
+        run: sudo apt-get update && sudo apt-get install -y libreadline-dev
+
       - name: Run the test suite
         run: nvim -l tests/minit.lua --minitest
         timeout-minutes: 10
