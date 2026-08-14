@@ -495,7 +495,10 @@ override same-named `'*'` entries; ties break on the name.
 
 Unlike `matchers.chain`, this falls back to `discovery.defaults` when `opts` or
 `opts.discovery` is absent, because `find_bib_files_from_buffer` is public and
-is called without options. Pass `discovery = false` to run no hooks at all.
+is called without options. Pass `discovery = false` to run no hooks at all, or
+`discovery = true` for the shipped ones. A value that is neither a table nor
+one of those booleans is reported once and treated as absent; `matchers.chain`
+accepts the same shorthands, where absent means an empty chain.
 
 **Returns:**
 - `BibtexDiscoverySpec[]`

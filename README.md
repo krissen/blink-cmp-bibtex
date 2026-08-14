@@ -324,9 +324,14 @@ fields. Spec fields:
   Set `extension = false` when the hook returns finished file names.
 
 Relative paths are resolved against the buffer's directory, with the project
-root as a fallback, exactly like the built-in results. `discovery = false`
-turns buffer discovery off entirely, leaving `files`, `global_files` and
-`search_paths` as the only sources.
+root as a fallback, exactly like the built-in results.
+
+`discovery = false` turns buffer discovery off entirely, leaving `files`,
+`global_files` and `search_paths` as the only sources, and `discovery = true`
+restores the shipped hooks. The `matchers` option takes the same two
+shorthands. Any other value that is neither of those nor a table is reported
+through `vim.notify` once and ignored, so a typo degrades the configuration
+instead of breaking completion.
 
 Run `:checkhealth blink-cmp-bibtex` to see the discovery chain that a filetype
 actually resolves to.
