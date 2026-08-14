@@ -437,13 +437,43 @@ end
 
 ## Release Process
 
-**Note**: Version management and changelogs are maintained by repository maintainers.
+Releases are automated with
+[release-please](https://github.com/googleapis/release-please). Versions, tags,
+`CHANGELOG.md` and the GitHub release are all derived from
+[Conventional Commits](https://www.conventionalcommits.org/), so the commit
+messages on `master` are the release input — see
+[CONTRIBUTING.md](../CONTRIBUTING.md) for the format.
 
-1. Update version references in documentation
-2. Create git tag: `git tag -a v1.x.x -m "Release v1.x.x"`
-3. Push tag: `git push origin v1.x.x`
-4. Create GitHub release from tag
-5. Update README.md if installation instructions change
+**How it works:**
+
+1. A push to `master` runs `.github/workflows/release-please.yml`, which opens
+   or updates a *release PR* titled `chore(master): release x.y.z`. The PR
+   contains the version bump and the generated changelog entry.
+2. `feat` commits bump the minor version, `fix` and `perf` the patch version.
+   `docs`, `test`, `ci`, `chore` and `refactor` commits do not trigger a
+   release, but a release PR that already exists picks them up.
+3. Breaking changes (`feat!:` or a `BREAKING CHANGE:` footer) bump the minor
+   version while the project is pre-1.0, because `bump-minor-pre-major` is set
+   in `release-please-config.json`. Going to 1.0.0 is a deliberate act.
+4. **A maintainer reviews and edits the release notes in the release PR before
+   merging it.** The generated changelog is a starting point, not the final
+   text.
+5. Merging the release PR tags `vx.y.z` and publishes the GitHub release from
+   the changelog entry.
+
+**Configuration:**
+
+- `release-please-config.json` – release type `simple` (no package manifest to
+  update), tags without a component prefix, so `v0.9.0` rather than
+  `blink-cmp-bibtex-v0.9.0`.
+- `.release-please-manifest.json` – the last released version. release-please
+  reads it to compute the next one and writes the new version back when the
+  release PR merges. It is seeded with `0.8.0` so the first automated release
+  lands on `0.9.0`; do not edit it by hand afterwards.
+
+Nothing needs to be tagged or released manually. If a release PR looks wrong,
+fix the commit history on `master` (with a follow-up commit) rather than the
+generated files.
 
 ## Resources
 
