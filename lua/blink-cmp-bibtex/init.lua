@@ -446,6 +446,21 @@ function Source.new(opts)
   return self
 end
 
+--- Whether the source is active in the current buffer
+--- blink.cmp collects trigger characters only from enabled providers, which is
+--- what keeps matcher trigger characters scoped to their filetypes.
+--- @return boolean
+function Source:enabled()
+  local ft = vim.bo.filetype
+  return #self.opts.filetypes == 0 or vim.tbl_contains(self.opts.filetypes, ft)
+end
+
+--- Characters that should open the completion menu in the current buffer
+--- @return string[]
+function Source:get_trigger_characters()
+  return matchers.trigger_characters(vim.bo.filetype, self.opts)
+end
+
 --- Get completion items for the current context
 --- @param context table Completion context from blink.cmp
 --- @param callback function Callback to invoke with completion results
