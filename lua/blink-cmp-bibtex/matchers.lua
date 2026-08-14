@@ -203,24 +203,72 @@ M.builtin = {
   gapdoc = M.gapdoc,
 }
 
+--- The dispatch shipped with the plugin, and the source of the config default
+--- Lives here rather than in config.lua so that the shorthand forms can inherit
+--- the shipped spec fields without the two modules depending on each other.
+--- @type table<string, table<string, table>>
+M.defaults = {
+  ['*'] = {
+    latex = { priority = 10 },
+    pandoc = { priority = 30 },
+  },
+  typst = {
+    typst = { priority = 20 },
+  },
+  -- GAPDoc lives in filetypes that are not enabled by default; add 'gap',
+  -- 'xml' or 'autodoc' to `filetypes` to activate these.
+  gap = {
+    gapdoc = { priority = 5, trigger_characters = { '"' } },
+  },
+  xml = {
+    gapdoc = { priority = 5, trigger_characters = { '"' } },
+  },
+  autodoc = {
+    gapdoc = { priority = 5, trigger_characters = { '"' } },
+  },
+}
+
+--- The spec fields shipped for a built-in matcher in a filetype context
+--- @param name string The built-in matcher name
+--- @param filetype string|nil The filetype whose chain is being built
+--- @return table|nil The shipped entry, or nil when nothing is shipped
+local function shipped_spec(name, filetype)
+  local per_filetype = filetype and M.defaults[filetype]
+  local entry = per_filetype and per_filetype[name]
+  if type(entry) ~= 'table' then
+    entry = M.defaults['*'] and M.defaults['*'][name]
+  end
+  return type(entry) == 'table' and entry or nil
+end
+
 --- Normalize a configured matcher value into a spec
 --- Accepts a function, a spec table, a built-in name, or a boolean.
 --- Invalid values are skipped with a single warning per name.
+---
+--- Whenever the match function comes from a built-in, priority, sanitize and
+--- trigger_characters are resolved in this order, so that re-enabling a matcher
+--- with `true` keeps the behavior it ships with:
+---   1. the field spelled out in the user's own spec table
+---   2. the field this filetype ships for that built-in in M.defaults
+---   3. the field '*' ships for that built-in in M.defaults
+---   4. DEFAULT_PRIORITY for priority, nil for the rest
 --- @param name string The configuration key the value was found under
 --- @param value any The configured value
+--- @param filetype string|nil The filetype whose chain is being built
 --- @return BibtexMatcherSpec|nil The normalized spec, or nil when disabled or invalid
-function M.normalize(name, value)
+function M.normalize(name, value, filetype)
   if value == nil or value == false then
     return nil
   end
 
-  local match, extra
+  local match, extra, inherited
   if value == true then
     match = M.builtin[name]
     if not match then
       warn_once(name, string.format("matcher '%s' is enabled but no built-in matcher has that name", name))
       return nil
     end
+    inherited = shipped_spec(name, filetype)
   elseif type(value) == 'function' then
     match = value
   elseif type(value) == 'string' then
@@ -229,6 +277,7 @@ function M.normalize(name, value)
       warn_once(name, string.format("matcher '%s' refers to unknown built-in matcher '%s'", name, value))
       return nil
     end
+    inherited = shipped_spec(value, filetype)
   elseif type(value) == 'table' then
     extra = value
     if type(value.match) == 'function' then
@@ -239,18 +288,32 @@ function M.normalize(name, value)
         warn_once(name, string.format("matcher '%s' has no match function and no built-in matcher has that name", name))
         return nil
       end
+      inherited = shipped_spec(name, filetype)
     end
   else
     warn_once(name, string.format("matcher '%s' has unsupported type '%s'", name, type(value)))
     return nil
   end
 
+  --- Read a spec field, preferring the user's own value over the shipped one
+  --- @param field string
+  --- @return any
+  local function field(field_name)
+    if extra and extra[field_name] ~= nil then
+      return extra[field_name]
+    end
+    if inherited and inherited[field_name] ~= nil then
+      return inherited[field_name]
+    end
+    return nil
+  end
+
   return {
     name = name,
     match = match,
-    priority = extra and extra.priority or DEFAULT_PRIORITY,
-    sanitize = extra and extra.sanitize,
-    trigger_characters = extra and extra.trigger_characters,
+    priority = field('priority') or DEFAULT_PRIORITY,
+    sanitize = field('sanitize'),
+    trigger_characters = field('trigger_characters'),
   }
 end
 
@@ -274,7 +337,7 @@ function M.chain(filetype, opts)
 
   local specs = {}
   for name, value in pairs(values) do
-    local spec = M.normalize(name, value)
+    local spec = M.normalize(name, value, filetype)
     if spec then
       specs[#specs + 1] = spec
     end

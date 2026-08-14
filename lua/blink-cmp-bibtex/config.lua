@@ -2,6 +2,8 @@
 --- Manages default settings and allows customization through setup() and extend()
 --- @module 'blink-cmp-bibtex.config'
 
+local matchers = require('blink-cmp-bibtex.matchers')
+
 local M = {}
 
 --- Default configuration options
@@ -24,27 +26,9 @@ local defaults = {
     'citet',
   },
   -- Citation matchers per filetype. Entries under a filetype key override
-  -- same-named entries under '*'. See matchers.lua for the accepted forms.
-  matchers = {
-    ['*'] = {
-      latex = { priority = 10 },
-      pandoc = { priority = 30 },
-    },
-    typst = {
-      typst = { priority = 20 },
-    },
-    -- GAPDoc lives in filetypes that are not enabled by default; add 'gap',
-    -- 'xml' or 'autodoc' to `filetypes` to activate these.
-    gap = {
-      gapdoc = { priority = 5, trigger_characters = { '"' } },
-    },
-    xml = {
-      gapdoc = { priority = 5, trigger_characters = { '"' } },
-    },
-    autodoc = {
-      gapdoc = { priority = 5, trigger_characters = { '"' } },
-    },
-  },
+  -- same-named entries under '*'. The shipped dispatch and the accepted entry
+  -- forms both live in matchers.lua, which owns this default.
+  matchers = vim.deepcopy(matchers.defaults),
   preview_style = 'apa',
   source_indicator = true,
   max_entries = 4000,

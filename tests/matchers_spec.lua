@@ -126,10 +126,47 @@ describe('matchers.chain', function()
   end)
 
   it('breaks ties on the matcher name', function()
+    -- Plain functions inherit nothing, so all three share the default priority.
     local opts = {
-      matchers = { ['*'] = { zulu = 'latex', alpha = 'pandoc', mike = 'typst' } },
+      matchers = {
+        ['*'] = { zulu = function() end, alpha = function() end, mike = function() end },
+      },
     }
     assert.are.same({ 'alpha', 'mike', 'zulu' }, names(matchers.chain('tex', opts)))
+  end)
+
+  it('keeps the shipped priority when a built-in is re-enabled with true', function()
+    -- Regression: the shorthand forms used to land at the default priority, so
+    -- `typst = true` silently moved typst from 20 to behind pandoc's 30.
+    local opts = { matchers = { ['*'] = { pandoc = true }, typst = { typst = true } } }
+    assert.are.same({ 'typst', 'pandoc' }, names(matchers.chain('typst', opts)))
+    local chain = matchers.chain('typst', opts)
+    assert.are.equal(20, chain[1].priority)
+    assert.are.equal(30, chain[2].priority)
+  end)
+
+  it('keeps the shipped trigger characters when gapdoc is re-enabled with true', function()
+    local opts = { matchers = { gap = { gapdoc = true } } }
+    local chain = matchers.chain('gap', opts)
+    assert.are.equal(5, chain[1].priority)
+    assert.are.same({ '"' }, chain[1].trigger_characters)
+  end)
+
+  it('inherits the shared priority for a built-in named by a string', function()
+    local opts = { matchers = { ['*'] = { citations = 'pandoc' } } }
+    assert.are.equal(30, matchers.chain('markdown', opts)[1].priority)
+  end)
+
+  it('lets an explicit priority win over the shipped one', function()
+    local opts = { matchers = { typst = { typst = { priority = 99 } } } }
+    assert.are.equal(99, matchers.chain('typst', opts)[1].priority)
+  end)
+
+  it('falls back to the default priority for a built-in the filetype does not ship', function()
+    -- typst is shipped only under the typst filetype, so enabling it elsewhere
+    -- has no shipped priority to inherit.
+    local opts = { matchers = { markdown = { typst = true } } }
+    assert.are.equal(50, matchers.chain('markdown', opts)[1].priority)
   end)
 
   it('returns an empty chain when nothing is configured', function()
