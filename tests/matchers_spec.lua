@@ -37,7 +37,7 @@ describe('matchers.normalize', function()
 
   it('wraps a function into a spec with the default priority', function()
     local fn = function() end
-    local spec = matchers.normalize('custom', fn)
+    local spec = assert(matchers.normalize('custom', fn))
     assert.are.equal(fn, spec.match)
     assert.are.equal('custom', spec.name)
     assert.are.equal(50, spec.priority)
@@ -45,25 +45,25 @@ describe('matchers.normalize', function()
 
   it('keeps the match function and options of a spec table', function()
     local fn = function() end
-    local spec = matchers.normalize('custom', { match = fn, priority = 3, sanitize = false })
+    local spec = assert(matchers.normalize('custom', { match = fn, priority = 3, sanitize = false }))
     assert.are.equal(fn, spec.match)
     assert.are.equal(3, spec.priority)
     assert.is_false(spec.sanitize)
   end)
 
   it('falls back to the built-in matcher named by the key', function()
-    local spec = matchers.normalize('latex', { priority = 10 })
+    local spec = assert(matchers.normalize('latex', { priority = 10 }))
     assert.are.equal(matchers.latex, spec.match)
     assert.are.equal(10, spec.priority)
   end)
 
   it('resolves a string to the named built-in matcher', function()
-    local spec = matchers.normalize('citations', 'pandoc')
+    local spec = assert(matchers.normalize('citations', 'pandoc'))
     assert.are.equal(matchers.pandoc, spec.match)
   end)
 
   it('resolves true to the built-in matcher named by the key', function()
-    assert.are.equal(matchers.typst, matchers.normalize('typst', true).match)
+    assert.are.equal(matchers.typst, assert(matchers.normalize('typst', true)).match)
   end)
 
   it('treats false and nil as disabled', function()
@@ -145,8 +145,8 @@ describe('matchers.detect', function()
   it('returns the matching spec alongside the result', function()
     local opts = config.defaults()
     local result, spec = matchers.detect('\\cite{k', opts, { filetype = 'tex' })
-    assert.are.equal('k', result.prefix)
-    assert.are.equal('latex', spec.name)
+    assert.are.equal('k', assert(result).prefix)
+    assert.are.equal('latex', assert(spec).name)
   end)
 
   it('stops at the first matcher that returns a result', function()
@@ -171,7 +171,7 @@ describe('matchers.detect', function()
         },
       },
     }
-    local result = matchers.detect('anything', opts, { filetype = 'tex' })
+    local result = assert(matchers.detect('anything', opts, { filetype = 'tex' }))
     assert.are.equal('a', result.prefix)
     assert.are.same({ 'first' }, calls)
   end)
@@ -196,8 +196,8 @@ describe('matchers.detect', function()
       },
     }
     with_notify_capture(function(messages)
-      local first = matchers.detect('x', opts, { filetype = 'tex' })
-      local second = matchers.detect('x', opts, { filetype = 'tex' })
+      local first = assert(matchers.detect('x', opts, { filetype = 'tex' }))
+      local second = assert(matchers.detect('x', opts, { filetype = 'tex' }))
       assert.are.equal('ok', first.prefix)
       assert.are.equal('ok', second.prefix)
       assert.are.equal(1, #messages)
@@ -242,8 +242,8 @@ describe('matchers.gapdoc', function()
 
   it('is reachable through the default gap chain', function()
     local result, spec = matchers.detect('<Cite Key="pro', config.defaults(), { filetype = 'gap' })
-    assert.are.equal('pro', result.prefix)
-    assert.are.equal('gapdoc', spec.name)
+    assert.are.equal('pro', assert(result).prefix)
+    assert.are.equal('gapdoc', assert(spec).name)
   end)
 end)
 
