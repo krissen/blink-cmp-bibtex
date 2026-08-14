@@ -457,12 +457,20 @@ function Source:get_completions(context, callback)
     callback(empty_response())
     return function() end
   end
-  local detection = extract_context(context, self.opts, ft)
+  local detection, spec = extract_context(context, self.opts, ft)
   if not detection then
     callback(empty_response())
     return function() end
   end
-  local prefix = sanitize_prefix(detection.prefix)
+  -- A match may opt out of prefix sanitization, either per match or per matcher.
+  local should_sanitize = detection.sanitize
+  if should_sanitize == nil then
+    should_sanitize = spec and spec.sanitize
+  end
+  if should_sanitize == nil then
+    should_sanitize = true
+  end
+  local prefix = should_sanitize and sanitize_prefix(detection.prefix) or (detection.prefix or '')
   local paths = scan.resolve_bib_paths(bufnr, self.opts)
   if table_is_empty(paths) then
     callback(empty_response())
