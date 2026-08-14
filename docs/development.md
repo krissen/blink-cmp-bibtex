@@ -6,7 +6,7 @@ This guide provides technical details for developers working on blink-cmp-bibtex
 
 ### Module Organization
 
-The codebase is organized into five main modules:
+The codebase is organized into eight modules:
 
 1. **config.lua**: Configuration management
    - Stores default settings
@@ -28,9 +28,22 @@ The codebase is organized into five main modules:
    - Invalidates cache when files change
    - Limits memory usage with configurable max entries
 
-5. **init.lua**: blink.cmp source
+5. **matchers.lua**: Citation matchers
+   - Detects citations in the text before the cursor
+   - Ships the `latex`, `pandoc`, `typst` and `gapdoc` matchers
+   - Normalizes configured matchers into specs and orders them by priority
+
+6. **local_bib.lua**: Local bibliography management
+   - Resolves the project-local target file
+   - Copies entries from global files into it
+
+7. **health.lua**: Health check
+   - Backs `:checkhealth blink-cmp-bibtex`
+   - Reports the resolved configuration and the matcher chain per filetype
+
+8. **init.lua**: blink.cmp source
    - Implements blink.cmp source interface
-   - Detects citation commands in context
+   - Delegates citation detection to matchers.lua
    - Generates completion items with previews
 
 ### Data Flow
@@ -41,6 +54,8 @@ Buffer → scan.lua → File paths
          cache.lua → Cached entries
               ↓
       parser.lua → Parse if needed
+              ↓
+     matchers.lua → Citation prefix at cursor
               ↓
          init.lua → Format & filter
               ↓
@@ -329,6 +344,49 @@ preview_styles.my_style = {
 ```
 
 2. Document it in README.md and docs/api.md
+
+### Adding a Citation Matcher
+
+A matcher is a function of the text before the cursor. To ship a new syntax:
+
+1. Add the matcher to `matchers.lua` and register it in `M.builtin`:
+
+```lua
+--- Match `<Cite Key="key` in GAPDoc documentation
+--- @param text string The text to search
+--- @return BibtexMatchResult|nil
+function M.gapdoc(text)
+  local prefix = text:match('<Cite%s+[^>]-Key%s*=%s*"([^"]*)$')
+  if prefix then
+    return { prefix = prefix, trigger = 'gapdoc', sanitize = false }
+  end
+  return nil
+end
+
+M.builtin = { latex = M.latex, pandoc = M.pandoc, typst = M.typst, gapdoc = M.gapdoc }
+```
+
+   Return `nil` when the cursor is not inside a citation — a matcher that
+   matches too eagerly steals the cursor from every later matcher in the chain.
+   Set `sanitize = false` when keys are used verbatim rather than in
+   comma-separated lists.
+
+2. Wire it into the `matchers` defaults in `config.lua`, under `'*'` if it
+   applies everywhere or under a filetype key otherwise. Pick a `priority`
+   (lower runs first) that places it correctly relative to the existing chain,
+   and declare `trigger_characters` if the syntax needs a character other than a
+   keyword to open the menu.
+
+3. If the matcher's filetype is not in the default `filetypes`, it stays dormant
+   until users opt in. `health.lua` reports shipped dormant matchers as
+   information and user-configured ones as a warning, so keep both lists in
+   sync.
+
+4. Add specs to `tests/matchers_spec.lua` covering both matches and non-matches,
+   and document the syntax in `README.md` and `docs/api.md`.
+
+Users can register matchers from their own configuration through the `matchers`
+option, so a syntax only belongs in the plugin when it is broadly useful.
 
 ### Adding Citation Commands
 
