@@ -62,9 +62,16 @@ function M.check()
   end
   table.sort(names)
 
+  local shipped = config.defaults().matchers or {}
+
   for _, filetype in ipairs(names) do
     local chain = describe_chain(matchers.chain(filetype, opts))
-    if #filetypes > 0 and not vim.tbl_contains(filetypes, filetype) then
+    if #filetypes == 0 or vim.tbl_contains(filetypes, filetype) then
+      h_ok(string.format('%s: %s', filetype, chain))
+    elseif shipped[filetype] ~= nil then
+      -- Shipped with the plugin and dormant by design; not a misconfiguration.
+      h_info(string.format("%s: %s (dormant, '%s' is not in filetypes)", filetype, chain, filetype))
+    else
       h_warn(
         string.format(
           "matchers for '%s' are configured but '%s' is not in filetypes — completions will not fire there",
@@ -73,8 +80,6 @@ function M.check()
         ),
         { string.format("add '%s' to the filetypes option to enable it", filetype) }
       )
-    else
-      h_ok(string.format('%s: %s', filetype, chain))
     end
   end
 end
