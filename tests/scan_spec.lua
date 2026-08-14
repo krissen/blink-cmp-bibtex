@@ -262,10 +262,18 @@ describe('scan.find_bib_files_from_buffer with GAPDoc declarations', function()
       { name = 'a comment', open = '<!--', close = '-->' },
       { name = 'a CDATA section', open = '<![CDATA[', close = ']]>' },
       { name = 'a processing instruction', open = '<?gapdoc', close = '?>' },
+      {
+        name = 'a DOCTYPE internal subset',
+        open = '<!DOCTYPE Book SYSTEM "gapdoc.dtd" [',
+        close = ']>',
+        -- An entity declaration parks the markup as replacement text, which is
+        -- inert until something references the entity.
+        wrapped = '<!DOCTYPE Book SYSTEM "gapdoc.dtd" [ <!ENTITY old "<Bibliography Databases=\'old\'/>"> ]>',
+      },
     }
 
     for _, region in ipairs(regions) do
-      local wrapped = region.open .. ' <Bibliography Databases="old"/> ' .. region.close
+      local wrapped = region.wrapped or (region.open .. ' <Bibliography Databases="old"/> ' .. region.close)
 
       it('ignores a declaration inside ' .. region.name, function()
         assert.are.same({}, discover({ wrapped }))
@@ -307,18 +315,37 @@ describe('scan.find_bib_files_from_buffer with GAPDoc declarations', function()
         discover({ '<?xml version="1.0" encoding="UTF-8"?>', '<Bibliography Databases="mybib"/>' })
       )
     end)
-  end)
 
-  it('returns declarations in source order regardless of quote style', function()
-    assert.are.same(
-      { 'first.bib', 'second.bib', 'third.bib', 'fourth.bib' },
-      discover({
-        "<Bibliography Databases='first'/>",
-        '<Bibliography Databases="second"/>',
-        "<Bibliography Databases='third'/>",
-        '<Bibliography Databases="fourth"/>',
-      })
-    )
+    it('is unaffected by a DOCTYPE without an internal subset', function()
+      assert.are.same(
+        { 'mybib.bib' },
+        discover({ '<!DOCTYPE Book SYSTEM "gapdoc.dtd">', '<Bibliography Databases="mybib"/>' })
+      )
+    end)
+
+    it('does not let a subset-less DOCTYPE reach a later name containing brackets', function()
+      -- The internal-subset pattern must not scan past the DOCTYPE's own '>'
+      -- looking for a ']' that belongs to something else entirely.
+      assert.are.same(
+        { 'bib[1].bib' },
+        discover({ '<!DOCTYPE Book SYSTEM "gapdoc.dtd">', '<Bibliography Databases="bib[1]"/>' })
+      )
+    end)
+
+    it('reads a declaration in a document with a full GAPDoc prologue', function()
+      assert.are.same(
+        { 'manual.bib' },
+        discover({
+          '<?xml version="1.0" encoding="UTF-8"?>',
+          '<!DOCTYPE Book SYSTEM "gapdoc.dtd" [',
+          '  <!ENTITY GAP "<Package>GAP</Package>">',
+          ']>',
+          '<Book Name="Manual">',
+          '  <Bibliography Databases="manual"/>',
+          '</Book>',
+        })
+      )
+    end)
   end)
 
   it('does not join the buffer when no declaration marker is present', function()

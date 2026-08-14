@@ -441,9 +441,16 @@ local function strip_inactive_regions(text)
   text = text:gsub('<!%-%-.-%-%->', ' ')
   text = text:gsub('<!%[CDATA%[.-%]%]>', ' ')
   text = text:gsub('<%?.-%?>', ' ')
+  -- A DOCTYPE may carry an internal subset, whose entity declarations hold
+  -- replacement text that is not markup until an entity is referenced. The
+  -- '[^>%[]*' guard keeps this from reaching past the DOCTYPE's own '>' into a
+  -- later element that happens to contain brackets.
+  text = text:gsub('<!DOCTYPE[^>%[]*%[.-%]%s*>', ' ')
+  text = text:gsub('<!DOCTYPE[^>]*>', ' ')
   text = text:gsub('<!%-%-.*$', ' ')
   text = text:gsub('<!%[CDATA%[.*$', ' ')
   text = text:gsub('<%?.*$', ' ')
+  text = text:gsub('<!DOCTYPE.*$', ' ')
   return text
 end
 
