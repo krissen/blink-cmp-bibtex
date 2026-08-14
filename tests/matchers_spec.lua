@@ -81,6 +81,51 @@ describe('matchers.normalize', function()
     end)
   end)
 
+  it('skips a spec whose optional fields are malformed', function()
+    local malformed = {
+      { field = 'priority', spec = { priority = 'high' }, reason = 'priority is string' },
+      { field = 'sanitize', spec = { sanitize = 'yes' }, reason = 'sanitize is string' },
+      { field = 'trigger_characters', spec = { trigger_characters = '"' }, reason = 'trigger_characters is string' },
+      {
+        field = 'trigger_characters entries',
+        spec = { trigger_characters = { 1, 2 } },
+        reason = 'trigger_characters contains number',
+      },
+    }
+    for _, case in ipairs(malformed) do
+      matchers.__test.reset()
+      with_notify_capture(function(messages)
+        case.spec.match = function() end
+        assert.is_nil(matchers.normalize('custom', case.spec), 'accepted a bad ' .. case.field)
+        assert.are.equal(1, #messages)
+        assert.is_truthy(messages[1]:find(case.reason, 1, true), messages[1])
+      end)
+    end
+  end)
+
+  it('drops a malformed entry from the chain without disturbing the others', function()
+    local opts = {
+      matchers = {
+        ['*'] = { latex = { priority = 10 }, pandoc = { priority = 'soon' } },
+      },
+    }
+    with_notify_capture(function()
+      assert.are.same({ 'latex' }, names(matchers.chain('tex', opts)))
+    end)
+  end)
+
+  it('accepts well formed optional fields', function()
+    local spec = assert(matchers.normalize('custom', {
+      match = function() end,
+      priority = 7,
+      sanitize = false,
+      trigger_characters = { '"', '<' },
+    }))
+    assert.are.equal(7, spec.priority)
+    assert.is_false(spec.sanitize)
+    assert.are.same({ '"', '<' }, spec.trigger_characters)
+  end)
+
   it('warns only once per matcher name', function()
     with_notify_capture(function(messages)
       matchers.normalize('nosuch', true)

@@ -248,6 +248,29 @@ M.defaults = {
   },
 }
 
+--- Describe the first unusable optional field of a configured spec table
+--- @param spec table The user's spec table
+--- @return string|nil A reason, or nil when every optional field is well formed
+local function malformed_field_reason(spec)
+  if spec.priority ~= nil and type(spec.priority) ~= 'number' then
+    return string.format('priority is %s instead of a number', type(spec.priority))
+  end
+  if spec.sanitize ~= nil and type(spec.sanitize) ~= 'boolean' then
+    return string.format('sanitize is %s instead of a boolean', type(spec.sanitize))
+  end
+  if spec.trigger_characters ~= nil then
+    if type(spec.trigger_characters) ~= 'table' then
+      return string.format('trigger_characters is %s instead of a table', type(spec.trigger_characters))
+    end
+    for _, char in ipairs(spec.trigger_characters) do
+      if type(char) ~= 'string' then
+        return string.format('trigger_characters contains %s instead of a string', type(char))
+      end
+    end
+  end
+  return nil
+end
+
 --- The spec fields shipped for a built-in matcher in a filetype context
 --- @param name string The built-in matcher name
 --- @param filetype string|nil The filetype whose chain is being built
@@ -263,7 +286,11 @@ end
 
 --- Normalize a configured matcher value into a spec
 --- Accepts a function, a spec table, a built-in name, or a boolean.
---- Invalid values are skipped with a single warning per name.
+--- Invalid values are skipped with a single warning per name. That includes a
+--- spec table carrying an unusable optional field (a non-number priority, a
+--- non-boolean sanitize, or trigger_characters that is not a list of strings):
+--- the whole entry is skipped rather than partly honoured, so that a typo never
+--- silently changes matcher order or menu behavior.
 ---
 --- Whenever the match function comes from a built-in, priority, sanitize and
 --- trigger_characters are resolved in this order, so that re-enabling a matcher
@@ -299,6 +326,11 @@ function M.normalize(name, value, filetype)
     end
     inherited = shipped_spec(value, filetype)
   elseif type(value) == 'table' then
+    local reason = malformed_field_reason(value)
+    if reason then
+      warn_once(name, string.format("matcher '%s' is skipped: %s", name, reason))
+      return nil
+    end
     extra = value
     if type(value.match) == 'function' then
       match = value.match
