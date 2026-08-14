@@ -470,6 +470,9 @@ messages on `master` are the release input — see
   reads it to compute the next one and writes the new version back when the
   release PR merges. It is seeded with `0.8.0` so the first automated release
   lands on `0.9.0`; do not edit it by hand afterwards.
+- The `simple` release type also maintains a `version.txt` alongside
+  `CHANGELOG.md`. Both are created and updated by the release PR, so neither is
+  edited by hand.
 
 Nothing needs to be tagged or released manually. If a release PR looks wrong,
 fix the commit history on `master` (with a follow-up commit) rather than the
