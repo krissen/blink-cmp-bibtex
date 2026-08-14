@@ -454,6 +454,41 @@ local function strip_inactive_regions(text)
   return text
 end
 
+--- The character references XML predefines, which need no DTD declaration
+--- @type table<string, string>
+local xml_entities = {
+  amp = '&',
+  lt = '<',
+  gt = '>',
+  quot = '"',
+  apos = "'",
+}
+
+--- Resolve one XML character reference to the character it stands for
+--- @param reference string The reference body, without the '&' and ';'
+--- @return string|nil The character, or nil when the reference is not resolvable
+local function resolve_xml_reference(reference)
+  local code = tonumber(reference:match('^#[xX](%x+)$') or '', 16) or tonumber(reference:match('^#(%d+)$') or '')
+  if code then
+    if code < 1 or code > 0x10FFFF then
+      return nil
+    end
+    return vim.fn.nr2char(code, 1)
+  end
+  -- Entity names are case sensitive in XML, so they are looked up as written.
+  return xml_entities[reference]
+end
+
+--- Decode the XML character references in an attribute value
+--- An XML processor resolves these before GAPDoc ever sees the value, so this
+--- runs before the value is split on commas. References that are not the five
+--- predefined entities or a numeric escape are left as written.
+--- @param value string The raw attribute value
+--- @return string The decoded value
+local function decode_xml_references(value)
+  return (value:gsub('&(#?%w+);', resolve_xml_reference))
+end
+
 --- Read the Databases attribute of a single <Bibliography> element
 --- @param element string The element text, from '<Bibliography' to its '>'
 --- @return string|nil The attribute value, or nil when the element has none
@@ -496,6 +531,7 @@ local function find_gapdoc_bibliography(lines)
     -- being typed at the end of the document, where no '>' exists yet.
     local element = rest:match('^<Bibliography%s[^>]*>') or rest:match('^<Bibliography%s[^>]*$')
     local databases = element and read_databases_attribute(element)
+    databases = databases and decode_xml_references(databases)
     for _, name in ipairs(databases and split_resources(databases) or {}) do
       -- BibXMLext databases carry their full .xml name and are skipped; every
       -- other name is a BibTeX database, which the DTD defines as being

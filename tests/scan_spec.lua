@@ -348,6 +348,46 @@ describe('scan.find_bib_files_from_buffer with GAPDoc declarations', function()
     end)
   end)
 
+  describe('character references', function()
+    local cases = {
+      { name = 'a named entity', written = 'references&amp;notes', expected = 'references&notes.bib' },
+      { name = 'a decimal reference', written = 'references&#38;notes', expected = 'references&notes.bib' },
+      { name = 'a lowercase hex reference', written = 'references&#x26;notes', expected = 'references&notes.bib' },
+      { name = 'an uppercase hex reference', written = 'references&#X26;notes', expected = 'references&notes.bib' },
+      { name = 'an apostrophe entity', written = 'o&apos;neill', expected = "o'neill.bib" },
+      { name = 'a quote entity', written = 'say&quot;what', expected = 'say"what.bib' },
+      { name = 'a non-ASCII reference', written = 'caf&#233;', expected = 'caf\u{e9}.bib' },
+    }
+
+    for _, case in ipairs(cases) do
+      it('decodes ' .. case.name, function()
+        assert.are.same({ case.expected }, discover({ '<Bibliography Databases="' .. case.written .. '"/>' }))
+      end)
+    end
+
+    it('leaves an undeclared entity as written', function()
+      assert.are.same({ 'refs&custom;more.bib' }, discover({ '<Bibliography Databases="refs&custom;more"/>' }))
+    end)
+
+    it('decodes before splitting, so an encoded comma separates names', function()
+      -- An XML processor resolves the reference first, and GAPDoc then splits
+      -- the decoded value, so this names two databases rather than one.
+      assert.are.same({ 'first.bib', 'second.bib' }, discover({ '<Bibliography Databases="first&#44;second"/>' }))
+    end)
+  end)
+
+  it('returns declarations in source order regardless of quote style', function()
+    assert.are.same(
+      { 'first.bib', 'second.bib', 'third.bib', 'fourth.bib' },
+      discover({
+        "<Bibliography Databases='first'/>",
+        '<Bibliography Databases="second"/>',
+        "<Bibliography Databases='third'/>",
+        '<Bibliography Databases="fourth"/>',
+      })
+    )
+  end)
+
   it('does not join the buffer when no declaration marker is present', function()
     -- The extractor runs for every filetype, so the scan must stay cheap in
     -- buffers that cannot contain a declaration at all.
