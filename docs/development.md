@@ -149,50 +149,108 @@ end
 
 ## Testing
 
-### Manual Testing
+### Running the suite
 
-1. **Basic completion:**
-   ```tex
-   \cite{<trigger completion>
-   ```
+```sh
+./scripts/test          # or: make test
+```
 
-2. **Multi-key citations:**
-   ```tex
-   \cite{key1,key2,<trigger completion>
-   ```
+The script runs `nvim -l tests/minit.lua --minitest` from the repository root.
+`tests/minit.lua` bootstraps [lazy.nvim](https://github.com/folke/lazy.nvim)
+into `.tests/` (gitignored) and installs blink.cmp plus `luassert`, so the first
+run needs network access. `luassert` is fetched through hererocks, which
+requires `python3` on `PATH`.
 
-3. **Optional arguments:**
-   ```tex
-   \parencite[see][p. 42]{<trigger completion>
-   ```
+Every push and pull request runs the same command in CI against Neovim
+`v0.10.4`, `stable` and `nightly` (nightly is allowed to fail), alongside
+`luacheck` and `stylua --check`:
 
-4. **Pandoc style:**
-   ```markdown
-   [@<trigger completion>
-   ```
-   
-   **Pandoc multi-key citations:**
-   ```markdown
-   [@key1; @<trigger completion>
-   ```
+```sh
+make lint      # luacheck lua/ tests/ repro.lua
+make fmt       # stylua lua/ tests/ repro.lua
+make fmt-check # stylua --check lua/ tests/ repro.lua
+```
 
-5. **File discovery:**
-   - Test `\addbibresource{file.bib}`
-   - Test YAML `bibliography:` field
-   - Test search_paths globs
+### Layout
 
-### Testing Checklist
+```
+tests/
+  minit.lua        # harness bootstrap, entry point for scripts/test
+  helpers.lua      # fixture paths, fake completion contexts, tmpdir helper
+  fixtures/        # .bib, .yml and a small project tree used by the specs
+  *_spec.lua       # one spec file per module
+```
 
-Before submitting changes:
+`tests/helpers.lua` provides the pieces most specs need:
 
-- [ ] Test in LaTeX file (`.tex`)
-- [ ] Test in Markdown file (`.md`)
-- [ ] Test with multiple BibTeX files
-- [ ] Test with large BibTeX files (>1000 entries)
-- [ ] Test cache invalidation (modify .bib file)
-- [ ] Verify previews display correctly
-- [ ] Check for Lua errors in `:messages`
-- [ ] Test with custom configuration
+- `helpers.fixture(rel)` resolves a path under `tests/fixtures/` to an absolute
+  path, so specs do not depend on the working directory.
+- `helpers.ctx(line, col, bufnr)` builds a table shaped like a blink.cmp
+  completion context.
+- `helpers.with_tmpdir(fn)` runs `fn` in a fresh temporary directory and removes
+  it afterwards, including when `fn` raises.
+
+### Writing specs
+
+Specs are run by `mini.test` through lazy.nvim's busted-style wrapper, so they
+are written with `describe`, `it` and `before_each`, and assert with `luassert`.
+Prefer table-driven cases, generating one `it` per row, so a new syntax or
+option is one line rather than one function:
+
+```lua
+local assert = require('luassert')
+local matchers = require('blink-cmp-bibtex.matchers')
+local config = require('blink-cmp-bibtex.config')
+
+describe('matchers.latex', function()
+  local cases = {
+    { line = '\\cite{Nie', prefix = 'Nie', command = 'cite' },
+    { line = '\\parencite[see][p. 42]{Nie', prefix = 'Nie', command = 'parencite' },
+  }
+
+  for _, case in ipairs(cases) do
+    it('matches ' .. case.line, function()
+      local result = matchers.latex(case.line, config.defaults())
+      assert.are.same({
+        prefix = case.prefix,
+        command = case.command,
+        trigger = 'latex',
+      }, result)
+    end)
+  end
+
+  it('ignores commands outside citation_commands', function()
+    assert.is_nil(matchers.latex('\\unknowncmd{k', config.defaults()))
+  end)
+end)
+```
+
+Use `config.defaults()` rather than `config.get()` in specs; `setup()` mutates
+the module-level options and would leak between spec files.
+
+Fixtures belong in `tests/fixtures/`; add a file there rather than writing
+BibTeX inline when more than one spec needs it.
+
+### Manual verification
+
+Automated specs cover parsing, discovery, caching and citation detection, but
+not the completion menu itself. For UI-facing changes, start a clean Neovim with
+the standalone reproduction config:
+
+```sh
+nvim -u repro.lua
+```
+
+It installs blink.cmp with this plugin registered as the `bibtex` source into
+`.repro/`, isolated from your own configuration. It is also what to ask for in
+bug reports. Then check:
+
+- [ ] Completion and previews appear in a `.tex` buffer (`\cite{`)
+- [ ] Completion appears in a `.md` buffer (`[@`)
+- [ ] Completion appears in a `.typ` buffer (`@`, `#cite(<`)
+- [ ] Cache invalidation: edit a `.bib` file and complete again
+- [ ] `:checkhealth blink-cmp-bibtex` reports the expected matcher chains
+- [ ] No Lua errors in `:messages`
 
 ## Performance Considerations
 
