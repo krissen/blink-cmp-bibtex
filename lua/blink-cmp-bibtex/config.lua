@@ -34,6 +34,17 @@ local defaults = {
     typst = {
       typst = { priority = 20 },
     },
+    -- GAPDoc lives in filetypes that are not enabled by default; add 'gap',
+    -- 'xml' or 'autodoc' to `filetypes` to activate these.
+    gap = {
+      gapdoc = { priority = 5, trigger_characters = { '"' } },
+    },
+    xml = {
+      gapdoc = { priority = 5, trigger_characters = { '"' } },
+    },
+    autodoc = {
+      gapdoc = { priority = 5, trigger_characters = { '"' } },
+    },
   },
   preview_style = 'apa',
   source_indicator = true,

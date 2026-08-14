@@ -141,12 +141,25 @@ function M.typst(text)
   return nil
 end
 
+--- Match GAPDoc `<Cite Key="..."/>` citation syntax
+--- GAPDoc keys are used verbatim, so a matched prefix is never sanitized.
+--- @param text string The text to search
+--- @return BibtexMatchResult|nil Citation detection result or nil if no match
+function M.gapdoc(text)
+  local prefix = text:match('<Cite%s+[^>]-Key%s*=%s*"([^"]*)$') or text:match("<Cite%s+[^>]-Key%s*=%s*'([^']*)$")
+  if prefix then
+    return { prefix = prefix, trigger = 'gapdoc', sanitize = false }
+  end
+  return nil
+end
+
 --- Matchers shipped with the plugin, addressable by name from the configuration
 --- @type table<string, BibtexMatcherFn>
 M.builtin = {
   latex = M.latex,
   pandoc = M.pandoc,
   typst = M.typst,
+  gapdoc = M.gapdoc,
 }
 
 --- Normalize a configured matcher value into a spec
