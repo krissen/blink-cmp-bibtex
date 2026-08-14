@@ -30,9 +30,13 @@ function M.check()
   -- Resolved per call so that Neovim 0.9's report_* names are honoured and the
   -- reporters stay stubbable from tests.
   local health = vim.health
+  --- @type fun(name: string)
   local h_start = health.start or health.report_start
+  --- @type fun(message: string)
   local h_ok = health.ok or health.report_ok
+  --- @type fun(message: string, advice?: string|string[])
   local h_warn = health.warn or health.report_warn
+  --- @type fun(message: string)
   local h_info = health.info or health.report_info
 
   h_start('blink-cmp-bibtex')
