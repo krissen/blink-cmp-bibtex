@@ -19,10 +19,15 @@ end
 local function with_notify_capture(fn)
   local messages = {}
   local original = vim.notify
-  vim.notify = function(msg)
+  -- The full signature matters: the language server merges every assignment to
+  -- vim.notify across the workspace, so a stub taking one parameter would
+  -- redefine the function project-wide and flag every real three-argument call.
+  --- @diagnostic disable-next-line: duplicate-set-field
+  vim.notify = function(msg, _level, _opts)
     messages[#messages + 1] = msg
   end
   local ok, result = pcall(fn, messages)
+  --- @diagnostic disable-next-line: duplicate-set-field
   vim.notify = original
   if not ok then
     error(result, 0)
