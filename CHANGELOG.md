@@ -5,16 +5,7 @@
 
 ### Features
 
-* **scan:** discover GAPDoc bibliography declarations ([8bf76f7](https://github.com/krissen/blink-cmp-bibtex/commit/8bf76f7de6e9aabc5458a8a6088c047aa333cca6))
-* **scan:** discover GAPDoc bibliography declarations ([ad7e10c](https://github.com/krissen/blink-cmp-bibtex/commit/ad7e10cc4cca64306ed2d174ecf7aaca2e60514a))
-
-
-### Bug Fixes
-
-* **scan:** decode XML character references in database names ([7d9a093](https://github.com/krissen/blink-cmp-bibtex/commit/7d9a09302fb8fe5063966764d51b69509789d469))
-* **scan:** harden GAPDoc bibliography extraction ([19cc23e](https://github.com/krissen/blink-cmp-bibtex/commit/19cc23ed65b63f6a9e7ba612e682fb7f9ff57099))
-* **scan:** strip inactive XML regions and scan declarations in source order ([6626630](https://github.com/krissen/blink-cmp-bibtex/commit/66266306506197eca7e6d6d0a49050715d6f48d8))
-* **scan:** treat the DOCTYPE internal subset as inactive markup ([7abf45e](https://github.com/krissen/blink-cmp-bibtex/commit/7abf45ead6a3290cf14fdecb1bdbb250d331d303))
+* **scan:** discover GAPDoc bibliography declarations ([#20](https://github.com/krissen/blink-cmp-bibtex/issues/20)) ([ad7e10c](https://github.com/krissen/blink-cmp-bibtex/commit/ad7e10cc4cca64306ed2d174ecf7aaca2e60514a))
 
 ## [0.9.0](https://github.com/krissen/blink-cmp-bibtex/compare/v0.8.0...v0.9.0) (2026-08-14)
 
