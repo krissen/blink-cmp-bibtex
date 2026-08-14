@@ -226,6 +226,60 @@ describe('matchers.detect', function()
     end)
   end)
 
+  it('treats a truthy non-table result as a matcher failure', function()
+    local opts = {
+      matchers = {
+        ['*'] = {
+          bogus = {
+            priority = 1,
+            match = function()
+              return true
+            end,
+          },
+          good = {
+            priority = 2,
+            match = function()
+              return { prefix = 'ok' }
+            end,
+          },
+        },
+      },
+    }
+    with_notify_capture(function(messages)
+      local result = assert(matchers.detect('x', opts, { filetype = 'tex' }))
+      assert.are.equal('ok', result.prefix)
+      assert.are.equal(1, #messages)
+      assert.is_truthy(messages[1]:find('instead of a table', 1, true))
+    end)
+  end)
+
+  it('treats a result without a string prefix as a matcher failure', function()
+    local opts = {
+      matchers = {
+        ['*'] = {
+          bogus = {
+            priority = 1,
+            match = function()
+              return { trigger = 'bogus' }
+            end,
+          },
+          good = {
+            priority = 2,
+            match = function()
+              return { prefix = 'ok' }
+            end,
+          },
+        },
+      },
+    }
+    with_notify_capture(function(messages)
+      local result = assert(matchers.detect('x', opts, { filetype = 'tex' }))
+      assert.are.equal('ok', result.prefix)
+      assert.are.equal(1, #messages)
+      assert.is_truthy(messages[1]:find('prefix is nil', 1, true))
+    end)
+  end)
+
   it('returns nil when no matcher matches', function()
     assert.is_nil(matchers.detect('plain prose', config.defaults(), { filetype = 'tex' }))
   end)

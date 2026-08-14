@@ -75,6 +75,19 @@ local function mark_failed(match, filetype)
   per_filetype[filetype or NO_FILETYPE] = true
 end
 
+--- Describe why a matcher result is unusable, if it is
+--- @param result any The value a matcher returned
+--- @return string|nil A reason, or nil when the result is well formed
+local function malformed_reason(result)
+  if type(result) ~= 'table' then
+    return string.format('returned %s instead of a table', type(result))
+  end
+  if type(result.prefix) ~= 'string' then
+    return string.format('returned a result whose prefix is %s instead of a string', type(result.prefix))
+  end
+  return nil
+end
+
 --- Match LaTeX citation commands in text
 --- @param text string The text to search
 --- @param opts table Configuration options with citation_commands
@@ -287,16 +300,19 @@ function M.detect(text, opts, ctx)
   for _, spec in ipairs(M.chain(filetype, opts)) do
     if not has_failed(spec.match, filetype) then
       local ok, result = pcall(spec.match, text, opts, ctx)
+      -- A matcher that errors or answers with something unusable is skipped for
+      -- this filetype rather than allowed to break completion downstream.
+      local problem
       if not ok then
+        problem = string.format('raised an error: %s', result)
+      elseif result ~= nil and result ~= false then
+        problem = malformed_reason(result)
+      end
+      if problem then
         mark_failed(spec.match, filetype)
         warn_once(
           string.format('%s@%s', spec.name, filetype or NO_FILETYPE),
-          string.format(
-            "matcher '%s' raised an error and is disabled for filetype '%s': %s",
-            spec.name,
-            filetype or 'unset',
-            result
-          )
+          string.format("matcher '%s' %s and is disabled for filetype '%s'", spec.name, problem, filetype or 'unset')
         )
       elseif result then
         return result, spec
