@@ -6,6 +6,7 @@ local config = require('blink-cmp-bibtex.config')
 local scan = require('blink-cmp-bibtex.scan')
 local cache = require('blink-cmp-bibtex.cache')
 local local_bib = require('blink-cmp-bibtex.local_bib')
+local matchers = require('blink-cmp-bibtex.matchers')
 
 --- @class Source
 --- @field opts table Configuration options for this source instance
@@ -393,129 +394,22 @@ local function get_preview_style(name)
   return preview_styles[name] or preview_styles.apa
 end
 
---- Match LaTeX citation commands in text
---- @param text string The text to search
---- @param opts table Configuration options with citation_commands
---- @return table|nil Citation detection result or nil if no match
-local function match_latex_citation(text, opts)
-  local brace_start = text:match('()%{[^{}]*$')
-  if not brace_start then
-    return nil
-  end
-  local prefix = text:sub(brace_start + 1)
-  local before = text:sub(1, brace_start - 1)
-  local cursor = #before
-  while cursor > 0 and before:sub(cursor, cursor):match('%s') do
-    cursor = cursor - 1
-  end
-  local function skip_optional()
-    while cursor > 0 and before:sub(cursor, cursor) == ']' do
-      cursor = cursor - 1
-      local depth = 1
-      while cursor > 0 and depth > 0 do
-        local ch = before:sub(cursor, cursor)
-        if ch == '[' then
-          depth = depth - 1
-        elseif ch == ']' then
-          depth = depth + 1
-        end
-        cursor = cursor - 1
-      end
-      while cursor > 0 and before:sub(cursor, cursor):match('%s') do
-        cursor = cursor - 1
-      end
-    end
-  end
-  skip_optional()
-  local command_segment = before:sub(1, cursor)
-  local command, modifier = command_segment:match('\\([%a@]+)(%*?)$')
-  if not command then
-    return nil
-  end
-  for _, allowed in ipairs(opts.citation_commands or {}) do
-    if command == allowed then
-      return {
-        prefix = prefix,
-        command = command .. (modifier or ''),
-        trigger = 'latex',
-      }
-    end
-  end
-  return nil
-end
-
---- Match Pandoc-style citation syntax
---- @param text string The text to search
---- @return table|nil Citation detection result or nil if no match
-local function match_pandoc_citation(text)
-  local prefix = text:match('%[@([^%]]*)$')
-  if prefix then
-    return { prefix = prefix, trigger = 'pandoc' }
-  end
-  local boundary = text:match('[^%w@]@([%w:_%-%.,]*)$')
-  if boundary then
-    return { prefix = boundary, trigger = 'pandoc' }
-  end
-  local line_start = text:match('^@([%w:_%-%.,]*)$')
-  if line_start then
-    return { prefix = line_start, trigger = 'pandoc' }
-  end
-  return nil
-end
-
---- Match Typst-style citation syntax
---- @param text string The text to search
---- @return table|nil Citation detection result or nil if no match
-local function match_typst_citation(text)
-  -- Match Typst citation patterns: after word/underscore, after non-word, or at line start
-  local prefix = text:match('[%w_]@([%w:_%-%.,]*)$') -- match word@abc
-  if prefix then
-    return { prefix = prefix, trigger = 'typst' }
-  end
-  local prefix_after_nonword = text:match('[^%w@]@([%w:_%-%.,]*)$') -- match after non-word character
-  if prefix_after_nonword then
-    return { prefix = prefix_after_nonword, trigger = 'typst' }
-  end
-  local prefix_at_start = text:match('^@([%w:_%-%.,]*)$') -- match at line start
-  if prefix_at_start then
-    return { prefix = prefix_at_start, trigger = 'typst' }
-  end
-  local prefix_cite = text:match('#cite%s*%(%s*<([^>]*)$') -- match #cite(<abc
-  if prefix_cite then
-    return { prefix = prefix_cite, trigger = 'typst' }
-  end
-  return nil
-end
-
 --- Extract citation context from the current line and cursor position
 --- @param context table Completion context from blink.cmp
 --- @param opts table Configuration options
 --- @param filetype string|nil The filetype of the current buffer
---- @return table|nil Detection result with prefix and trigger type
+--- @return BibtexMatchResult|nil result Detection result with prefix and trigger type
+--- @return BibtexMatcherSpec|nil spec The matcher that produced the result
 local function extract_context(context, opts, filetype)
   local line = context.line or ''
   local col = context.cursor and context.cursor[2] or #line
   local text = line:sub(1, col)
-  local latex = match_latex_citation(text, opts)
-  if latex then
-    return latex
-  end
-  -- Check Typst patterns first for Typst files to prevent Pandoc interception
-  if filetype == 'typst' then
-    local typst = match_typst_citation(text)
-    if typst then
-      return typst
-    end
-  end
-  local pandoc = match_pandoc_citation(text)
-  if pandoc then
-    return pandoc
-  end
-  -- Check Typst patterns for other filetypes as fallback
-  if filetype ~= 'typst' then
-    return match_typst_citation(text)
-  end
-  return nil
+  return matchers.detect(text, opts, {
+    bufnr = context.bufnr,
+    filetype = filetype,
+    line = line,
+    col = col,
+  })
 end
 
 --- Filter entries by prefix match
