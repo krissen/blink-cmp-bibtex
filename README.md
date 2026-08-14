@@ -482,8 +482,10 @@ Each completion item exposes:
 
 The report shows the resolved `filetypes`, preview style and file counts, and
 lists the matcher chain each configured filetype resolves to, in the order the
-matchers run. Matchers configured for a filetype that is missing from
-`filetypes` are flagged, since they can never fire there.
+matchers run. A filetype that has matchers but is missing from `filetypes` is
+warned about, since those matchers can never fire — except for the ones shipped
+dormant with the plugin (`gap`, `xml`, `autodoc`), which are reported as
+information.
 
 ## Documentation
 
