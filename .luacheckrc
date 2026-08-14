@@ -5,6 +5,9 @@ read_globals = {
   'vim',
 }
 exclude_files = { '.tests' }
+-- Bootstrap files assign vim.env before loading lazy.nvim.
+files['tests/minit.lua'] = { globals = { 'vim' } }
+files['repro.lua'] = { globals = { 'vim' } }
 files['tests/**/*.lua'] = {
   read_globals = {
     'describe',
