@@ -74,11 +74,11 @@ describe('extract_context', function()
       assert.are.same({ prefix = 'a; @b', trigger = 'pandoc' }, detect('markdown', '[@a; @b'))
     end)
 
-    it('falls through to the Typst matcher after an email-like address', function()
-      -- current behavior (quirk): '[^%w@]@' cannot match because the character
-      -- before '@' is a word character, so the Typst matcher answers instead
-      -- and reports trigger = 'typst' inside a markdown buffer.
-      assert.are.same({ prefix = 'k', trigger = 'typst' }, detect('markdown', 'email@k'))
+    it('ignores an email-like address', function()
+      -- Deliberate change: the Typst matcher used to run as a last-chance
+      -- fallback in every filetype and answered here, so typing an address
+      -- produced citation completions. It is now scoped to typst buffers.
+      assert.is_nil(detect('markdown', 'email@k'))
     end)
 
     it('returns nil for a completed bracket group', function()
@@ -106,8 +106,10 @@ describe('extract_context', function()
       end)
     end
 
-    it('matches #cite(<key in non-typst filetypes as a fallback', function()
-      assert.are.same({ prefix = 'k', trigger = 'typst' }, detect('markdown', '#cite(<k'))
+    it('does not match #cite(<key outside typst buffers', function()
+      -- Deliberate change: Typst syntax is only recognized in typst buffers
+      -- now that the matcher is no longer a fallback for every filetype.
+      assert.is_nil(detect('markdown', '#cite(<k'))
     end)
   end)
 

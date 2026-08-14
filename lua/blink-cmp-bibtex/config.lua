@@ -29,7 +29,6 @@ local defaults = {
     ['*'] = {
       latex = { priority = 10 },
       pandoc = { priority = 30 },
-      typst = { priority = 40 },
     },
     typst = {
       typst = { priority = 20 },
