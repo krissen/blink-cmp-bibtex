@@ -99,17 +99,22 @@ end
 
 ### Neovim Version Support
 
-The plugin supports Neovim 0.9+ with forward compatibility for 0.10+.
+The plugin targets Neovim 0.10+, which is what blink.cmp itself requires. CI
+runs the suite against `v0.10.4`, `stable` and `nightly`.
 
 **Key compatibility considerations:**
 
 1. **vim.uv vs vim.loop**
-   - Use `vim.uv or vim.loop` pattern for backward compatibility
-   - `vim.uv` is the new API in Neovim 0.10+
+   - Use the `vim.uv or vim.loop` pattern
+   - `vim.uv` is the current API; the fallback keeps older versions working
 
 2. **vim.islist vs vim.tbl_islist**
-   - Prefer `vim.islist` with fallback
+   - Prefer `vim.islist` with a fallback to `vim.tbl_islist`
    - `vim.tbl_islist` is deprecated
+
+3. **vim.health**
+   - `health.start`/`ok`/`warn`/`info` with a fallback to the older
+     `report_*` names
 
 3. **Table operations**
    - Use `vim.tbl_deep_extend` for merging tables
