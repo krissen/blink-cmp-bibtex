@@ -3,9 +3,10 @@
 
 local M = {}
 
---- Directory containing this file, used to anchor fixture lookups.
+--- Absolute directory containing this file, used to anchor fixture lookups.
+--- debug.getinfo reports the path as it was required, which may be relative.
 --- @type string
-local tests_dir = vim.fs.dirname(debug.getinfo(1, 'S').source:sub(2))
+local tests_dir = vim.fs.normalize(vim.fn.fnamemodify(debug.getinfo(1, 'S').source:sub(2), ':p:h'))
 
 --- Absolute path to a file under tests/fixtures.
 --- @param rel string Path relative to tests/fixtures
