@@ -2,6 +2,7 @@
 --- Manages default settings and allows customization through setup() and extend()
 --- @module 'blink-cmp-bibtex.config'
 
+local discovery = require('blink-cmp-bibtex.discovery')
 local matchers = require('blink-cmp-bibtex.matchers')
 
 local M = {}
@@ -25,6 +26,10 @@ local defaults = {
     'citep',
     'citet',
   },
+  -- Bibliography discovery hooks per filetype. Entries under a filetype key
+  -- override same-named entries under '*'. Unlike the matchers, every shipped
+  -- hook sits under '*', because buffer discovery is filetype agnostic.
+  discovery = vim.deepcopy(discovery.defaults),
   -- Citation matchers per filetype. Entries under a filetype key override
   -- same-named entries under '*'. The shipped dispatch and the accepted entry
   -- forms both live in matchers.lua, which owns this default.

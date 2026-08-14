@@ -479,3 +479,81 @@ describe('scan.find_bib_files_from_buffer with GAPDoc declarations', function()
     assert.is_true(ok, tostring(err))
   end)
 end)
+
+describe('scan discovery hooks', function()
+  local discovery = require('blink-cmp-bibtex.discovery')
+
+  before_each(function()
+    discovery.__test.reset()
+  end)
+
+  --- Options carrying a single user hook alongside the shipped ones.
+  --- @param entry any The configured value for the hook
+  --- @param filetype string|nil The filetype key to register it under
+  --- @return table
+  local function with_hook(entry, filetype)
+    local opts = { discovery = vim.deepcopy(discovery.defaults) }
+    if filetype then
+      opts.discovery[filetype] = { mine = entry }
+    else
+      opts.discovery['*'].mine = entry
+    end
+    return opts
+  end
+
+  it('resolves a relative path from a user hook against the buffer directory', function()
+    local bufnr = vim.fn.bufadd(helpers.fixture('project/doc.md'))
+    vim.fn.bufload(bufnr)
+    local opts = with_hook(function()
+      return 'bib/refs.bib'
+    end)
+    -- The YAML declaration in the fixture resolves to the same file.
+    assert.are.same({ helpers.fixture('project/bib/refs.bib') }, scan.resolve_bib_paths(bufnr, opts))
+  end)
+
+  it('passes an absolute path from a user hook through', function()
+    local bufnr = helpers.make_buf({ lines = { '' }, filetype = 'markdown' })
+    local opts = with_hook(function()
+      return helpers.fixture('refs.bib')
+    end)
+    assert.are.same({ helpers.fixture('refs.bib') }, scan.resolve_bib_paths(bufnr, opts))
+    vim.api.nvim_buf_delete(bufnr, { force = true })
+  end)
+
+  it('gives the hook a context describing the buffer', function()
+    local seen
+    local bufnr = vim.fn.bufadd(helpers.fixture('project/doc.md'))
+    vim.fn.bufload(bufnr)
+    vim.api.nvim_set_option_value('filetype', 'markdown', { buf = bufnr })
+    scan.find_bib_files_from_buffer(
+      bufnr,
+      with_hook(function(context)
+        seen = context
+        return nil
+      end)
+    )
+    assert.are.equal(bufnr, seen.bufnr)
+    assert.are.equal('markdown', seen.filetype)
+    assert.are.equal(helpers.fixture('project'), vim.fs.normalize(seen.dir))
+    assert.is_true(#seen.lines > 0)
+  end)
+
+  it('drops only the disabled built-in for the filetype it is disabled in', function()
+    local opts = { discovery = vim.deepcopy(discovery.defaults) }
+    opts.discovery.markdown = { yaml = false }
+    local bufnr = open_fixture('project/mixed.md', 'markdown')
+    -- The LaTeX declaration survives; only the YAML one is dropped.
+    assert.are.same({ 'bib/refs.bib' }, scan.find_bib_files_from_buffer(bufnr, opts))
+    assert.are.same({ 'bib/refs.bib', 'shared.bib' }, scan.find_bib_files_from_buffer(bufnr, { discovery = nil }))
+  end)
+
+  it('discovers nothing from the buffer when discovery is configured as empty', function()
+    local bufnr = open_fixture('project/mixed.md', 'markdown')
+    assert.are.same({}, scan.find_bib_files_from_buffer(bufnr, { discovery = {} }))
+    -- Explicitly configured files are unaffected.
+    assert.are.same(
+      { helpers.fixture('refs.bib') },
+      scan.resolve_bib_paths(bufnr, { discovery = {}, files = { helpers.fixture('refs.bib') } })
+    )
+  end)
+end)
