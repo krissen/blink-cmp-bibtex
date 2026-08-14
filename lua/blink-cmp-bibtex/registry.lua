@@ -23,13 +23,17 @@ local warned = {}
 local failed = setmetatable({}, { __mode = 'k' })
 
 --- Report a problem once per key per session
---- @param key string Identifies what the message is about
+--- The consumer namespaces the key, so a matcher and a discovery hook that
+--- happen to share a name do not silence each other's warnings.
+--- @param consumer string Which registry is reporting, e.g. 'matcher'
+--- @param key string Identifies what the message is about within that registry
 --- @param message string The message to display
-function M.warn_once(key, message)
-  if warned[key] then
+function M.warn_once(consumer, key, message)
+  local namespaced = consumer .. ':' .. key
+  if warned[namespaced] then
     return
   end
-  warned[key] = true
+  warned[namespaced] = true
   vim.notify(message, vim.log.levels.WARN, { title = 'blink-cmp-bibtex' })
 end
 

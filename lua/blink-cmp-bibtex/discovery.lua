@@ -565,7 +565,11 @@ function M.normalize(name, value, filetype)
   if value == true then
     find = M.builtin[name]
     if not find then
-      registry.warn_once(name, string.format("discovery hook '%s' is enabled but no built-in hook has that name", name))
+      registry.warn_once(
+        'discovery',
+        name,
+        string.format("discovery hook '%s' is enabled but no built-in hook has that name", name)
+      )
       return nil
     end
     inherited = shipped_spec(name, filetype)
@@ -574,14 +578,18 @@ function M.normalize(name, value, filetype)
   elseif type(value) == 'string' then
     find = M.builtin[value]
     if not find then
-      registry.warn_once(name, string.format("discovery hook '%s' refers to unknown built-in hook '%s'", name, value))
+      registry.warn_once(
+        'discovery',
+        name,
+        string.format("discovery hook '%s' refers to unknown built-in hook '%s'", name, value)
+      )
       return nil
     end
     inherited = shipped_spec(value, filetype)
   elseif type(value) == 'table' then
     local reason = malformed_field_reason(value)
     if reason then
-      registry.warn_once(name, string.format("discovery hook '%s' is skipped: %s", name, reason))
+      registry.warn_once('discovery', name, string.format("discovery hook '%s' is skipped: %s", name, reason))
       return nil
     end
     extra = value
@@ -591,6 +599,7 @@ function M.normalize(name, value, filetype)
       find = M.builtin[name]
       if not find then
         registry.warn_once(
+          'discovery',
           name,
           string.format("discovery hook '%s' has no find function and no built-in hook has that name", name)
         )
@@ -599,7 +608,11 @@ function M.normalize(name, value, filetype)
       inherited = shipped_spec(name, filetype)
     end
   else
-    registry.warn_once(name, string.format("discovery hook '%s' has unsupported type '%s'", name, type(value)))
+    registry.warn_once(
+      'discovery',
+      name,
+      string.format("discovery hook '%s' has unsupported type '%s'", name, type(value))
+    )
     return nil
   end
 
@@ -717,6 +730,7 @@ function M.collect(ctx)
       if problem then
         registry.mark_failed(spec.find, ctx.filetype)
         registry.warn_once(
+          'discovery',
           string.format('%s@%s', spec.name, ctx.filetype or registry.NO_FILETYPE),
           string.format(
             "discovery hook '%s' %s and is disabled for filetype '%s'",

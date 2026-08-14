@@ -247,7 +247,11 @@ function M.normalize(name, value, filetype)
   if value == true then
     match = M.builtin[name]
     if not match then
-      registry.warn_once(name, string.format("matcher '%s' is enabled but no built-in matcher has that name", name))
+      registry.warn_once(
+        'matcher',
+        name,
+        string.format("matcher '%s' is enabled but no built-in matcher has that name", name)
+      )
       return nil
     end
     inherited = shipped_spec(name, filetype)
@@ -256,14 +260,18 @@ function M.normalize(name, value, filetype)
   elseif type(value) == 'string' then
     match = M.builtin[value]
     if not match then
-      registry.warn_once(name, string.format("matcher '%s' refers to unknown built-in matcher '%s'", name, value))
+      registry.warn_once(
+        'matcher',
+        name,
+        string.format("matcher '%s' refers to unknown built-in matcher '%s'", name, value)
+      )
       return nil
     end
     inherited = shipped_spec(value, filetype)
   elseif type(value) == 'table' then
     local reason = malformed_field_reason(value)
     if reason then
-      registry.warn_once(name, string.format("matcher '%s' is skipped: %s", name, reason))
+      registry.warn_once('matcher', name, string.format("matcher '%s' is skipped: %s", name, reason))
       return nil
     end
     extra = value
@@ -273,6 +281,7 @@ function M.normalize(name, value, filetype)
       match = M.builtin[name]
       if not match then
         registry.warn_once(
+          'matcher',
           name,
           string.format("matcher '%s' has no match function and no built-in matcher has that name", name)
         )
@@ -281,7 +290,7 @@ function M.normalize(name, value, filetype)
       inherited = shipped_spec(name, filetype)
     end
   else
-    registry.warn_once(name, string.format("matcher '%s' has unsupported type '%s'", name, type(value)))
+    registry.warn_once('matcher', name, string.format("matcher '%s' has unsupported type '%s'", name, type(value)))
     return nil
   end
 
@@ -364,6 +373,7 @@ function M.detect(text, opts, ctx)
       if problem then
         registry.mark_failed(spec.match, filetype)
         registry.warn_once(
+          'matcher',
           string.format('%s@%s', spec.name, filetype or registry.NO_FILETYPE),
           string.format("matcher '%s' %s and is disabled for filetype '%s'", spec.name, problem, filetype or 'unset')
         )

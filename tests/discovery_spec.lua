@@ -177,6 +177,58 @@ describe('discovery.chain', function()
   end)
 end)
 
+describe('discovery and matcher warnings', function()
+  local matchers = require('blink-cmp-bibtex.matchers')
+
+  before_each(function()
+    discovery.__test.reset()
+  end)
+
+  it('warns separately for a hook and a matcher sharing a name', function()
+    -- The two registries share the warn-once bookkeeping, so their keys must be
+    -- namespaced or the first warning would silence the second.
+    with_notify_capture(function(messages)
+      assert.is_nil(discovery.normalize('gapdoc', 42))
+      assert.is_nil(matchers.normalize('gapdoc', 42))
+      assert.are.equal(2, #messages)
+      assert.is_truthy(messages[1]:find('discovery hook', 1, true))
+      assert.is_truthy(messages[2]:find('matcher', 1, true))
+    end)
+  end)
+
+  it('still warns only once per registry for the same name', function()
+    with_notify_capture(function(messages)
+      discovery.normalize('gapdoc', 42)
+      discovery.normalize('gapdoc', 42)
+      assert.are.equal(1, #messages)
+    end)
+  end)
+
+  it('warns separately for a failing hook and a failing matcher of one name', function()
+    local opts = {
+      discovery = {
+        ['*'] = {
+          shared = function()
+            error('boom')
+          end,
+        },
+      },
+      matchers = {
+        ['*'] = {
+          shared = function()
+            error('boom')
+          end,
+        },
+      },
+    }
+    with_notify_capture(function(messages)
+      discovery.collect(ctx(opts, {}, 'tex'))
+      matchers.detect('text', opts, { filetype = 'tex' })
+      assert.are.equal(2, #messages)
+    end)
+  end)
+end)
+
 describe('discovery.collect', function()
   before_each(function()
     discovery.__test.reset()
