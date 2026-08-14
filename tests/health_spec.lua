@@ -121,6 +121,39 @@ describe('health.check', function()
     assert.is_truthy(find(calls.warn, 'no matchers are configured'))
   end)
 
+  it('reports the discovery chain', function()
+    config.setup(nil)
+    local message = assert(find(run_check().info, 'latex (priority 10), yaml (priority 20)'))
+    assert.is_truthy(message:find('typst (priority 30), gapdoc (priority 40)', 1, true))
+  end)
+
+  it('warns when buffer discovery is turned off', function()
+    config.setup({ discovery = false })
+    assert.is_truthy(find(run_check().warn, 'buffer discovery is disabled'))
+  end)
+
+  it('warns about discovery hooks for a filetype outside the filetypes list', function()
+    config.setup({ discovery = { rst = { mine = function() end } } })
+    local message = assert(find(run_check().warn, "discovery for 'rst'"))
+    assert.is_truthy(message:find('bibliographies will not be discovered there', 1, true))
+  end)
+
+  it('still reports discovery when no matchers are configured', function()
+    -- The matcher section used to return early, which hid everything below it.
+    local original = config.get
+    --- @diagnostic disable-next-line: duplicate-set-field
+    config.get = function()
+      local resolved = vim.deepcopy(original())
+      resolved.matchers = {}
+      return resolved
+    end
+    local ok, calls = pcall(run_check)
+    config.get = original
+    assert.is_true(ok, tostring(calls))
+    assert.is_truthy(find(calls.warn, 'no matchers are configured'))
+    assert.is_truthy(find(calls.info, 'latex (priority 10), yaml (priority 20)'))
+  end)
+
   it('warns about matchers for a filetype outside the filetypes list', function()
     config.setup({ matchers = { cobol = { latex = true } } })
     assert.is_truthy(find(run_check().warn, "matchers for 'cobol'"))
