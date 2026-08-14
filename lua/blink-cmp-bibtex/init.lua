@@ -195,6 +195,62 @@ local function sanitize_prefix(prefix)
   return trimmed:match('^@(.*)$') or trimmed
 end
 
+--- Whether a detected prefix should be reduced to the key being typed
+--- A match may opt out per match or per matcher; sanitizing is the default.
+--- @param detection BibtexMatchResult The match result
+--- @param spec BibtexMatcherSpec|nil The matcher that produced it
+--- @return boolean
+local function wants_sanitized_prefix(detection, spec)
+  local wanted = detection.sanitize
+  if wanted == nil then
+    wanted = spec and spec.sanitize
+  end
+  if wanted == nil then
+    wanted = true
+  end
+  return wanted
+end
+
+--- Characters a citation key may contain, used to find its end from the cursor
+--- @type string
+local KEY_CHARACTER = '[%w:_%.%-]'
+
+--- Detect the citation key the cursor sits in or after
+--- The matchers read the text up to the cursor, while the cursor here may sit
+--- anywhere inside a finished key, so the text is first extended to the end of
+--- that key. The chain runs for the buffer's filetype, which is what makes the
+--- GAPDoc and user-registered syntaxes work here and not just in completion.
+--- The original patterns remain as a fallback for text no matcher claims.
+--- @param bufnr number The buffer to read the filetype from
+--- @param opts table Configuration options
+--- @return string|nil The citation key, or nil when the cursor is not on one
+local function key_under_cursor(bufnr, opts)
+  local line = vim.api.nvim_get_current_line()
+  local col = vim.api.nvim_win_get_cursor(0)[2]
+  local finish = math.min(col + 1, #line)
+  while finish < #line and line:sub(finish + 1, finish + 1):match(KEY_CHARACTER) do
+    finish = finish + 1
+  end
+  local text = line:sub(1, finish)
+
+  local detection, spec = matchers.detect(text, opts, {
+    bufnr = bufnr,
+    filetype = vim.bo[bufnr].filetype,
+    line = line,
+    col = finish,
+  })
+  if detection then
+    local key = wants_sanitized_prefix(detection, spec) and sanitize_prefix(detection.prefix) or detection.prefix
+    if key and key ~= '' then
+      return key
+    end
+  end
+
+  return text:match('@(' .. KEY_CHARACTER .. '+)$')
+    or text:match('{(' .. KEY_CHARACTER .. '+)$')
+    or text:match(',(' .. KEY_CHARACTER .. '+)$')
+end
+
 --- Format author/editor list into a readable string
 --- @param fields table BibTeX entry fields
 --- @return string|nil Formatted author string or nil if not available
@@ -492,15 +548,8 @@ function Source:get_completions(context, callback)
     callback(empty_response())
     return function() end
   end
-  -- A match may opt out of prefix sanitization, either per match or per matcher.
-  local should_sanitize = detection.sanitize
-  if should_sanitize == nil then
-    should_sanitize = spec and spec.sanitize
-  end
-  if should_sanitize == nil then
-    should_sanitize = true
-  end
-  local prefix = should_sanitize and sanitize_prefix(detection.prefix) or (detection.prefix or '')
+  local prefix = wants_sanitized_prefix(detection, spec) and sanitize_prefix(detection.prefix)
+    or (detection.prefix or '')
   local paths = scan.resolve_bib_paths(bufnr, self.opts)
   if table_is_empty(paths) then
     callback(empty_response())
@@ -632,7 +681,11 @@ end
 Source.setup = config.setup
 
 --- Internal helpers exposed for testing. Not part of the public API.
-Source.__test = { extract_context = extract_context, sanitize_prefix = sanitize_prefix }
+Source.__test = {
+  extract_context = extract_context,
+  sanitize_prefix = sanitize_prefix,
+  key_under_cursor = key_under_cursor,
+}
 
 --- Copy a BibTeX entry to the local bib file
 --- @param key string|nil The citation key to copy (if nil, try to detect from cursor)
@@ -645,14 +698,11 @@ function Source.copy_to_local_bib(key)
     return false
   end
 
+  local bufnr = vim.api.nvim_get_current_buf()
+
   -- If no key provided, try to detect from cursor position
   if not key or key == '' then
-    local line = vim.api.nvim_get_current_line()
-    local col = vim.api.nvim_win_get_cursor(0)[2]
-    -- Try to extract citation key under/before cursor
-    local text = line:sub(1, col + 1)
-    -- Match citation key patterns (word chars, colon, underscore, dot, hyphen)
-    key = text:match('@([%w:_%.%-]+)$') or text:match('{([%w:_%.%-]+)$') or text:match(',([%w:_%.%-]+)$')
+    key = key_under_cursor(bufnr, opts)
     if not key then
       vim.notify('No citation key found at cursor', vim.log.levels.WARN, { title = 'blink-cmp-bibtex' })
       return false
@@ -660,7 +710,6 @@ function Source.copy_to_local_bib(key)
   end
 
   -- Get current bib paths for validation
-  local bufnr = vim.api.nvim_get_current_buf()
   local paths = scan.resolve_bib_paths(bufnr, opts)
 
   -- Build set of current paths for validation

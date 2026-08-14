@@ -3,6 +3,7 @@
 local assert = require('luassert')
 local Source = require('blink-cmp-bibtex')
 local cache = require('blink-cmp-bibtex.cache')
+local config = require('blink-cmp-bibtex.config')
 local helpers = require('tests.helpers')
 
 --- Drive Source:get_completions synchronously.
@@ -358,5 +359,72 @@ describe('Source:execute auto_add', function()
     complete(source, helpers.ctx('\\cite{bbb', nil, bufnr))
     accept(source, 'aaa1')
     assert.is_truthy(read_target():find('@article{aaa1', 1, true))
+  end)
+end)
+
+describe('Source.__test.key_under_cursor', function()
+  local bufnr
+
+  --- Place the cursor in a scratch buffer and detect the key under it.
+  --- @param filetype string
+  --- @param line string Cursor position is marked with '|'
+  --- @param opts table|nil Configuration options
+  --- @return string|nil
+  local function detect(filetype, line, opts)
+    local col = assert(line:find('|', 1, true), 'the line must mark the cursor with |') - 1
+    bufnr = helpers.make_buf({ lines = { (line:gsub('%|', '')) }, filetype = filetype })
+    vim.api.nvim_set_current_buf(bufnr)
+    vim.api.nvim_win_set_cursor(0, { 1, col })
+    return Source.__test.key_under_cursor(bufnr, opts or config.get())
+  end
+
+  after_each(function()
+    if bufnr and vim.api.nvim_buf_is_valid(bufnr) then
+      vim.api.nvim_buf_delete(bufnr, { force = true })
+    end
+  end)
+
+  it('detects a key the cursor sits inside of in a LaTeX citation', function()
+    assert.are.equal('smith2020', detect('tex', '\\cite{smi|th2020} and more'))
+  end)
+
+  it('detects a key the cursor sits at the end of', function()
+    assert.are.equal('smith2020', detect('tex', '\\cite{smith202|0}'))
+  end)
+
+  it('detects the key being pointed at in a multi-key citation', function()
+    assert.are.equal('doe2019', detect('tex', '\\cite{smith2020,do|e2019}'))
+  end)
+
+  it('detects a Pandoc key', function()
+    assert.are.equal('smith2020', detect('markdown', 'see [@smi|th2020] here'))
+  end)
+
+  it('detects a GAPDoc key, which the ad-hoc patterns never covered', function()
+    assert.are.equal('smith2020', detect('gap', '<Cite Key="smi|th2020"/>'))
+  end)
+
+  it('detects a key through a user-registered matcher', function()
+    local opts = vim.deepcopy(config.get())
+    opts.matchers = vim.deepcopy(opts.matchers)
+    opts.matchers.xml = {
+      refkey = {
+        priority = 5,
+        sanitize = false,
+        match = function(text)
+          local prefix = text:match('<Ref%s+BibKey="([^"]*)$')
+          return prefix and { prefix = prefix, trigger = 'refkey' } or nil
+        end,
+      },
+    }
+    assert.are.equal('smith2020', detect('xml', '<Ref BibKey="smi|th2020"/>', opts))
+  end)
+
+  it('returns nil for a plain word', function()
+    assert.is_nil(detect('markdown', 'just some wo|rds here'))
+  end)
+
+  it('returns nil once the citation is closed behind the cursor', function()
+    assert.is_nil(detect('tex', '\\cite{smith2020}|'))
   end)
 end)
