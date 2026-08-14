@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.11.0](https://github.com/krissen/blink-cmp-bibtex/compare/v0.10.0...v0.11.0) (2026-08-14)
+
+
+### Features
+
+* **health:** report discovery chains ([15052ec](https://github.com/krissen/blink-cmp-bibtex/commit/15052ec12e45c239880751c61004c9890fce3d24)), closes [#27](https://github.com/krissen/blink-cmp-bibtex/issues/27)
+* **scan:** register bib discovery hooks per filetype ([ae53a8d](https://github.com/krissen/blink-cmp-bibtex/commit/ae53a8d7aa735897408ccb49d1376142628a8c22)), closes [#27](https://github.com/krissen/blink-cmp-bibtex/issues/27)
+* **scan:** turn buffer discovery off with discovery = false ([93289ec](https://github.com/krissen/blink-cmp-bibtex/commit/93289ec42fc81eb57060c9b03b0ccab9913e00d5)), closes [#27](https://github.com/krissen/blink-cmp-bibtex/issues/27)
+* **scan:** user-extensible bib discovery hooks ([4526311](https://github.com/krissen/blink-cmp-bibtex/commit/45263119a45c9d09fe98cfe1cfb6399627692c8a))
+
+
+### Bug Fixes
+
+* **config:** tolerate non-table option values ([751792b](https://github.com/krissen/blink-cmp-bibtex/commit/751792ba546fab92fc0fd16edbc74d8845ebc9db)), closes [#27](https://github.com/krissen/blink-cmp-bibtex/issues/27)
+* **init:** bound the entry lookup to two completion rounds ([803f6a2](https://github.com/krissen/blink-cmp-bibtex/commit/803f6a24ab1f2a704866b1b9e512602eb612cf78)), closes [#25](https://github.com/krissen/blink-cmp-bibtex/issues/25)
+* **init:** detect citation keys through the matcher chain ([62f75a6](https://github.com/krissen/blink-cmp-bibtex/commit/62f75a67d143c74368f745a46cdd7c163744c0c1)), closes [#26](https://github.com/krissen/blink-cmp-bibtex/issues/26)
+* **init:** extend key detection through all valid key characters ([df096dc](https://github.com/krissen/blink-cmp-bibtex/commit/df096dcddcdad69e474689203328b1d505574764)), closes [#26](https://github.com/krissen/blink-cmp-bibtex/issues/26)
+* **matchers:** treat the semicolon as a separator only where it is one ([f181fa5](https://github.com/krissen/blink-cmp-bibtex/commit/f181fa5beb236c0f0f6a2c9549077d4363279811)), closes [#26](https://github.com/krissen/blink-cmp-bibtex/issues/26)
+* **registry:** namespace warn-once keys per consumer ([f92c713](https://github.com/krissen/blink-cmp-bibtex/commit/f92c713b43d3e72748ee6e73d18edf09d74315ed)), closes [#27](https://github.com/krissen/blink-cmp-bibtex/issues/27)
+
 ## [0.10.0](https://github.com/krissen/blink-cmp-bibtex/compare/v0.9.0...v0.10.0) (2026-08-14)
 
 
