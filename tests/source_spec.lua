@@ -250,6 +250,40 @@ describe('Source:resolve', function()
   end)
 end)
 
+describe('Source:get_completions with semicolons in keys', function()
+  local bufnr, dir, bib
+
+  before_each(function()
+    dir = vim.fs.normalize(vim.fn.tempname())
+    vim.fn.mkdir(dir, 'p')
+    bib = vim.fs.joinpath(dir, 'refs.bib')
+    helpers.write_file(bib, '@article{alpha;beta,\n  title = {Semicolon Key}\n}\n@article{beta,\n  title = {Plain}\n}')
+    cache.invalidate(bib)
+    bufnr = helpers.make_buf({ lines = { '' }, filetype = 'tex' })
+  end)
+
+  after_each(function()
+    vim.api.nvim_buf_delete(bufnr, { force = true })
+    vim.fn.delete(dir, 'rf')
+  end)
+
+  it('filters on the whole key when a LaTeX citation contains a semicolon', function()
+    -- The semicolon used to split the prefix in every syntax, so this filtered
+    -- on 'bet' and offered the wrong entry.
+    local source = Source.new({ files = { bib } })
+    local response = complete(source, helpers.ctx('\\cite{alpha;bet', nil, bufnr))
+    assert.are.same({ 'alpha;beta' }, labels(response))
+  end)
+
+  it('still filters on the last key after a Pandoc semicolon', function()
+    local markdown = helpers.make_buf({ lines = { '' }, filetype = 'markdown' })
+    local source = Source.new({ files = { bib } })
+    local response = complete(source, helpers.ctx('[@alpha;beta; @bet', nil, markdown))
+    assert.are.same({ 'beta' }, labels(response))
+    vim.api.nvim_buf_delete(markdown, { force = true })
+  end)
+end)
+
 describe('Source entry lookup lifetime', function()
   local bufnr, dir, bib
 
@@ -436,6 +470,24 @@ describe('Source.__test.key_under_cursor', function()
 
   it('still stops at the delimiter that ends the citation', function()
     assert.are.equal('smith2020', detect('markdown', 'see [@smi|th2020] and more'))
+  end)
+
+  it('keeps a semicolon inside a LaTeX key', function()
+    -- LaTeX separates keys with commas; a semicolon is part of the key, and the
+    -- parser accepts it as one.
+    assert.are.equal('alpha;beta', detect('tex', '\\cite{alp|ha;beta}'))
+  end)
+
+  it('reads the key before a Pandoc semicolon separator', function()
+    assert.are.equal('key1', detect('markdown', 'see [@key|1; @key2] here'))
+  end)
+
+  it('reads the key after a Pandoc semicolon separator', function()
+    assert.are.equal('key2', detect('markdown', 'see [@key1; @key|2] here'))
+  end)
+
+  it('keeps a semicolon inside a GAPDoc key', function()
+    assert.are.equal('a;b', detect('gap', '<Cite Key="a|;b"/>'))
   end)
 
   it('returns nil for a plain word', function()

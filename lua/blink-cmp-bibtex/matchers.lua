@@ -14,6 +14,7 @@ local M = {}
 --- @field trigger string|nil Name of the syntax that matched
 --- @field command string|nil The citation command that matched, when applicable
 --- @field sanitize boolean|nil Override the prefix sanitization for this match
+--- @field separators string|nil Override the key separators for this match
 
 --- A matcher function
 --- @alias BibtexMatcherFn fun(text: string, opts: table, ctx: table|nil): BibtexMatchResult|nil
@@ -24,6 +25,7 @@ local M = {}
 --- @field match BibtexMatcherFn The matching function
 --- @field priority number Lower runs first (default 50)
 --- @field sanitize boolean|nil Whether matched prefixes are sanitized
+--- @field separators string|nil Characters separating keys in a multi-key citation
 --- @field trigger_characters string[]|nil Characters that should open the menu
 
 --- Default priority for matchers that do not declare one
@@ -164,11 +166,13 @@ M.builtin = {
 --- @type table<string, table<string, table>>
 M.defaults = {
   ['*'] = {
-    latex = { priority = 10 },
-    pandoc = { priority = 30 },
+    -- LaTeX separates keys with commas only; a semicolon is an ordinary
+    -- character in a key, which the parser accepts.
+    latex = { priority = 10, separators = ',' },
+    pandoc = { priority = 30, separators = ',;' },
   },
   typst = {
-    typst = { priority = 20 },
+    typst = { priority = 20, separators = ',' },
   },
   -- GAPDoc lives in filetypes that are not enabled by default; add 'gap',
   -- 'xml' or 'autodoc' to `filetypes` to activate these.
@@ -192,6 +196,9 @@ local function malformed_field_reason(spec)
   end
   if spec.sanitize ~= nil and type(spec.sanitize) ~= 'boolean' then
     return string.format('sanitize is %s instead of a boolean', type(spec.sanitize))
+  end
+  if spec.separators ~= nil and type(spec.separators) ~= 'string' then
+    return string.format('separators is %s instead of a string', type(spec.separators))
   end
   if spec.trigger_characters ~= nil then
     if type(spec.trigger_characters) ~= 'table' then
@@ -312,6 +319,7 @@ function M.normalize(name, value, filetype)
     match = match,
     priority = field('priority') or DEFAULT_PRIORITY,
     sanitize = field('sanitize'),
+    separators = field('separators'),
     trigger_characters = field('trigger_characters'),
   }
 end

@@ -178,21 +178,45 @@ local function format_source_indicator(info)
   return ''
 end
 
+--- Characters that separate keys when a matcher does not say otherwise
+--- @type string
+local DEFAULT_SEPARATORS = ',;'
+
 --- Sanitize a citation key prefix by handling multi-key citations
---- Extracts the last citation key being typed when multiple keys are separated by commas or semicolons
+--- Extracts the last citation key being typed when several keys are listed.
+--- Which characters separate them depends on the syntax: LaTeX and Typst use a
+--- comma, while Pandoc also uses a semicolon. A semicolon is an ordinary
+--- character in a key otherwise, and the parser accepts it as one.
 --- @param prefix string|nil The raw prefix string
+--- @param separators string|nil Separator characters; defaults to a comma and a semicolon
 --- @return string The sanitized prefix for the current key
-local function sanitize_prefix(prefix)
+local function sanitize_prefix(prefix, separators)
   if not prefix or prefix == '' then
     return ''
   end
-  -- Normalize semicolons to commas and extract last segment
-  local normalized = prefix:gsub(';', ',')
-  local segments = vim.split(normalized, ',', { trimempty = false })
+  separators = separators or DEFAULT_SEPARATORS
+  if separators == '' then
+    separators = DEFAULT_SEPARATORS
+  end
+  -- Normalize every separator to the first one, then take the last segment
+  local primary = separators:sub(1, 1)
+  local normalized = prefix
+  for index = 2, #separators do
+    normalized = normalized:gsub('%' .. separators:sub(index, index), primary)
+  end
+  local segments = vim.split(normalized, primary, { plain = true, trimempty = false })
   local candidate = segments[#segments] or ''
   -- Trim whitespace and strip leading @ symbol (for multi-ref Pandoc citations)
   local trimmed = candidate:match('^%s*(.-)%s*$') or ''
   return trimmed:match('^@(.*)$') or trimmed
+end
+
+--- The key separators that apply to a match
+--- @param detection BibtexMatchResult The match result
+--- @param spec BibtexMatcherSpec|nil The matcher that produced it
+--- @return string
+local function separators_for(detection, spec)
+  return detection.separators or (spec and spec.separators) or DEFAULT_SEPARATORS
 end
 
 --- Whether a detected prefix should be reduced to the key being typed
@@ -216,7 +240,7 @@ end
 --- so the cursor scan stops at delimiters rather than at an allowed alphabet:
 --- otherwise a key like smith/2020 or a+b would be cut at its punctuation.
 --- @type string
-local KEY_DELIMITERS = [[%s,;{}%[%]()<>"'\]]
+local KEY_DELIMITERS = [[%s,{}%[%]()<>"'\]]
 
 --- Matches one character a citation key may contain
 --- @type string
@@ -238,7 +262,8 @@ local function key_under_cursor(bufnr, opts)
   while finish < #line and line:sub(finish + 1, finish + 1):match(KEY_CHARACTER) do
     finish = finish + 1
   end
-  local text = line:sub(1, finish)
+  -- A separator the scan swallowed belongs to the next key, not to this one.
+  local text = line:sub(1, finish):gsub('[,;]+$', '')
 
   local detection, spec = matchers.detect(text, opts, {
     bufnr = bufnr,
@@ -247,7 +272,10 @@ local function key_under_cursor(bufnr, opts)
     col = finish,
   })
   if detection then
-    local key = wants_sanitized_prefix(detection, spec) and sanitize_prefix(detection.prefix) or detection.prefix
+    local key = detection.prefix
+    if wants_sanitized_prefix(detection, spec) then
+      key = sanitize_prefix(detection.prefix, separators_for(detection, spec))
+    end
     if key and key ~= '' then
       return key
     end
@@ -555,8 +583,10 @@ function Source:get_completions(context, callback)
     callback(empty_response())
     return function() end
   end
-  local prefix = wants_sanitized_prefix(detection, spec) and sanitize_prefix(detection.prefix)
-    or (detection.prefix or '')
+  local prefix = detection.prefix or ''
+  if wants_sanitized_prefix(detection, spec) then
+    prefix = sanitize_prefix(detection.prefix, separators_for(detection, spec))
+  end
   local paths = scan.resolve_bib_paths(bufnr, self.opts)
   if table_is_empty(paths) then
     callback(empty_response())

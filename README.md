@@ -155,10 +155,14 @@ Spec fields:
   one) – lower runs first; the first matcher that returns a result wins. Ties
   are broken by name.
 - `sanitize` (boolean) – whether a matched prefix is reduced to the key being
-  typed. Sanitization splits on `,`/`;`, keeps the last segment, trims
-  whitespace and strips a leading `@`, which is what makes `\cite{a,b,c` and
-  `[@a; @b` complete the final key. Set `sanitize = false` when keys are used
-  verbatim (the built-in `gapdoc` matcher does this).
+  typed. Sanitization splits on the matcher's separators, keeps the last
+  segment, trims whitespace and strips a leading `@`, which is what makes
+  `\cite{a,b,c` and `[@a; @b` complete the final key. Set `sanitize = false`
+  when keys are used verbatim (the built-in `gapdoc` matcher does this).
+- `separators` (string, default `",;"`) – the characters that separate keys in
+  a multi-key citation. The built-in `latex` and `typst` matchers use `","`
+  only, since a semicolon is an ordinary character in a key there; `pandoc`
+  uses `",;"`.
 - `trigger_characters` (string[]) – characters that should open the completion
   menu in buffers of this filetype. They are only offered while the source is
   enabled, so a `"` trigger for XML never fires in a LaTeX buffer.

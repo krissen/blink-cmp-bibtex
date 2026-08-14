@@ -119,6 +119,21 @@ describe('matchers.normalize', function()
     end)
   end)
 
+  it('rejects a non-string separators field', function()
+    matchers.__test.reset()
+    with_notify_capture(function(messages)
+      assert.is_nil(matchers.normalize('custom', { match = function() end, separators = 42 }))
+      assert.are.equal(1, #messages)
+      assert.is_truthy(messages[1]:find('separators is number', 1, true))
+    end)
+  end)
+
+  it('carries the shipped separators of a built-in', function()
+    -- LaTeX lists keys with commas only, Pandoc also with semicolons.
+    assert.are.equal(',', assert(matchers.normalize('latex', true)).separators)
+    assert.are.equal(',;', assert(matchers.normalize('pandoc', true)).separators)
+  end)
+
   it('accepts well formed optional fields', function()
     local spec = assert(matchers.normalize('custom', {
       match = function() end,
