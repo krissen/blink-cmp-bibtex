@@ -204,6 +204,28 @@ describe('matchers.detect', function()
     end)
   end)
 
+  it('keeps a broken override in one filetype from disabling the built-in elsewhere', function()
+    local opts = {
+      matchers = {
+        ['*'] = { pandoc = { priority = 30 } },
+        markdown = {
+          pandoc = {
+            priority = 30,
+            match = function()
+              error('boom')
+            end,
+          },
+        },
+      },
+    }
+    with_notify_capture(function()
+      assert.is_nil(matchers.detect('[@k', opts, { filetype = 'markdown' }))
+      local result, spec = matchers.detect('[@k', opts, { filetype = 'rmd' })
+      assert.are.equal('k', assert(result).prefix)
+      assert.are.equal('pandoc', assert(spec).name)
+    end)
+  end)
+
   it('returns nil when no matcher matches', function()
     assert.is_nil(matchers.detect('plain prose', config.defaults(), { filetype = 'tex' }))
   end)

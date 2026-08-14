@@ -28,23 +28,51 @@ local M = {}
 --- @type number
 local DEFAULT_PRIORITY = 50
 
---- Matcher names already reported as invalid, to keep notifications to one per session
+--- Problems already reported, to keep notifications to one per key per session
 --- @type table<string, boolean>
 local warned = {}
 
---- Matcher names that raised an error and are skipped for the rest of the session
---- @type table<string, boolean>
-local disabled = {}
+--- Stand-in filetype key for chains built without a filetype
+--- @type string
+local NO_FILETYPE = '\0none'
 
---- Report a problem with a matcher once per session
---- @param name string The matcher name
+--- Match functions that misbehaved, per filetype they misbehaved in
+--- Keyed by the function itself so that a broken override in one filetype
+--- never disables the same-named matcher elsewhere. Keys are weak so that
+--- matchers belonging to discarded configurations can be collected.
+--- @type table<function, table<string, boolean>>
+local failed = setmetatable({}, { __mode = 'k' })
+
+--- Report a problem once per key per session
+--- @param key string Identifies what the message is about
 --- @param message string The message to display
-local function warn_once(name, message)
-  if warned[name] then
+local function warn_once(key, message)
+  if warned[key] then
     return
   end
-  warned[name] = true
+  warned[key] = true
   vim.notify(message, vim.log.levels.WARN, { title = 'blink-cmp-bibtex' })
+end
+
+--- Whether a match function already misbehaved in this filetype
+--- @param match function The match function
+--- @param filetype string|nil The buffer filetype
+--- @return boolean
+local function has_failed(match, filetype)
+  local per_filetype = failed[match]
+  return per_filetype ~= nil and per_filetype[filetype or NO_FILETYPE] == true
+end
+
+--- Remember that a match function misbehaved in this filetype
+--- @param match function The match function
+--- @param filetype string|nil The buffer filetype
+local function mark_failed(match, filetype)
+  local per_filetype = failed[match]
+  if not per_filetype then
+    per_filetype = {}
+    failed[match] = per_filetype
+  end
+  per_filetype[filetype or NO_FILETYPE] = true
 end
 
 --- Match LaTeX citation commands in text
@@ -257,11 +285,19 @@ end
 function M.detect(text, opts, ctx)
   local filetype = ctx and ctx.filetype
   for _, spec in ipairs(M.chain(filetype, opts)) do
-    if not disabled[spec.name] then
+    if not has_failed(spec.match, filetype) then
       local ok, result = pcall(spec.match, text, opts, ctx)
       if not ok then
-        disabled[spec.name] = true
-        warn_once(spec.name, string.format("matcher '%s' raised an error and is disabled: %s", spec.name, result))
+        mark_failed(spec.match, filetype)
+        warn_once(
+          string.format('%s@%s', spec.name, filetype or NO_FILETYPE),
+          string.format(
+            "matcher '%s' raised an error and is disabled for filetype '%s': %s",
+            spec.name,
+            filetype or 'unset',
+            result
+          )
+        )
       elseif result then
         return result, spec
       end
@@ -290,10 +326,10 @@ end
 
 --- Internal helpers exposed for testing. Not part of the public API.
 M.__test = {
-  --- Forget the per-session warning and disabled-matcher state.
+  --- Forget the per-session warning and failed-matcher state.
   reset = function()
     warned = {}
-    disabled = {}
+    failed = setmetatable({}, { __mode = 'k' })
   end,
 }
 
