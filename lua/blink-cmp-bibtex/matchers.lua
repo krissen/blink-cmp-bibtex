@@ -75,6 +75,26 @@ local function mark_failed(match, filetype)
   per_filetype[filetype or NO_FILETYPE] = true
 end
 
+--- Render an arbitrary error value as text
+--- A matcher may throw anything, including a table whose __tostring itself
+--- raises, so every conversion attempt is protected.
+--- @param err any The value a matcher threw
+--- @return string
+local function describe_error(err)
+  if type(err) == 'string' then
+    return err
+  end
+  local ok, rendered = pcall(vim.inspect, err)
+  if ok and type(rendered) == 'string' then
+    return rendered
+  end
+  ok, rendered = pcall(tostring, err)
+  if ok and type(rendered) == 'string' then
+    return rendered
+  end
+  return '<unprintable error>'
+end
+
 --- Describe why a matcher result is unusable, if it is
 --- @param result any The value a matcher returned
 --- @return string|nil A reason, or nil when the result is well formed
@@ -367,7 +387,7 @@ function M.detect(text, opts, ctx)
       -- this filetype rather than allowed to break completion downstream.
       local problem
       if not ok then
-        problem = string.format('raised an error: %s', result)
+        problem = string.format('raised an error: %s', describe_error(result))
       elseif result ~= nil and result ~= false then
         problem = malformed_reason(result)
       end

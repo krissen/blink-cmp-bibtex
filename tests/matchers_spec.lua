@@ -241,6 +241,48 @@ describe('matchers.detect', function()
     end)
   end)
 
+  it('survives a matcher that throws something other than a string', function()
+    -- Regression: the error value went straight into string.format, so an
+    -- unprintable error object turned a skipped matcher into a crash.
+    local throwers = {
+      function()
+        error({ code = 1 })
+      end,
+      function()
+        error(setmetatable({}, {
+          __tostring = function()
+            error('unprintable')
+          end,
+        }))
+      end,
+      function()
+        error(nil)
+      end,
+    }
+    for index, thrower in ipairs(throwers) do
+      matchers.__test.reset()
+      local opts = {
+        matchers = {
+          ['*'] = {
+            broken = { priority = 1, match = thrower },
+            good = {
+              priority = 2,
+              match = function()
+                return { prefix = 'ok' }
+              end,
+            },
+          },
+        },
+      }
+      with_notify_capture(function(messages)
+        local result = assert(matchers.detect('x', opts, { filetype = 'tex' }), 'thrower ' .. index)
+        assert.are.equal('ok', result.prefix)
+        assert.are.equal(1, #messages)
+        assert.are.equal('string', type(messages[1]))
+      end)
+    end
+  end)
+
   it('keeps a broken override in one filetype from disabling the built-in elsewhere', function()
     local opts = {
       matchers = {
