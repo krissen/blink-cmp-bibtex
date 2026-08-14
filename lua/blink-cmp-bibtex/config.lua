@@ -23,6 +23,18 @@ local defaults = {
     'citep',
     'citet',
   },
+  -- Citation matchers per filetype. Entries under a filetype key override
+  -- same-named entries under '*'. See matchers.lua for the accepted forms.
+  matchers = {
+    ['*'] = {
+      latex = { priority = 10 },
+      pandoc = { priority = 30 },
+      typst = { priority = 40 },
+    },
+    typst = {
+      typst = { priority = 20 },
+    },
+  },
   preview_style = 'apa',
   source_indicator = true,
   max_entries = 4000,
