@@ -273,14 +273,20 @@ discovery = {
     typst = { priority = 30 },   -- #bibliography(), following #import
     gapdoc = { priority = 40, extension = false }, -- <Bibliography Databases="">
   },
+  -- Reads the GAP package around the buffer rather than the buffer itself.
+  gap = { gap_package = { priority = 45, extension = false } },
+  xml = { gap_package = { priority = 45, extension = false } },
+  autodoc = { gap_package = { priority = 45, extension = false } },
 }
 ```
 
-Note the contrast with `matchers`: **every** discovery hook sits under `'*'`,
-because a declaration is worth finding wherever it appears — an
+Note the contrast with `matchers`: every hook that reads the **buffer** sits
+under `'*'`, because a declaration is worth finding wherever it appears — an
 `\addbibresource` in a Markdown buffer is found today, and moving the LaTeX
-hook under `tex` would silently stop finding it. Only narrow a hook to a
-filetype when the syntax genuinely cannot occur elsewhere.
+hook under `tex` would silently stop finding it. Only narrow such a hook to a
+filetype when the syntax genuinely cannot occur elsewhere. A hook that probes
+the **file system** instead is narrowed to the filetypes where it can pay off,
+so that no other buffer pays for it; `gap_package` is one.
 
 A hook receives a context and returns the file names it found, as a list, a
 single string, or nil:
@@ -432,6 +438,12 @@ Custom styles can be added by extending `require("blink-cmp-bibtex").setup()` wi
   XML documents. Names are comma-separated and carry no `.bib` extension, which
   is appended automatically; `.xml` (BibXMLext) databases are skipped, as are
   declarations inside XML comments, CDATA sections and processing instructions.
+- GAP packages are looked up outside the buffer: when a `gap`, `xml` or
+  `autodoc` buffer declares no bibliography of its own, the package around it is
+  located through its `PackageInfo.g`, and its `doc/` directory is read for the
+  main manual's `<Bibliography>` declaration. When no manual has been built yet,
+  AutoDoc's convention is used instead: `doc/<PackageName>.bib`, or the `bib`
+  named in `makedoc.g` (whose `dir` option moves the documentation directory).
 - Both BibTeX (`.bib`) and Hayagriva (`.yml`, `.yaml`) bibliography files are supported and automatically detected based on file extension.
 - Every one of these is a discovery hook, and the set is configurable: see
   [Custom bib discovery](#custom-bib-discovery) to add a syntax, reorder the
@@ -577,6 +589,24 @@ The optional `Style` attribute is ignored, and BibXMLext databases (named with
 their full `.xml` name) are skipped, since this plugin reads BibTeX and
 Hayagriva. If your bibliography lives elsewhere, list it under `files` or
 `search_paths` as usual.
+
+In a GAP package the declaration is rarely in the file being edited: it sits in
+the main XML under `doc/`, which AutoDoc generates and which a fresh checkout may
+not have at all. The `gap_package` hook therefore reads the package around the
+buffer — found through its `PackageInfo.g` — and uses either the manual's
+declaration or AutoDoc's convention, `doc/<PackageName>.bib` (or the `bib` named
+in `makedoc.g`). Nothing needs configuring beyond opting the filetype in.
+
+The same result can be had without any hook by pointing the scanner at the
+documentation directory:
+
+```lua
+require("blink-cmp-bibtex").setup({
+  filetypes = { "tex", "markdown", "gap", "xml", "autodoc" },
+  root_markers = { "PackageInfo.g", ".git" },
+  search_paths = { "doc/*.bib" },
+})
+```
 
 ### Completion details
 

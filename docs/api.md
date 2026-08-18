@@ -457,7 +457,7 @@ through the `discovery` option, whose default is `discovery.defaults`.
 
 ### `discovery.latex(ctx)` / `discovery.yaml(ctx)` / `discovery.typst(ctx)` / `discovery.gapdoc(ctx)`
 
-The hooks shipped with the plugin, reading `\addbibresource{}` and friends,
+The buffer-reading hooks shipped with the plugin, reading `\addbibresource{}` and friends,
 Markdown YAML front matter, Typst `#bibliography()` (following `#import`), and
 GAPDoc `<Bibliography Databases="…"/>` respectively.
 
@@ -467,15 +467,40 @@ GAPDoc `<Bibliography Databases="…"/>` respectively.
 **Returns:**
 - `string[]`: File names, unresolved
 
+### `discovery.gap_package(ctx)`
+
+Find the bibliographies of the GAP package the buffer belongs to, reading the
+package rather than the buffer. Returns nothing when the buffer declares a
+`<Bibliography>` of its own (the `gapdoc` hook covers that case), when the
+buffer has no file, or when no `PackageInfo.g` is found upward from it.
+Otherwise the package's documentation directory — `doc`, or the `dir` named in
+`makedoc.g` — is read for the main manual (`_main.xml`, `main.xml`,
+`manual.xml`, `<PackageName>.xml`, then the remaining XML files), and its
+`<Bibliography Databases="…"/>` declaration is used. When no manual declares
+one, AutoDoc's convention is used instead: the `bib` named in `makedoc.g`, or
+`<PackageName>.bib` from `PackageInfo.g`, inside the documentation directory.
+
+Results are absolute paths, carrying `.bib` already, and are cached per package
+root against the modification times and sizes of every file and directory read.
+Files above the size caps (64 KiB for GAP files, 1 MiB for XML) are skipped.
+
+**Parameters:**
+- `ctx` (BibtexDiscoveryContext): The buffer being scanned
+
+**Returns:**
+- `string[]`: Absolute bibliography paths, which need not exist
+
 ### `discovery.builtin`
 
-Table mapping the built-in names `latex`, `yaml`, `typst` and `gapdoc` to their
-functions.
+Table mapping the built-in names `latex`, `yaml`, `typst`, `gapdoc` and
+`gap_package` to their functions.
 
 ### `discovery.defaults`
 
 The dispatch shipped with the plugin, and the value `config` copies into
-`discovery`. Every hook sits under `'*'`: discovery is filetype agnostic, unlike
+`discovery`. Every hook that reads the buffer sits under `'*'`, because that
+kind of discovery is filetype agnostic; `gap_package`, which probes the file
+system, is shipped under `gap`, `xml` and `autodoc` only. Both are looser than
 `matchers.defaults`, where the filetype decides which citation syntax applies.
 
 ### `discovery.normalize(name, value, filetype)`
@@ -523,6 +548,7 @@ them.
 --- @field lines string[]      -- shared between hooks; read-only
 --- @field bufname string|nil
 --- @field dir string|nil      -- the buffer's directory
+--- @field root string|nil     -- the project root, from root_markers
 --- @field opts table
 
 --- @alias BibtexDiscoveryFn fun(ctx: BibtexDiscoveryContext): string[]|string|nil
@@ -537,6 +563,29 @@ them.
 A hook takes only the context, with no leading subject argument. This differs
 from a matcher, which takes the text it inspects as its first parameter: the
 lines a hook reads are already part of its context.
+
+## Module: blink-cmp-bibtex.path
+
+Path helpers shared by the scanner and the discovery hooks, so that a hook can
+resolve what it finds without depending on `scan`, which depends on this module.
+
+### `path.joinpath(base, relative)` / `path.normalize(path)` / `path.is_absolute(path)`
+
+Join two components, expand and normalize a path (`~` included), and tell an
+absolute path from a relative one.
+
+### `path.find_root(bufname, markers)`
+
+Find the project root of a buffer: the directory of the nearest marker found
+upward from the buffer's own directory, or that directory when no marker is
+found. An empty or unnamed buffer starts from the working directory.
+
+**Parameters:**
+- `bufname` (string): Buffer file name
+- `markers` (table): Root marker files or directories, as `root_markers`
+
+**Returns:**
+- `string`: The root directory
 
 ## Module: blink-cmp-bibtex.scan
 

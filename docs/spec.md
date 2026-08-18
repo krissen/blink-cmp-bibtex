@@ -14,6 +14,12 @@ nvim-cmp) with a fresh, MIT-licensed codebase that targets blink.cmp directly.
   - Typst `#bibliography()` declarations, including those in imported files.
   - GAPDoc `<Bibliography Databases="..."/>` declarations, whose comma-separated
     names carry no `.bib` extension.
+  - The main manual of a GAP package, found through the package's
+    `PackageInfo.g` and read from its documentation directory, for buffers that
+    declare no bibliography of their own.
+  - AutoDoc's naming convention for a GAP package, `doc/<PackageName>.bib` or
+    the `bib` named in `makedoc.g`, for packages whose manual has not been
+    built.
   - Glob search relative to the project root (`opts.search_paths`).
   - Manually supplied file list via `opts.files`.
   - Resolve buffer-discovered paths relative to the buffer's directory, with the
