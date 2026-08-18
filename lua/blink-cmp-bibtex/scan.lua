@@ -339,6 +339,11 @@ function M.is_global_path(path, set)
   if not path or not set then
     return false
   end
+  -- A path that already is a key needs no resolving: the keys are resolved
+  -- paths, and every path this is asked about comes from the same resolution.
+  if set[path] then
+    return true
+  end
   local normalized = canonical(path_util.normalize(path))
   return normalized ~= nil and set[normalized] == true
 end

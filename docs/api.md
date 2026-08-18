@@ -746,9 +746,10 @@ returns.
 ### `scan.is_global_path(path, set)`
 
 Whether a path is one of the configured global bibliographies, against a set
-built by `global_set`. The comparison resolves the path, which costs a system
-call, so a caller classifying the same path repeatedly should remember the
-answer.
+built by `global_set`. A path that is already a key is answered from the set;
+any other is resolved first, which costs a system call, so a caller classifying
+the same path repeatedly should remember the answer. A caller holding the
+sources the set was built from can read `set[source.path]` directly.
 
 **Returns:**
 - `boolean`

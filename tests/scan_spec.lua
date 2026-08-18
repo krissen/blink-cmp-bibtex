@@ -799,6 +799,14 @@ describe('scan.global_set', function()
     end)
   end)
 
+  it('answers from the set alone when the path is already a key', function()
+    -- Every path classified during a round comes from the resolution the set
+    -- was built from, so the answer must not depend on the file still being
+    -- there to resolve.
+    local set = { ['/gone/refs.bib'] = true }
+    assert.is_true(scan.is_global_path('/gone/refs.bib', set))
+  end)
+
   it('is empty when nothing is configured', function()
     assert.are.same({}, scan.global_set({}))
     assert.are.same({}, scan.global_set(nil))

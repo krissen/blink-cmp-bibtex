@@ -285,7 +285,10 @@ function M.check()
           message = string.format('skipped: %s (%s) — is a directory', shown, origins),
           advice = { 'point the option at a bibliography file rather than a directory' },
         }
-      elseif scan.is_global_path(source.path, global_set) then
+      -- Looked up rather than classified: the set is keyed by the paths of
+      -- these very sources, so resolving one again would only cost a system
+      -- call to arrive at the key it already is.
+      elseif global_set[source.path] then
         global_lines[#global_lines + 1] = string.format('global: %s (%s)', shown, origins)
       else
         local_lines[#local_lines + 1] = string.format('local: %s (%s)', shown, origins)
