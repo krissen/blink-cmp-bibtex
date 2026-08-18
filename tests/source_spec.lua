@@ -165,6 +165,17 @@ describe('Source source indicators', function()
     local response = complete(source, helpers.ctx('\\cite{smith2020', nil, bufnr))
     assert.are.same({ description = '[G]' }, response.items[1].labelDetails)
   end)
+
+  it('classifies the files a function-valued global_files reports', function()
+    local source = Source.new({
+      files = { helpers.fixture('project/bib/refs.bib') },
+      global_files = function()
+        return { helpers.fixture('refs.bib') }
+      end,
+    })
+    local response = complete(source, helpers.ctx('\\cite{smith2020', nil, bufnr))
+    assert.are.same({ description = '[G]' }, response.items[1].labelDetails)
+  end)
 end)
 
 describe('Source GAPDoc support', function()
