@@ -734,6 +734,12 @@ and keyed it, so a relative entry lands on the project root rather than on the
 working directory, and a file listed under one spelling is recognized when the
 buffer reaches it under another.
 
+`scan.resolve_options(opts, bufnr)` resolves `files`, `global_files` and
+`search_paths` once, into `{ files = …, global_files = …, search_paths = … }`,
+and `resolve_bib_sources` accepts that table as its third argument. A caller
+that also counts or inspects the options passes it in, so that a function-valued
+option runs once rather than once per reading.
+
 A caller that has already resolved the sources should read them with
 `scan.global_set_from_sources(sources)` instead: resolving twice calls a
 function-valued option twice, and it could answer differently the second time.

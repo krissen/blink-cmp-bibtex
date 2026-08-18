@@ -101,6 +101,21 @@ describe('health.check', function()
     assert.is_truthy(find(calls.info, 'global_files: 1 configured'))
   end)
 
+  it('calls a function-valued option once per report', function()
+    local calls = 0
+    config.setup({
+      files = function()
+        calls = calls + 1
+        return { 'refs.bib' }
+      end,
+    })
+    run_check()
+    -- Counted and resolved from one reading: an expensive function would
+    -- otherwise run twice, and one that answers differently would leave the
+    -- count describing a list the report never resolved.
+    assert.are.equal(1, calls)
+  end)
+
   it('degrades gracefully when a function option raises', function()
     config.setup({
       files = function()

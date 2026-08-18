@@ -215,6 +215,36 @@ describe('scan.resolve_bib_paths', function()
   end)
 end)
 
+describe('scan.resolve_options', function()
+  it('resolves every path option to a list', function()
+    local resolved = scan.resolve_options({
+      files = 'a.bib',
+      global_files = function()
+        return { 'b.bib' }
+      end,
+    })
+    assert.are.same({ 'a.bib' }, resolved.files)
+    assert.are.same({ 'b.bib' }, resolved.global_files)
+    assert.are.same({}, resolved.search_paths)
+  end)
+
+  it('is used instead of the options when handed to resolve_bib_sources', function()
+    local bufnr = vim.api.nvim_create_buf(false, true)
+    local calls = 0
+    local opts = {
+      files = function()
+        calls = calls + 1
+        return { helpers.fixture('refs.bib') }
+      end,
+    }
+    local resolved = scan.resolve_options(opts, bufnr)
+    local sources = scan.resolve_bib_sources(bufnr, opts, resolved)
+    assert.are.equal(1, calls)
+    assert.are.same({ helpers.fixture('refs.bib') }, scan.paths_from_sources(sources))
+    vim.api.nvim_buf_delete(bufnr, { force = true })
+  end)
+end)
+
 describe('scan.resolve_option_list', function()
   it('wraps a bare string into a list', function()
     assert.are.same({ 'refs.bib' }, scan.resolve_option_list('refs.bib'))

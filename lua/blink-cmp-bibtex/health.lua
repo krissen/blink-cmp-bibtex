@@ -235,9 +235,13 @@ function M.check()
   h_info(string.format('preview_style: %s, max_entries: %s', tostring(opts.preview_style), tostring(opts.max_entries)))
   -- files and global_files may be a list, a bare string, or a function, so they
   -- are resolved the same way the scanner resolves them before being counted.
-  h_info(string.format('files: %d configured', #scan.resolve_option_list(opts.files, bufnr)))
-  h_info(string.format('global_files: %d configured', #scan.resolve_option_list(opts.global_files, bufnr)))
-  h_info(string.format('search_paths: %d configured', #scan.resolve_option_list(opts.search_paths, bufnr)))
+  -- Read once and used for both the counts and the resolution below, so that a
+  -- function-valued option runs once per report and the counts describe the
+  -- very list the bibliographies were resolved from.
+  local resolved_options = scan.resolve_options(opts, bufnr)
+  h_info(string.format('files: %d configured', #resolved_options.files))
+  h_info(string.format('global_files: %d configured', #resolved_options.global_files))
+  h_info(string.format('search_paths: %d configured', #resolved_options.search_paths))
   h_info(string.format('root_markers: %d configured', #scan.resolve_option_list(opts.root_markers, bufnr)))
 
   h_start('blink-cmp-bibtex: bibliographies')
@@ -265,7 +269,7 @@ function M.check()
       )
     end
 
-    local sources = scan.resolve_bib_sources(bufnr, opts)
+    local sources = scan.resolve_bib_sources(bufnr, opts, resolved_options)
     if #sources == 0 then
       h_info('no bibliographies resolve for this buffer')
     end

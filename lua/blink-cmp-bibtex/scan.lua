@@ -150,6 +150,29 @@ function M.find_bib_files_from_buffer(bufnr, opts)
   return names
 end
 
+--- The path options of a configuration, resolved to lists
+--- @class BibtexResolvedOptions
+--- @field files string[] The files option
+--- @field global_files string[] The global_files option
+--- @field search_paths string[] The search_paths option
+
+--- Resolve the path options once
+--- Any of them may be a function, which a caller that both counts them and
+--- resolves them would otherwise run twice: an expensive one would run twice
+--- per call, and one that answers differently the second time would leave the
+--- count disagreeing with the list it describes.
+--- @param opts table|nil Configuration options
+--- @param bufnr number|nil Buffer the options are resolved for
+--- @return BibtexResolvedOptions The resolved lists
+function M.resolve_options(opts, bufnr)
+  opts = opts or {}
+  return {
+    files = M.resolve_option_list(opts.files, bufnr),
+    global_files = M.resolve_option_list(opts.global_files, bufnr),
+    search_paths = M.resolve_option_list(opts.search_paths, bufnr),
+  }
+end
+
 --- Where one bibliography came from
 --- The kind names the option or the mechanism that reported it, and the detail
 --- is what it was reported as: the raw option value, the glob pattern it was
@@ -179,12 +202,16 @@ end
 --- @param bufnr number|nil Buffer number; without a valid one only the path
 ---   options are resolved, anchored at the working directory
 --- @param opts table|nil Configuration options
+--- @param resolved BibtexResolvedOptions|nil The path options already resolved,
+---   from resolve_options; passed in by a caller that has read them for
+---   something else, so that a function-valued option runs once
 --- @return BibtexBibSource[] The bibliographies, in resolution order
-function M.resolve_bib_sources(bufnr, opts)
+function M.resolve_bib_sources(bufnr, opts, resolved)
   opts = opts or {}
-  local manual_files = M.resolve_option_list(opts.files, bufnr)
-  local global_files = M.resolve_option_list(opts.global_files, bufnr)
-  local search_paths = M.resolve_option_list(opts.search_paths, bufnr)
+  resolved = resolved or M.resolve_options(opts, bufnr)
+  local manual_files = resolved.files
+  local global_files = resolved.global_files
+  local search_paths = resolved.search_paths
   -- Read before the buffer is scanned, so that the root is found once and
   -- handed to the hooks rather than found again for them.
   local bufname = ''
@@ -205,7 +232,7 @@ function M.resolve_bib_sources(bufnr, opts)
   --- @type table<string, BibtexBibSource>
   local index = {}
   --- @type BibtexBibSource[]
-  local resolved = {}
+  local sources = {}
 
   --- Record one reported path, statting it the first time it is seen
   --- @param path string|nil The path as reported
@@ -237,7 +264,7 @@ function M.resolve_bib_sources(bufnr, opts)
         origins = {},
       }
       index[expanded] = source
-      resolved[#resolved + 1] = source
+      sources[#sources + 1] = source
     end
     source.origins[#source.origins + 1] = origin
   end
@@ -270,7 +297,7 @@ function M.resolve_bib_sources(bufnr, opts)
     add_path(opts.local_bib.target, root, { kind = 'local_bib', detail = opts.local_bib.target })
   end
 
-  return resolved
+  return sources
 end
 
 --- The sources that can actually be read, as plain paths
