@@ -60,6 +60,25 @@ local function count_reads(fn)
   return calls
 end
 
+--- Count the paths stat'ed while running a function.
+--- @param fn function
+--- @return number The number of fs_stat calls
+local function count_stats(fn)
+  local uv = vim.uv or vim.loop
+  local original = uv.fs_stat
+  local calls = 0
+  --- @diagnostic disable-next-line: duplicate-set-field
+  uv.fs_stat = function(...) -- luacheck: ignore
+    calls = calls + 1
+    return original(...)
+  end
+  local ok, err = pcall(fn)
+  --- @diagnostic disable-next-line: duplicate-set-field
+  uv.fs_stat = original
+  assert.is_true(ok, tostring(err))
+  return calls
+end
+
 --- Run a function with vim.fs.dir returning a fixed listing of files.
 --- @param entries string[] The names the directory reports, in order
 --- @param fn function
@@ -91,8 +110,18 @@ end
 local package_info = 'SetPackageInfo( rec(\nPackageName := "LocalNR",\nVersion := "1.0",\n) );\n'
 
 describe('discovery.gap_package', function()
+  local default_interval = discovery.__test.gap_limits.validation_interval_ms
+
   before_each(function()
     discovery.__test.reset()
+    -- Most of these tests change a package and expect the change to be seen at
+    -- once, so the interval that lets a cached entry be trusted without asking
+    -- the file system is switched off; the tests about the interval set it.
+    discovery.__test.gap_limits.validation_interval_ms = 0
+  end)
+
+  after_each(function()
+    discovery.__test.gap_limits.validation_interval_ms = default_interval
   end)
 
   it('reads the databases the main XML declares', function()
@@ -351,6 +380,90 @@ describe('discovery.gap_package', function()
         vim.fs.joinpath(root, 'doc/refs.bib'),
         vim.fs.joinpath(root, 'doc/extra.bib'),
       }, names(discovery.gap_package(context)))
+    end)
+  end)
+
+  it('leaves the stamps unvalidated within the validation interval', function()
+    helpers.with_tmpdir(function(dir)
+      local root = make_package(dir, {
+        ['PackageInfo.g'] = package_info,
+        ['lib/foo.gd'] = '',
+      })
+      -- No declaration anywhere, so every one of these is read and stamped:
+      -- the case where validating an entry is at its most expensive.
+      for index = 1, 8 do
+        helpers.write_file(vim.fs.joinpath(root, string.format('doc/chapter%d.xml', index)), '<Chapter/>\n')
+      end
+      local context = ctx(vim.fs.joinpath(root, 'lib/foo.gd'))
+      local expected = { vim.fs.joinpath(root, 'doc/LocalNR.bib') }
+      assert.are.same(expected, names(discovery.gap_package(context)))
+
+      discovery.__test.gap_limits.validation_interval_ms = 60000
+      local cached = count_stats(function()
+        assert.are.same(expected, names(discovery.gap_package(context)))
+      end)
+      discovery.__test.gap_limits.validation_interval_ms = 0
+      local validated = count_stats(function()
+        assert.are.same(expected, names(discovery.gap_package(context)))
+      end)
+      -- Validating stats every stamped file; the hook runs on every completion
+      -- request, so within the interval none of that may reach the disk. Both
+      -- counts still carry the upward search for PackageInfo.g, which is why
+      -- the difference rather than the total is what is asserted.
+      assert.is_true(
+        validated - cached >= 8,
+        string.format('validating cost %d stats and a cached call %d', validated, cached)
+      )
+    end)
+  end)
+
+  it('does not depend on the XML files it never read', function()
+    helpers.with_tmpdir(function(dir)
+      --- Prime a package and count the stats its next validated call costs.
+      --- @param name string The directory the package is created in
+      --- @param chapters number How many XML files to add behind the manual
+      --- @return number
+      local function validation_stats(name, chapters)
+        local root = make_package(vim.fs.joinpath(vim.fs.normalize(dir), name), {
+          ['PackageInfo.g'] = package_info,
+          ['doc/_main.xml'] = '<Bibliography Databases="manual"/>\n',
+          ['lib/foo.gd'] = '',
+        })
+        -- Ranked behind the manual, which declares a database, so the loop
+        -- stops before any of them is read.
+        for index = 1, chapters do
+          helpers.write_file(vim.fs.joinpath(root, string.format('doc/zz%d.xml', index)), '<Chapter/>\n')
+        end
+        local context = ctx(vim.fs.joinpath(root, 'lib/foo.gd'))
+        local expected = { vim.fs.joinpath(root, 'doc/manual.bib') }
+        assert.are.same(expected, names(discovery.gap_package(context)))
+        return count_stats(function()
+          assert.are.same(expected, names(discovery.gap_package(context)))
+        end)
+      end
+
+      -- Both packages sit at the same depth, so the upward search for
+      -- PackageInfo.g costs the same and only the stamps can differ.
+      assert.are.equal(validation_stats('small', 0), validation_stats('large', 20))
+    end)
+  end)
+
+  it('validates the package again once the interval has passed', function()
+    helpers.with_tmpdir(function(dir)
+      local root = make_package(dir, {
+        ['PackageInfo.g'] = package_info,
+        ['lib/foo.gd'] = '',
+      })
+      local context = ctx(vim.fs.joinpath(root, 'lib/foo.gd'))
+      discovery.__test.gap_limits.validation_interval_ms = 60000
+      assert.are.same({ vim.fs.joinpath(root, 'doc/LocalNR.bib') }, names(discovery.gap_package(context)))
+
+      helpers.write_file(vim.fs.joinpath(root, 'doc/_main.xml'), '<Bibliography Databases="manual"/>\n')
+      -- Still inside the interval: what was cached stands.
+      assert.are.same({ vim.fs.joinpath(root, 'doc/LocalNR.bib') }, names(discovery.gap_package(context)))
+
+      discovery.__test.gap_limits.validation_interval_ms = 0
+      assert.are.same({ vim.fs.joinpath(root, 'doc/manual.bib') }, names(discovery.gap_package(context)))
     end)
   end)
 

@@ -502,7 +502,11 @@ one, AutoDoc's convention is used instead: the `bib` named in `makedoc.g`, or
 
 Results are absolute paths, carrying `.bib` already, and are cached per package
 root against the modification times and sizes of every file and directory read.
-Files above the size caps (64 KiB for GAP files, 1 MiB for XML) are skipped.
+Since the hook runs on every completion request, those stamps are checked at
+most every two seconds; an edit to the package is therefore picked up within
+that interval rather than on the next keystroke. Files above the size caps
+(64 KiB for GAP files, 1 MiB for XML) are skipped, and a file skipped that way
+is not part of the cached entry.
 
 Each result is a record naming the manual that declared it, which
 `:checkhealth blink-cmp-bibtex` shows; a path derived from AutoDoc's convention

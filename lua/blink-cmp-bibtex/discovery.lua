@@ -481,6 +481,8 @@ local gap_size_caps = {
 local gap_limits = {
   --- How many XML files a documentation directory is read from
   max_xml_files = 50,
+  --- How long a validated cache entry is taken as it is, in milliseconds
+  validation_interval_ms = 2000,
 }
 
 --- The main XML file names AutoDoc and GAPDoc packages use, in preference order
@@ -614,6 +616,19 @@ local function list_gap_xml_files(doc_dir, pkg_name)
   return names
 end
 
+--- The monotonic clock in milliseconds
+--- Monotonic rather than wall clock, so that the cache is unaffected by the
+--- system clock being set.
+--- @return number|nil The reading, or nil when the clock cannot be read
+local function monotonic_ms()
+  local uv = vim.uv or vim.loop
+  local ok, nanoseconds = pcall(uv.hrtime)
+  if not ok or type(nanoseconds) ~= 'number' then
+    return nil
+  end
+  return nanoseconds / 1e6
+end
+
 --- The manual the buffer itself is, when it is one
 --- What is on disk for the file being edited may be older than what the buffer
 --- holds, so that one file is skipped. Only an XML file inside the package's
@@ -683,11 +698,19 @@ local function collect_gap_package_bibliography(ctx, pkg_root, info_path)
   local excluded = gap_excluded_manual(ctx.bufname, doc_dir)
   for _, name in ipairs(list_gap_xml_files(doc_dir, pkg_name)) do
     local xml_path = path_util.joinpath(doc_dir, name) --[[@as string]]
-    depends_on(xml_path)
     -- The buffer itself was already offered to the gapdoc hook, and what is on
     -- disk for it may be older than what is being edited.
     if not excluded or path_util.normalize(xml_path) ~= excluded then
       local lines = read_capped_file(xml_path, gap_size_caps.xml)
+      if lines then
+        -- Only a file that was read is depended on. A candidate that was
+        -- skipped for its size is not: stamping every candidate would put one
+        -- stat per XML file in the documentation directory on the path of
+        -- every keystroke, which costs more on a network file system than the
+        -- edge case it buys — an over-cap file shrinking below the cap is
+        -- picked up the next time the directory itself changes.
+        depends_on(xml_path)
+      end
       if lines and has_bibliography_marker(lines) then
         local databases = extract_gapdoc_databases(lines)
         if #databases > 0 then
@@ -716,7 +739,13 @@ local function collect_gap_package_bibliography(ctx, pkg_root, info_path)
     end
   end
 
-  return { result = results, stamps = stamps, doc_dir = doc_dir, excluded = excluded }
+  return {
+    result = results,
+    stamps = stamps,
+    doc_dir = doc_dir,
+    excluded = excluded,
+    validated_at = monotonic_ms(),
+  }
 end
 
 --- Whether a cache entry still describes the file system
@@ -728,6 +757,25 @@ local function gap_cache_is_current(entry)
       return false
     end
   end
+  return true
+end
+
+--- Whether a cache entry may be used as it stands
+--- Validating an entry costs one stat per file it was built from, and the hook
+--- runs on every completion request, so an entry validated a moment ago is
+--- trusted without asking the file system again. The interval is therefore how
+--- long an edit to the package may go unnoticed.
+--- @param entry table The cache entry
+--- @return boolean
+local function gap_cache_is_valid(entry)
+  local now = monotonic_ms()
+  if now and entry.validated_at and now - entry.validated_at < gap_limits.validation_interval_ms then
+    return true
+  end
+  if not gap_cache_is_current(entry) then
+    return false
+  end
+  entry.validated_at = now
   return true
 end
 
@@ -756,11 +804,7 @@ local function find_gap_package_bibliography(ctx)
   -- Every buffer of a package shares one entry: which files were read does not
   -- depend on the buffer, except for the one manual the buffer itself may be.
   local cached = gap_package_cache[pkg_root]
-  if
-    cached
-    and cached.excluded == gap_excluded_manual(ctx.bufname, cached.doc_dir)
-    and gap_cache_is_current(cached)
-  then
+  if cached and cached.excluded == gap_excluded_manual(ctx.bufname, cached.doc_dir) and gap_cache_is_valid(cached) then
     return vim.list_extend({}, cached.result)
   end
 
