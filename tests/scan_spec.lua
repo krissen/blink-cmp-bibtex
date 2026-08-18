@@ -768,6 +768,26 @@ describe('scan.global_set', function()
     assert.is_true(scan.is_global_path(helpers.fixture('refs.bib'), set))
   end)
 
+  it('anchors a relative entry where the scanner anchors it', function()
+    helpers.with_tmpdir(function(dir)
+      local root = vim.fs.normalize(dir)
+      vim.fn.mkdir(vim.fs.joinpath(root, '.git'), 'p')
+      helpers.write_file(vim.fs.joinpath(root, 'refs.bib'), '')
+      local bufnr = helpers.make_buf({
+        lines = {},
+        name = vim.fs.joinpath(root, 'main.tex'),
+        filetype = 'tex',
+      })
+      -- Relative to the project root, which is not the working directory.
+      local opts = { global_files = { 'refs.bib' }, root_markers = { '.git' } }
+      local sources = scan.resolve_bib_sources(bufnr, opts)
+      assert.are.equal(1, #sources)
+      assert.is_true(scan.is_global_path(sources[1].path, scan.global_set_from_sources(sources)))
+      assert.is_true(scan.is_global_path(sources[1].path, scan.global_set(opts, bufnr)))
+      vim.api.nvim_buf_delete(bufnr, { force = true })
+    end)
+  end)
+
   it('recognizes a global file reached through a symbolic link', function()
     helpers.with_tmpdir(function(dir)
       local real = vim.fs.joinpath(dir, 'real')

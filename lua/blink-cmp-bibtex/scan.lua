@@ -103,10 +103,13 @@ end
 --- Find BibTeX files referenced in a buffer, with where each was declared
 --- Runs the discovery hooks configured for the buffer's filetype; see
 --- discovery.lua for the hooks shipped with the plugin.
---- @param bufnr number Buffer number
+--- @param bufnr number|nil Buffer number; an invalid one discovers nothing
 --- @param opts table|nil Configuration options; the shipped hooks are used when omitted
+--- @param root string|nil The project root, found from opts.root_markers when
+---   omitted; passed in by a caller that has already found it, so that finding
+---   it does not cost a second walk up the directory tree
 --- @return BibtexDiscoveryEntry[] Reported bibliographies, in chain order
-function M.find_bib_files_from_buffer_detailed(bufnr, opts)
+function M.find_bib_files_from_buffer_detailed(bufnr, opts, root)
   opts = opts or {}
   if not bufnr or not vim.api.nvim_buf_is_valid(bufnr) then
     return {}
@@ -129,14 +132,14 @@ function M.find_bib_files_from_buffer_detailed(bufnr, opts)
     lines = lines,
     bufname = bufname,
     dir = buffer_dir,
-    root = path_util.find_root(bufname, opts.root_markers or {}),
+    root = root or path_util.find_root(bufname, opts.root_markers or {}),
     opts = opts,
   })
 end
 
 --- Find BibTeX files referenced in a buffer
 --- The names find_bib_files_from_buffer_detailed reports, in the same order.
---- @param bufnr number Buffer number
+--- @param bufnr number|nil Buffer number; an invalid one discovers nothing
 --- @param opts table|nil Configuration options; the shipped hooks are used when omitted
 --- @return string[] List of bibliography file names (not full paths)
 function M.find_bib_files_from_buffer(bufnr, opts)
@@ -173,7 +176,8 @@ end
 --- lets the health check explain a bibliography that never loads. Paths are
 --- identified by what they point at, so two spellings of one file are one
 --- source with two origins.
---- @param bufnr number Buffer number
+--- @param bufnr number|nil Buffer number; without a valid one only the path
+---   options are resolved, anchored at the working directory
 --- @param opts table|nil Configuration options
 --- @return BibtexBibSource[] The bibliographies, in resolution order
 function M.resolve_bib_sources(bufnr, opts)
@@ -181,9 +185,14 @@ function M.resolve_bib_sources(bufnr, opts)
   local manual_files = M.resolve_option_list(opts.files, bufnr)
   local global_files = M.resolve_option_list(opts.global_files, bufnr)
   local search_paths = M.resolve_option_list(opts.search_paths, bufnr)
-  local buffer_files = M.find_bib_files_from_buffer_detailed(bufnr, opts)
-  local bufname = vim.api.nvim_buf_get_name(bufnr)
+  -- Read before the buffer is scanned, so that the root is found once and
+  -- handed to the hooks rather than found again for them.
+  local bufname = ''
+  if bufnr and vim.api.nvim_buf_is_valid(bufnr) then
+    bufname = vim.api.nvim_buf_get_name(bufnr)
+  end
   local root = path_util.find_root(bufname, opts.root_markers or {})
+  local buffer_files = M.find_bib_files_from_buffer_detailed(bufnr, opts, root)
   local buffer_dir = nil
   -- Only try to get dirname if bufname is a valid file path (not empty, not just '.')
   if bufname and bufname ~= '' and bufname ~= '.' then
@@ -264,15 +273,12 @@ function M.resolve_bib_sources(bufnr, opts)
   return resolved
 end
 
---- Resolve all BibTeX file paths for a buffer
---- Combines buffer-discovered files, manual files, and search paths; the paths
---- resolve_bib_sources found that can actually be read.
---- @param bufnr number Buffer number
---- @param opts table Configuration options
---- @return string[] List of resolved absolute file paths
-function M.resolve_bib_paths(bufnr, opts)
+--- The sources that can actually be read, as plain paths
+--- @param sources BibtexBibSource[] What resolve_bib_sources returned
+--- @return string[] The paths that exist and are not directories, in order
+function M.paths_from_sources(sources)
   local paths = {}
-  for _, source in ipairs(M.resolve_bib_sources(bufnr, opts)) do
+  for _, source in ipairs(sources or {}) do
     if source.exists and not source.is_dir then
       paths[#paths + 1] = source.path
     end
@@ -280,26 +286,48 @@ function M.resolve_bib_paths(bufnr, opts)
   return paths
 end
 
---- Build the set of global bibliographies, keyed by their real paths
---- global_files takes the same forms as any other path option, so it is
---- resolved and normalized the same way the scanner resolves it, and keyed the
---- same way, so that a file listed here under one spelling is recognized when
---- the buffer reaches it under another. Callers that need to classify several
---- paths build the set once and reuse it; resolving a path costs a system
---- call, so a caller classifying the same path repeatedly should remember the
---- answer.
---- @param opts table|nil Configuration options
---- @param bufnr number|nil Buffer the option is resolved for
---- @return table<string, boolean> The normalized global paths
-function M.global_set(opts, bufnr)
+--- Resolve all BibTeX file paths for a buffer
+--- Combines buffer-discovered files, manual files, and search paths; the paths
+--- resolve_bib_sources found that can actually be read. A caller that also
+--- needs the origins resolves the sources once and reads them with
+--- paths_from_sources.
+--- @param bufnr number Buffer number
+--- @param opts table Configuration options
+--- @return string[] List of resolved absolute file paths
+function M.resolve_bib_paths(bufnr, opts)
+  return M.paths_from_sources(M.resolve_bib_sources(bufnr, opts))
+end
+
+--- Build the set of global bibliographies from resolved sources
+--- Reads the origins rather than the option, so that classification cannot
+--- diverge from resolution: a global file is exactly a path that resolution
+--- reached through global_files, anchored and keyed the way resolution
+--- anchored and keyed it.
+--- @param sources BibtexBibSource[] What resolve_bib_sources returned
+--- @return table<string, boolean> The global paths, keyed as the sources are
+function M.global_set_from_sources(sources)
   local set = {}
-  for _, path in ipairs(M.resolve_option_list(opts and opts.global_files, bufnr)) do
-    local normalized = canonical(path_util.normalize(path))
-    if normalized then
-      set[normalized] = true
+  for _, source in ipairs(sources or {}) do
+    for _, origin in ipairs(source.origins) do
+      if origin.kind == 'global_files' then
+        set[source.path] = true
+        break
+      end
     end
   end
   return set
+end
+
+--- Build the set of global bibliographies for a buffer
+--- A convenience over resolve_bib_sources for a caller that needs nothing
+--- else; one that has already resolved the sources should read them with
+--- global_set_from_sources instead of resolving them a second time, which
+--- would call a function-valued option again.
+--- @param opts table|nil Configuration options
+--- @param bufnr number|nil Buffer the option is resolved for
+--- @return table<string, boolean> The global paths
+function M.global_set(opts, bufnr)
+  return M.global_set_from_sources(M.resolve_bib_sources(bufnr, opts))
 end
 
 --- Check whether a path is one of the configured global bibliographies

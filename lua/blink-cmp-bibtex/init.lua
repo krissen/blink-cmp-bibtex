@@ -576,14 +576,16 @@ function Source:get_completions(context, callback)
   if wants_sanitized_prefix(detection, spec) then
     prefix = sanitize_prefix(detection.prefix, separators_for(detection, spec))
   end
-  local paths = scan.resolve_bib_paths(bufnr, self.opts)
+  -- Resolved once for the round: the options may be functions, and resolving
+  -- them again to classify what they produced would call them twice per
+  -- keystroke and could answer differently the second time.
+  local sources = scan.resolve_bib_sources(bufnr, self.opts)
+  local paths = scan.paths_from_sources(sources)
   if table_is_empty(paths) then
     callback(empty_response())
     return function() end
   end
-  -- Built once for the round: global_files may be a function, and resolving it
-  -- per entry would call it once per completion item.
-  local is_global_path = global_classifier(scan.global_set(self.opts, bufnr))
+  local is_global_path = global_classifier(scan.global_set_from_sources(sources))
   local cancelled = false
   vim.schedule(function()
     if cancelled then
@@ -739,7 +741,8 @@ function Source.copy_to_local_bib(key)
   end
 
   -- Get current bib paths for validation
-  local paths = scan.resolve_bib_paths(bufnr, opts)
+  local sources = scan.resolve_bib_sources(bufnr, opts)
+  local paths = scan.paths_from_sources(sources)
 
   -- Build set of current paths for validation
   local current_paths = {}
@@ -761,7 +764,7 @@ function Source.copy_to_local_bib(key)
   if not entry_data or not entry_data.raw then
     -- Entry not in lookup or stale - reload from current bib files
     local entries = cache.collect(paths, opts.max_entries)
-    local is_global_path = global_classifier(scan.global_set(opts, bufnr))
+    local is_global_path = global_classifier(scan.global_set_from_sources(sources))
     for _, entry in ipairs(entries) do
       if entry.key == key and entry.raw then
         local is_global = is_global_path(entry.source_path)
@@ -797,11 +800,12 @@ end
 function Source.debug_source_indicators()
   local opts = config.get()
   local bufnr = vim.api.nvim_get_current_buf()
-  local paths = scan.resolve_bib_paths(bufnr, opts)
+  local sources = scan.resolve_bib_sources(bufnr, opts)
+  local paths = scan.paths_from_sources(sources)
   local entries = cache.collect(paths, opts.max_entries)
 
-  -- Resolved the same way the scanner resolves it
-  local global_set = scan.global_set(opts, bufnr)
+  -- Read off the same resolution, rather than resolved a second time
+  local global_set = scan.global_set_from_sources(sources)
   local is_global_path = global_classifier(global_set)
 
   -- Classify each entry

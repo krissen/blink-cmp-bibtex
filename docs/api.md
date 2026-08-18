@@ -711,11 +711,18 @@ exist and are not directories.
 
 ### `scan.global_set(opts, bufnr)`
 
-Build the set of global bibliographies. `global_files` takes the same forms as
-any other path option — a list, a bare string, or a function — and is resolved
-the way the scanner resolves it, keyed by what each path points at, so a file
-listed here under one spelling is recognized when the buffer reaches it under
-another. Callers that classify several paths build the set once and reuse it.
+Build the set of global bibliographies for a buffer, by resolving its sources
+and reading their origins. A global file is exactly a path that resolution
+reached through `global_files`, anchored and keyed the way resolution anchored
+and keyed it, so a relative entry lands on the project root rather than on the
+working directory, and a file listed under one spelling is recognized when the
+buffer reaches it under another.
+
+A caller that has already resolved the sources should read them with
+`scan.global_set_from_sources(sources)` instead: resolving twice calls a
+function-valued option twice, and it could answer differently the second time.
+`scan.paths_from_sources(sources)` gives the same list `resolve_bib_paths`
+returns.
 
 **Returns:**
 - `table<string, boolean>`

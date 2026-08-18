@@ -189,7 +189,9 @@ function M.check()
       h_info('no bibliographies resolve for this buffer')
     end
 
-    local global_set = scan.global_set(opts, bufnr)
+    -- Read off the resolution above rather than resolved a second time, which
+    -- would call a function-valued option again.
+    local global_set = scan.global_set_from_sources(sources)
     local global_lines, local_lines, unusable = {}, {}, {}
     for _, source in ipairs(sources) do
       local origins = describe_origins(source, buffer_dir, bufname)
