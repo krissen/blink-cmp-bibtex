@@ -354,6 +354,50 @@ describe('discovery.gap_package', function()
     end)
   end)
 
+  it('shares what it found between the buffers of one package', function()
+    helpers.with_tmpdir(function(dir)
+      local root = make_package(dir, {
+        ['PackageInfo.g'] = package_info,
+        ['doc/_main.xml'] = '<Bibliography Databases="manual"/>\n',
+        ['lib/foo.gd'] = '',
+        ['lib/bar.gd'] = '',
+      })
+      local expected = { vim.fs.joinpath(root, 'doc/manual.bib') }
+      assert.is_true(count_reads(function()
+        assert.are.same(expected, names(discovery.gap_package(ctx(vim.fs.joinpath(root, 'lib/foo.gd')))))
+      end) > 0)
+      -- A second buffer of the same package reads the same files, so it must
+      -- not send the hook back to the file system.
+      assert.are.equal(
+        0,
+        count_reads(function()
+          assert.are.same(expected, names(discovery.gap_package(ctx(vim.fs.joinpath(root, 'lib/bar.gd')))))
+        end),
+        'read the package again for another buffer of the same package'
+      )
+    end)
+  end)
+
+  it('rereads the package for a buffer that is one of its manuals', function()
+    helpers.with_tmpdir(function(dir)
+      local root = make_package(dir, {
+        ['PackageInfo.g'] = package_info,
+        ['doc/_main.xml'] = '<Bibliography Databases="manual"/>\n',
+        ['lib/foo.gd'] = '',
+      })
+      assert.are.same(
+        { vim.fs.joinpath(root, 'doc/manual.bib') },
+        names(discovery.gap_package(ctx(vim.fs.joinpath(root, 'lib/foo.gd'))))
+      )
+      -- Editing the manual itself skips it on disk, so the entry cached for
+      -- the source file above cannot be reused.
+      assert.are.same(
+        { vim.fs.joinpath(root, 'doc/LocalNR.bib') },
+        names(discovery.gap_package(ctx(vim.fs.joinpath(root, 'doc/_main.xml'), { '<Book/>' }, 'xml')))
+      )
+    end)
+  end)
+
   it('notices a manual added to the documentation directory', function()
     helpers.with_tmpdir(function(dir)
       local root = make_package(dir, {

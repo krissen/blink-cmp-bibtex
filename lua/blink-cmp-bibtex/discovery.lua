@@ -614,6 +614,25 @@ local function list_gap_xml_files(doc_dir, pkg_name)
   return names
 end
 
+--- The manual the buffer itself is, when it is one
+--- What is on disk for the file being edited may be older than what the buffer
+--- holds, so that one file is skipped. Only an XML file inside the package's
+--- documentation directory can ever be skipped, which is what lets the cache
+--- be shared by every other buffer of the same package.
+--- @param bufname string|nil The buffer file name
+--- @param doc_dir string The package's documentation directory
+--- @return string|nil The normalized path to skip, or nil when none is
+local function gap_excluded_manual(bufname, doc_dir)
+  if not bufname or bufname == '' or not bufname:lower():match('%.xml$') then
+    return nil
+  end
+  local normalized = path_util.normalize(bufname)
+  if not normalized or vim.fs.dirname(normalized) ~= path_util.normalize(doc_dir) then
+    return nil
+  end
+  return normalized
+end
+
 --- Find the bibliographies of the GAP package a buffer belongs to
 --- The declaration is rarely in the file being edited: GAPDoc keeps it in the
 --- package's main XML, which AutoDoc generates, and which may not exist at all
@@ -622,9 +641,8 @@ end
 --- @param ctx BibtexDiscoveryContext
 --- @param pkg_root string The package root, the directory holding PackageInfo.g
 --- @param info_path string The path to PackageInfo.g
---- @return BibtexDiscoveryResult[] Absolute bibliography paths, with the manual
----   that declared them when one did
---- @return table<string, table|false> The stamps the result depends on
+--- @return table The cache entry: the result, the stamps it depends on, the
+---   documentation directory and the manual that was skipped, if any
 local function collect_gap_package_bibliography(ctx, pkg_root, info_path)
   local stamps = {}
 
@@ -662,13 +680,13 @@ local function collect_gap_package_bibliography(ctx, pkg_root, info_path)
 
   -- The manual's own declaration, which names the databases in use.
   depends_on(doc_dir)
-  local bufname = ctx.bufname and ctx.bufname ~= '' and path_util.normalize(ctx.bufname) or nil
+  local excluded = gap_excluded_manual(ctx.bufname, doc_dir)
   for _, name in ipairs(list_gap_xml_files(doc_dir, pkg_name)) do
     local xml_path = path_util.joinpath(doc_dir, name) --[[@as string]]
     depends_on(xml_path)
     -- The buffer itself was already offered to the gapdoc hook, and what is on
     -- disk for it may be older than what is being edited.
-    if not bufname or path_util.normalize(xml_path) ~= bufname then
+    if not excluded or path_util.normalize(xml_path) ~= excluded then
       local lines = read_capped_file(xml_path, gap_size_caps.xml)
       if lines and has_bibliography_marker(lines) then
         local databases = extract_gapdoc_databases(lines)
@@ -698,7 +716,7 @@ local function collect_gap_package_bibliography(ctx, pkg_root, info_path)
     end
   end
 
-  return results, stamps
+  return { result = results, stamps = stamps, doc_dir = doc_dir, excluded = excluded }
 end
 
 --- Whether a cache entry still describes the file system
@@ -735,15 +753,20 @@ local function find_gap_package_bibliography(ctx)
   end
   local pkg_root = vim.fs.dirname(info_path)
 
-  local bufname = ctx.bufname or ''
+  -- Every buffer of a package shares one entry: which files were read does not
+  -- depend on the buffer, except for the one manual the buffer itself may be.
   local cached = gap_package_cache[pkg_root]
-  if cached and cached.bufname == bufname and gap_cache_is_current(cached) then
+  if
+    cached
+    and cached.excluded == gap_excluded_manual(ctx.bufname, cached.doc_dir)
+    and gap_cache_is_current(cached)
+  then
     return vim.list_extend({}, cached.result)
   end
 
-  local result, stamps = collect_gap_package_bibliography(ctx, pkg_root, info_path)
-  gap_package_cache[pkg_root] = { bufname = bufname, stamps = stamps, result = result }
-  return vim.list_extend({}, result)
+  local entry = collect_gap_package_bibliography(ctx, pkg_root, info_path)
+  gap_package_cache[pkg_root] = entry
+  return vim.list_extend({}, entry.result)
 end
 
 --- Ensure a path has a bibliography extension (.bib, .yml, or .yaml)
