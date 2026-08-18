@@ -1,0 +1,40 @@
+--- Tests for the shared path helpers.
+
+local assert = require('luassert')
+local path_util = require('blink-cmp-bibtex.path')
+local helpers = require('tests.helpers')
+
+describe('path.find_root', function()
+  it('returns the directory holding the marker', function()
+    helpers.with_tmpdir(function(dir)
+      local root = vim.fs.normalize(dir)
+      vim.fn.mkdir(vim.fs.joinpath(root, '.git'), 'p')
+      helpers.write_file(vim.fs.joinpath(root, 'lib/foo.gd'), '')
+      assert.are.equal(root, vim.fs.normalize(path_util.find_root(vim.fs.joinpath(root, 'lib/foo.gd'), { '.git' })))
+    end)
+  end)
+
+  it('falls back to the buffer directory when no marker is found', function()
+    helpers.with_tmpdir(function(dir)
+      local root = vim.fs.normalize(dir)
+      helpers.write_file(vim.fs.joinpath(root, 'lib/foo.gd'), '')
+      local found = path_util.find_root(vim.fs.joinpath(root, 'lib/foo.gd'), { 'no-such-marker-file' })
+      assert.are.equal(vim.fs.joinpath(root, 'lib'), vim.fs.normalize(found))
+    end)
+  end)
+
+  it('falls back to the buffer directory when no markers are configured', function()
+    helpers.with_tmpdir(function(dir)
+      local root = vim.fs.normalize(dir)
+      vim.fn.mkdir(vim.fs.joinpath(root, '.git'), 'p')
+      helpers.write_file(vim.fs.joinpath(root, 'lib/foo.gd'), '')
+      local found = path_util.find_root(vim.fs.joinpath(root, 'lib/foo.gd'), {})
+      assert.are.equal(vim.fs.joinpath(root, 'lib'), vim.fs.normalize(found))
+    end)
+  end)
+
+  it('uses the working directory for a buffer without a name', function()
+    local uv = vim.uv or vim.loop
+    assert.are.equal(vim.fs.normalize(uv.cwd() or ''), vim.fs.normalize(path_util.find_root('', {})))
+  end)
+end)

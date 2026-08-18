@@ -66,28 +66,6 @@ function M.resolve_option_list(value, ...)
   return normalize_list(resolve_option(value, ...))
 end
 
---- Find the project root directory based on markers
---- @param bufname string Buffer file name
---- @param markers table List of root marker files/directories
---- @return string The root directory path
-local function find_root(bufname, markers)
-  local uv = vim.uv or vim.loop
-  -- Ensure bufname is not just a directory marker like '.' or empty
-  local dir
-  if not bufname or bufname == '' or bufname == '.' then
-    dir = uv.cwd() or ''
-  else
-    dir = vim.fs.dirname(bufname)
-  end
-  if markers and #markers > 0 then
-    local found = vim.fs.find(markers, { upward = true, path = dir })[1]
-    if found then
-      return vim.fs.dirname(found)
-    end
-  end
-  return dir
-end
-
 local function expand_search_path(path, root)
   local resolved = {}
   if not path_util.is_absolute(path) then
@@ -148,7 +126,7 @@ function M.resolve_bib_paths(bufnr, opts)
   local search_paths = M.resolve_option_list(opts.search_paths, bufnr)
   local buffer_files = M.find_bib_files_from_buffer(bufnr, opts)
   local bufname = vim.api.nvim_buf_get_name(bufnr)
-  local root = find_root(bufname, opts.root_markers or {})
+  local root = path_util.find_root(bufname, opts.root_markers or {})
   local buffer_dir = nil
   -- Only try to get dirname if bufname is a valid file path (not empty, not just '.')
   if bufname and bufname ~= '' and bufname ~= '.' then
