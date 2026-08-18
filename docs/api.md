@@ -668,6 +668,12 @@ that nothing is dropped: a path reported twice keeps an origin per report, and
 a path with nothing behind it is returned with `exists = false` rather than
 skipped. Each path is stat'ed once.
 
+Paths are identified by what they point at, so a file reached through a
+symbolic link — a linked project directory, or `/var` against `/private/var` on
+macOS — is one source carrying every origin that named it, rather than one per
+spelling. `path` is that resolved path; a path with nothing behind it cannot be
+resolved and keeps the spelling it was declared with.
+
 **Parameters:**
 - `bufnr` (number): Buffer number
 - `opts` (table|nil): Configuration options
@@ -705,10 +711,11 @@ exist and are not directories.
 
 ### `scan.global_set(opts, bufnr)`
 
-Build the set of normalized global bibliography paths. `global_files` takes the
-same forms as any other path option — a list, a bare string, or a function —
-and is resolved and normalized the way the scanner resolves it. Callers that
-classify several paths build the set once and reuse it.
+Build the set of global bibliographies. `global_files` takes the same forms as
+any other path option — a list, a bare string, or a function — and is resolved
+the way the scanner resolves it, keyed by what each path points at, so a file
+listed here under one spelling is recognized when the buffer reaches it under
+another. Callers that classify several paths build the set once and reuse it.
 
 **Returns:**
 - `table<string, boolean>`
@@ -716,7 +723,9 @@ classify several paths build the set once and reuse it.
 ### `scan.is_global_path(path, set)`
 
 Whether a path is one of the configured global bibliographies, against a set
-built by `global_set`.
+built by `global_set`. The comparison resolves the path, which costs a system
+call, so a caller classifying the same path repeatedly should remember the
+answer.
 
 **Returns:**
 - `boolean`

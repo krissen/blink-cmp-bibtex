@@ -66,6 +66,24 @@ function M.resolve_option_list(value, ...)
   return normalize_list(resolve_option(value, ...))
 end
 
+--- Identify a path by what it points at
+--- Symlinked segments give one file several spellings — on macOS a temporary
+--- directory is reachable as both /var/... and /private/var/... — and a text
+--- comparison reads those as different files. The same bibliography then
+--- resolves twice, and one reached through a link is not recognized as the
+--- global file it is. A path with nothing behind it cannot be resolved and
+--- keeps the spelling it was declared with.
+--- @param path string|nil A normalized path
+--- @return string|nil The real path, or the path itself when it has none
+local function canonical(path)
+  if not path or path == '' then
+    return path
+  end
+  local uv = vim.uv or vim.loop
+  local real = uv.fs_realpath(path)
+  return real and vim.fs.normalize(real) or path
+end
+
 local function expand_search_path(path, root)
   local resolved = {}
   if not path_util.is_absolute(path) then
@@ -152,7 +170,9 @@ end
 --- Same order and deduplication as resolve_bib_paths, except that nothing is
 --- dropped: a path reported twice keeps both origins, and a path with nothing
 --- behind it is reported with exists = false rather than skipped, which is what
---- lets the health check explain a bibliography that never loads.
+--- lets the health check explain a bibliography that never loads. Paths are
+--- identified by what they point at, so two spellings of one file are one
+--- source with two origins.
 --- @param bufnr number Buffer number
 --- @param opts table|nil Configuration options
 --- @return BibtexBibSource[] The bibliographies, in resolution order
@@ -193,6 +213,7 @@ function M.resolve_bib_sources(bufnr, opts)
       local anchor = base_dir or root or buffer_dir
       expanded = path_util.normalize(path_util.joinpath(anchor, path))
     end
+    expanded = canonical(expanded)
     if not expanded then
       return
     end
@@ -259,17 +280,21 @@ function M.resolve_bib_paths(bufnr, opts)
   return paths
 end
 
---- Build the set of normalized global bibliography paths
+--- Build the set of global bibliographies, keyed by their real paths
 --- global_files takes the same forms as any other path option, so it is
---- resolved and normalized the same way the scanner resolves it. Callers that
---- need to classify several paths build the set once and reuse it.
+--- resolved and normalized the same way the scanner resolves it, and keyed the
+--- same way, so that a file listed here under one spelling is recognized when
+--- the buffer reaches it under another. Callers that need to classify several
+--- paths build the set once and reuse it; resolving a path costs a system
+--- call, so a caller classifying the same path repeatedly should remember the
+--- answer.
 --- @param opts table|nil Configuration options
 --- @param bufnr number|nil Buffer the option is resolved for
 --- @return table<string, boolean> The normalized global paths
 function M.global_set(opts, bufnr)
   local set = {}
   for _, path in ipairs(M.resolve_option_list(opts and opts.global_files, bufnr)) do
-    local normalized = path_util.normalize(path)
+    local normalized = canonical(path_util.normalize(path))
     if normalized then
       set[normalized] = true
     end
@@ -278,6 +303,7 @@ function M.global_set(opts, bufnr)
 end
 
 --- Check whether a path is one of the configured global bibliographies
+--- Costs a system call, since the path is compared by what it points at.
 --- @param path string|nil The path to classify
 --- @param set table<string, boolean>|nil A set built by global_set
 --- @return boolean True when the path is a global bibliography
@@ -285,7 +311,7 @@ function M.is_global_path(path, set)
   if not path or not set then
     return false
   end
-  local normalized = path_util.normalize(path)
+  local normalized = canonical(path_util.normalize(path))
   return normalized ~= nil and set[normalized] == true
 end
 

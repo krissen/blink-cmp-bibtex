@@ -292,6 +292,31 @@ describe('health.check bibliographies', function()
     end)
   end)
 
+  it('lists a file reached through a symbolic link once, as global', function()
+    helpers.with_tmpdir(function(dir)
+      local real = vim.fs.joinpath(dir, 'real')
+      helpers.write_file(vim.fs.joinpath(real, 'refs.bib'), '')
+      local link = vim.fs.joinpath(dir, 'link')
+      assert.is_true(vim.uv.fs_symlink(real, link) == true)
+      use_buffer({
+        lines = { '\\addbibresource{refs.bib}' },
+        name = vim.fs.joinpath(real, 'main.tex'),
+        filetype = 'tex',
+      })
+      config.setup({ global_files = { vim.fs.joinpath(link, 'refs.bib') } })
+      local listed = {}
+      for _, message in ipairs(run_check().ok) do
+        if message:find('refs.bib', 1, true) then
+          listed[#listed + 1] = message
+        end
+      end
+      assert.are.equal(1, #listed, table.concat(listed, ' | '))
+      assert.is_truthy(listed[1]:find('global: ', 1, true))
+      assert.is_truthy(listed[1]:find('global_files', 1, true))
+      assert.is_truthy(listed[1]:find('buffer discovery: latex, main.tex:1', 1, true))
+    end)
+  end)
+
   it('warns about a configured file that does not exist', function()
     helpers.with_tmpdir(function(dir)
       use_buffer({ lines = {}, filetype = 'tex' })

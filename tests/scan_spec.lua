@@ -712,6 +712,34 @@ describe('scan.resolve_bib_sources', function()
     end)
   end)
 
+  it('identifies a bibliography by what it points at, not by how it was spelled', function()
+    helpers.with_tmpdir(function(dir)
+      local real = vim.fs.joinpath(dir, 'real')
+      helpers.write_file(vim.fs.joinpath(real, 'refs.bib'), '')
+      local link = vim.fs.joinpath(dir, 'link')
+      assert.is_true(vim.uv.fs_symlink(real, link) == true)
+      local bufnr = helpers.make_buf({
+        lines = { '\\addbibresource{refs.bib}' },
+        name = vim.fs.joinpath(real, 'main.tex'),
+        filetype = 'tex',
+      })
+      -- The buffer reaches the file through the real directory and the option
+      -- through the link, which are the same file.
+      local opts = { global_files = { vim.fs.joinpath(link, 'refs.bib') } }
+      local sources = scan.resolve_bib_sources(bufnr, opts)
+      assert.are.equal(1, #sources)
+      assert.are.same(
+        { 'buffer', 'global_files' },
+        vim.tbl_map(function(origin)
+          return origin.kind
+        end, sources[1].origins)
+      )
+      assert.is_true(scan.is_global_path(sources[1].path, scan.global_set(opts, bufnr)))
+      assert.are.same({ sources[1].path }, scan.resolve_bib_paths(bufnr, opts))
+      vim.api.nvim_buf_delete(bufnr, { force = true })
+    end)
+  end)
+
   it('accumulates an origin per report of the same path', function()
     local sources = scan.resolve_bib_sources(open_fixture('project/main.tex', 'tex'), {
       files = { fixtures .. '/project/bib/refs.bib' },
@@ -738,6 +766,17 @@ describe('scan.global_set', function()
       end,
     })
     assert.is_true(scan.is_global_path(helpers.fixture('refs.bib'), set))
+  end)
+
+  it('recognizes a global file reached through a symbolic link', function()
+    helpers.with_tmpdir(function(dir)
+      local real = vim.fs.joinpath(dir, 'real')
+      helpers.write_file(vim.fs.joinpath(real, 'refs.bib'), '')
+      local link = vim.fs.joinpath(dir, 'link')
+      assert.is_true(vim.uv.fs_symlink(real, link) == true)
+      local set = scan.global_set({ global_files = { vim.fs.joinpath(link, 'refs.bib') } })
+      assert.is_true(scan.is_global_path(vim.fs.joinpath(real, 'refs.bib'), set))
+    end)
   end)
 
   it('is empty when nothing is configured', function()
