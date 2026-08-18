@@ -18,6 +18,8 @@ local M = {}
 --- @field lines string[] The buffer lines, read-only
 --- @field bufname string|nil The buffer file name, empty for scratch buffers
 --- @field dir string|nil The buffer's directory, for resolving relative paths
+--- @field root string|nil The project root, from the root_markers option, or
+---   the buffer's directory when no marker is found
 --- @field opts table Configuration options
 
 --- A discovery hook

@@ -89,6 +89,7 @@ end
 --- @param opts table|nil Configuration options; the shipped hooks are used when omitted
 --- @return string[] List of bibliography file names (not full paths)
 function M.find_bib_files_from_buffer(bufnr, opts)
+  opts = opts or {}
   if not bufnr or not vim.api.nvim_buf_is_valid(bufnr) then
     return {}
   end
@@ -110,7 +111,8 @@ function M.find_bib_files_from_buffer(bufnr, opts)
     lines = lines,
     bufname = bufname,
     dir = buffer_dir,
-    opts = opts or {},
+    root = path_util.find_root(bufname, opts.root_markers or {}),
+    opts = opts,
   })
 end
 

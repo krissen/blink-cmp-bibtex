@@ -538,6 +538,26 @@ describe('scan discovery hooks', function()
     assert.is_true(#seen.lines > 0)
   end)
 
+  it('gives the hook the project root found through the root markers', function()
+    helpers.with_tmpdir(function(dir)
+      local root = vim.fs.normalize(dir)
+      vim.fn.mkdir(vim.fs.joinpath(root, '.git'), 'p')
+      helpers.write_file(vim.fs.joinpath(root, 'doc/main.tex'), '')
+      local bufnr = vim.fn.bufadd(vim.fs.joinpath(root, 'doc/main.tex'))
+      vim.fn.bufload(bufnr)
+      local seen
+      local opts = with_hook(function(context)
+        seen = context
+        return nil
+      end)
+      opts.root_markers = { '.git' }
+      scan.find_bib_files_from_buffer(bufnr, opts)
+      -- Neovim resolves the buffer name, so the root arrives with symlinks
+      -- resolved as well; on macOS the temporary directory is one.
+      assert.are.equal(vim.fs.normalize(vim.fn.resolve(root)), vim.fs.normalize(seen.root))
+    end)
+  end)
+
   it('drops only the disabled built-in for the filetype it is disabled in', function()
     local opts = { discovery = vim.deepcopy(discovery.defaults) }
     opts.discovery.markdown = { yaml = false }
