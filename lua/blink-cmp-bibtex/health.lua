@@ -25,6 +25,23 @@ local function describe_chain(chain)
   return table.concat(parts, ', ')
 end
 
+--- Whether a buffer is the one :checkhealth renders its report into
+--- Neovim's runtime names that buffer 'health://', runs every check, and only
+--- then sets the 'checkhealth' filetype, so while this check is running the
+--- name is what identifies it. The filetype is read as well, for a version
+--- that sets it before running the checks.
+--- @param bufnr integer The buffer to classify
+--- @return boolean
+local function is_report_buffer(bufnr)
+  if vim.bo[bufnr].filetype == 'checkhealth' then
+    return true
+  end
+  local name = vim.api.nvim_buf_get_name(bufnr)
+  -- Matched at the front and after a directory, since a version that expands
+  -- the name against the working directory reports the latter.
+  return name:sub(1, 9) == 'health://' or name:match('/health://$') ~= nil
+end
+
 --- The buffer the report is about
 --- :checkhealth renders its output in a buffer of its own, so the buffer that
 --- is current while check() runs is the report rather than the document the
@@ -33,16 +50,16 @@ end
 --- @return integer The buffer to resolve bibliographies for
 local function target_buffer()
   local current = vim.api.nvim_get_current_buf()
-  if vim.bo[current].filetype ~= 'checkhealth' then
+  if not is_report_buffer(current) then
     return current
   end
   local alternate = vim.fn.bufnr('#')
-  if alternate > 0 and vim.api.nvim_buf_is_valid(alternate) and vim.bo[alternate].filetype ~= 'checkhealth' then
+  if alternate > 0 and vim.api.nvim_buf_is_valid(alternate) and not is_report_buffer(alternate) then
     return alternate
   end
   for _, win in ipairs(vim.api.nvim_list_wins()) do
     local buf = vim.api.nvim_win_get_buf(win)
-    if vim.bo[buf].filetype ~= 'checkhealth' then
+    if not is_report_buffer(buf) then
       return buf
     end
   end

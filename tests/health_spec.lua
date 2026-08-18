@@ -348,6 +348,25 @@ describe('health.check bibliographies', function()
     assert.is_truthy(find(run_check().info, 'no bibliographies resolve for this buffer'))
   end)
 
+  it('reports on the alternate buffer while the report is still unnamed by filetype', function()
+    -- The runtime names the report buffer and only sets its filetype once
+    -- every check has run, so this is the state check() actually sees.
+    helpers.with_tmpdir(function(dir)
+      helpers.write_file(vim.fs.joinpath(dir, 'refs.bib'), '')
+      use_buffer({
+        lines = { '\\addbibresource{refs.bib}' },
+        name = vim.fs.joinpath(dir, 'main.tex'),
+        filetype = 'tex',
+      })
+      use_buffer({ lines = {}, name = 'health://' })
+      config.setup(nil)
+      local calls = run_check()
+      assert.is_truthy(find(calls.info, 'current buffer: '))
+      assert.is_nil(find(calls.info, 'health://'))
+      assert.is_truthy(find(calls.ok, 'refs.bib (buffer discovery: latex, main.tex:1)'))
+    end)
+  end)
+
   it('reports on the alternate buffer when the report itself is current', function()
     helpers.with_tmpdir(function(dir)
       helpers.write_file(vim.fs.joinpath(dir, 'refs.bib'), '')
