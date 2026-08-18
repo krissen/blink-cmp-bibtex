@@ -327,6 +327,54 @@ describe('health.check bibliographies', function()
     end)
   end)
 
+  it('says where a bibliography the buffer declared should have been', function()
+    helpers.with_tmpdir(function(dir)
+      use_buffer({
+        lines = { '% a comment', '\\addbibresource{refs.bib}' },
+        name = vim.fs.joinpath(dir, 'main.tex'),
+        filetype = 'tex',
+      })
+      config.setup(nil)
+      local message = assert(find(run_check().warn, 'missing: '))
+      assert.is_truthy(message:find('declared in main.tex:2 but the file does not exist', 1, true))
+    end)
+  end)
+
+  it('reports a local_bib target that is created on the first copy as pending', function()
+    helpers.with_tmpdir(function(dir)
+      use_buffer({ lines = {}, name = vim.fs.joinpath(dir, 'main.tex'), filetype = 'tex' })
+      config.setup({
+        local_bib = { target = vim.fs.joinpath(dir, 'local.bib'), create_if_missing = true },
+      })
+      local calls = run_check()
+      local message = assert(find(calls.info, 'not present yet: '))
+      assert.is_truthy(message:find('local_bib.target, created on first copy', 1, true))
+      assert.is_nil(find(calls.warn, 'local.bib'))
+    end)
+  end)
+
+  it('warns about a local_bib target that will never be created', function()
+    helpers.with_tmpdir(function(dir)
+      use_buffer({ lines = {}, name = vim.fs.joinpath(dir, 'main.tex'), filetype = 'tex' })
+      config.setup({ local_bib = { target = vim.fs.joinpath(dir, 'local.bib') } })
+      assert.is_truthy(find(run_check().warn, 'missing: '))
+    end)
+  end)
+
+  it('reports a GAP package convention name as pending rather than missing', function()
+    helpers.with_tmpdir(function(dir)
+      local root = vim.fs.joinpath(vim.fs.normalize(dir), 'pkg')
+      helpers.write_file(vim.fs.joinpath(root, 'PackageInfo.g'), 'PackageName := "LocalNR",\n')
+      helpers.write_file(vim.fs.joinpath(root, 'lib/foo.gd'), '')
+      use_buffer({ lines = { '' }, name = vim.fs.joinpath(root, 'lib/foo.gd'), filetype = 'gap' })
+      config.setup({ filetypes = { 'gap' } })
+      local calls = run_check()
+      local message = assert(find(calls.info, 'not present yet: '), table.concat(calls.warn, ' | '))
+      assert.is_truthy(message:find('LocalNR.bib (gap_package convention)', 1, true))
+      assert.is_nil(find(calls.warn, 'LocalNR.bib'))
+    end)
+  end)
+
   it('warns about a configured path that is a directory', function()
     helpers.with_tmpdir(function(dir)
       use_buffer({ lines = {}, filetype = 'tex' })

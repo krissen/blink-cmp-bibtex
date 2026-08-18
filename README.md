@@ -663,7 +663,13 @@ blink-cmp-bibtex: bibliographies ~
 - provider-level opts (sources.providers.bibtex.opts) are not visible to this report
 ```
 
-A path that resolves to a directory is warned about the same way. If the buffer
+How a path that is not there is reported depends on who asked for it: one
+listed in an option is warned about as above, one the buffer declared says
+where the declaration is (`missing: … — declared in main.tex:3 but the file
+does not exist`), and one that nobody wrote down — a GAP package's conventional
+name, or a `local_bib.target` that is created on the first copy — is reported
+as `not present yet`, which is not a problem. A path that resolves to a
+directory is warned about the same way. If the buffer
 has a filetype that is not in `filetypes`, the section says so — the source is
 not offered there, and the list below the warning is what it would use if it
 were. The report reads the options from `setup()`; anything passed as
