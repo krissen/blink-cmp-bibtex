@@ -22,10 +22,27 @@ local M = {}
 ---   the buffer's directory when no marker is found
 --- @field opts table Configuration options
 
+--- One bibliography a hook reports, with where it was declared
+--- A hook may report a bare file name instead, which carries no position.
+--- @class BibtexDiscoveryResult
+--- @field name string The file name as declared
+--- @field line integer|nil The line the declaration was found on, 1-based
+--- @field file string|nil The declaring file, when it is not the buffer itself
+
+--- One bibliography as collected, with the hook that reported it
+--- @class BibtexDiscoveryEntry
+--- @field name string The file name, with the hook's extension rule applied
+--- @field hook string The name of the hook that reported it
+--- @field line integer|nil The line the declaration was found on, 1-based
+--- @field file string|nil The declaring file, when it is not the buffer itself
+
 --- A discovery hook
 --- Unlike a matcher, a hook takes no subject argument: the lines it reads are
---- already part of the context.
---- @alias BibtexDiscoveryFn fun(ctx: BibtexDiscoveryContext): string[]|string|nil
+--- already part of the context. Each reported bibliography is either a bare
+--- file name or a record naming it, which lets a hook say where the
+--- declaration was found.
+--- @alias BibtexDiscoveryReport string|BibtexDiscoveryResult
+--- @alias BibtexDiscoveryFn fun(ctx: BibtexDiscoveryContext): BibtexDiscoveryReport[]|BibtexDiscoveryReport|nil
 
 --- A normalized discovery entry
 --- @class BibtexDiscoverySpec
@@ -166,7 +183,8 @@ end
 
 --- Find bibliography files in YAML front matter
 --- @param lines string[] Buffer lines to search
---- @return string[] List of bibliography file paths
+--- @return BibtexDiscoveryResult[] List of bibliography file paths, with the
+---   line each was declared on
 local function find_yaml_bibliography(lines)
   local resources = {}
   local in_front_matter = false
@@ -179,7 +197,7 @@ local function find_yaml_bibliography(lines)
     elseif in_front_matter then
       local inline = line:match('^bibliography:%s*(.+)$')
       if inline then
-        resources[#resources + 1] = trim(inline)
+        resources[#resources + 1] = { name = trim(inline), line = idx }
         collecting_list = false
       elseif line:match('^bibliography:%s*$') then
         collecting_list = true
@@ -189,7 +207,7 @@ local function find_yaml_bibliography(lines)
       if collecting_list then
         local list_item = line:match('^%s*%-%s*(.+)%s*$')
         if list_item then
-          resources[#resources + 1] = trim(list_item)
+          resources[#resources + 1] = { name = trim(list_item), line = idx }
         end
       end
     end
@@ -250,28 +268,25 @@ end
 --- @param lines string[] Buffer lines to search
 --- @param base_dir string|nil Directory to resolve relative imports from
 --- @param visited table<string, boolean>|nil Table to track visited files (prevents cycles)
---- @return string[] List of bibliography file paths
+--- @return BibtexDiscoveryResult[] List of bibliography file paths, with the
+---   line each was declared on and, for a declaration reached through an
+---   import, the file declaring it
 local function find_typst_bibliography(lines, base_dir, visited)
   visited = visited or {}
   local resources = {}
 
   -- Find direct bibliography declarations
-  for _, line in ipairs(lines) do
-    -- Match #bibliography("path/to/file.bib") with double quotes
-    for path in line:gmatch('#bibliography%s*%(%s*"([^"]+)"%s*%)') do
-      path = trim(path)
-      if not path_util.is_absolute(path) and base_dir then
-        path = path_util.joinpath(base_dir, path) --[[@as string]]
+  for idx, line in ipairs(lines) do
+    -- Match #bibliography("path/to/file.bib") with double quotes, then the
+    -- single-quoted form, so that the results follow the source order.
+    for _, pattern in ipairs({ '#bibliography%s*%(%s*"([^"]+)"%s*%)', "#bibliography%s*%(%s*'([^']+)'%s*%)" }) do
+      for path in line:gmatch(pattern) do
+        path = trim(path)
+        if not path_util.is_absolute(path) and base_dir then
+          path = path_util.joinpath(base_dir, path) --[[@as string]]
+        end
+        resources[#resources + 1] = { name = path, line = idx }
       end
-      resources[#resources + 1] = path
-    end
-    -- Match #bibliography('path/to/file.bib') with single quotes
-    for path in line:gmatch("#bibliography%s*%(%s*'([^']+)'%s*%)") do
-      path = trim(path)
-      if not path_util.is_absolute(path) and base_dir then
-        path = path_util.joinpath(base_dir, path) --[[@as string]]
-      end
-      resources[#resources + 1] = path
     end
   end
 
@@ -294,9 +309,12 @@ local function find_typst_bibliography(lines, base_dir, visited)
           local imported_resources = find_typst_bibliography(import_lines, import_dir, visited)
           for _, resource in ipairs(imported_resources) do
             -- Resolve imported resource paths relative to the imported file's directory
-            if not path_util.is_absolute(resource) then
-              resource = path_util.joinpath(import_dir, resource) --[[@as string]]
+            if not path_util.is_absolute(resource.name) then
+              resource.name = path_util.joinpath(import_dir, resource.name) --[[@as string]]
             end
+            -- A declaration reached through several imports keeps the file it
+            -- was written in, which the innermost call already recorded.
+            resource.file = resource.file or full_path
             resources[#resources + 1] = resource
           end
         end
@@ -735,12 +753,12 @@ end
 
 --- Find the bibliographies a LaTeX buffer declares
 --- @param ctx BibtexDiscoveryContext
---- @return string[]
+--- @return BibtexDiscoveryResult[]
 function M.latex(ctx)
   local resources = {}
-  for _, line in ipairs(ctx.lines) do
+  for idx, line in ipairs(ctx.lines) do
     for _, resource in ipairs(extract_command_paths(line)) do
-      resources[#resources + 1] = resource
+      resources[#resources + 1] = { name = resource, line = idx }
     end
   end
   return resources
@@ -748,14 +766,14 @@ end
 
 --- Find the bibliographies declared in Markdown YAML front matter
 --- @param ctx BibtexDiscoveryContext
---- @return string[]
+--- @return BibtexDiscoveryResult[]
 function M.yaml(ctx)
   return find_yaml_bibliography(ctx.lines)
 end
 
 --- Find the bibliographies a Typst buffer declares, following its imports
 --- @param ctx BibtexDiscoveryContext
---- @return string[]
+--- @return BibtexDiscoveryResult[]
 function M.typst(ctx)
   return find_typst_bibliography(ctx.lines, ctx.dir)
 end
@@ -994,6 +1012,8 @@ function M.chain(filetype, opts)
 end
 
 --- Describe why a hook result is unusable, if it is
+--- A reported bibliography is either a bare file name or a record naming it,
+--- so a table entry is well formed exactly when its name is a string.
 --- @param result any The value a hook returned
 --- @return string|nil A reason, or nil when the result is well formed
 local function malformed_result_reason(result)
@@ -1003,27 +1023,41 @@ local function malformed_result_reason(result)
   if type(result) ~= 'table' then
     return string.format('returned %s instead of a list of file names', type(result))
   end
+  if type(result.name) == 'string' then
+    return nil
+  end
   for _, entry in ipairs(result) do
-    if type(entry) ~= 'string' then
+    if type(entry) == 'table' then
+      if type(entry.name) ~= 'string' then
+        return string.format('returned a list holding a record naming %s instead of a file name', type(entry.name))
+      end
+    elseif type(entry) ~= 'string' then
       return string.format('returned a list holding %s instead of a file name', type(entry))
     end
   end
   return nil
 end
 
---- Run the hook chain and collect the file names it reports
+--- Run the hook chain and collect the bibliographies it reports, with origins
 --- Results are concatenated in chain order and left unresolved; the caller
 --- resolves and deduplicates them.
 --- @param ctx BibtexDiscoveryContext
---- @return string[] File names, in chain order
-function M.collect(ctx)
+--- @return BibtexDiscoveryEntry[] Reported bibliographies, in chain order
+function M.collect_detailed(ctx)
+  --- @type BibtexDiscoveryEntry[]
   local resources = {}
 
-  --- Record one reported name, applying the hook's extension rule
+  --- Record one reported bibliography, applying the hook's extension rule
   --- @param spec BibtexDiscoverySpec The hook that reported it
-  --- @param name string The file name reported
-  local function remember(spec, name)
-    resources[#resources + 1] = spec.extension == false and name or ensure_bib_extension(name)
+  --- @param report BibtexDiscoveryReport The bibliography reported
+  local function remember(spec, report)
+    local record = type(report) == 'table' and report or { name = report }
+    resources[#resources + 1] = {
+      name = spec.extension == false and record.name or ensure_bib_extension(record.name) --[[@as string]],
+      hook = spec.name,
+      line = record.line,
+      file = record.file,
+    }
   end
 
   for _, spec in ipairs(M.chain(ctx.filetype, ctx.opts)) do
@@ -1047,16 +1081,29 @@ function M.collect(ctx)
             ctx.filetype or 'unset'
           )
         )
-      elseif type(result) == 'string' then
+      elseif type(result) == 'string' or (type(result) == 'table' and type(result.name) == 'string') then
         remember(spec, result)
       elseif result then
-        for _, name in ipairs(result) do
-          remember(spec, name)
+        for _, report in ipairs(result) do
+          remember(spec, report)
         end
       end
     end
   end
   return resources
+end
+
+--- Run the hook chain and collect the file names it reports
+--- The names collect_detailed reports, in the same order; the origins are
+--- dropped, which is all a caller that only resolves paths needs.
+--- @param ctx BibtexDiscoveryContext
+--- @return string[] File names, in chain order
+function M.collect(ctx)
+  local names = {}
+  for _, entry in ipairs(M.collect_detailed(ctx)) do
+    names[#names + 1] = entry.name
+  end
+  return names
 end
 
 --- Internal helpers exposed for testing. Not part of the public API.
