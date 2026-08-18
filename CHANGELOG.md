@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.12.0](https://github.com/krissen/blink-cmp-bibtex/compare/v0.11.0...v0.12.0) (2026-08-18)
+
+
+### Features
+
+* **discovery:** collect hook name and position alongside discovered names ([ff60e68](https://github.com/krissen/blink-cmp-bibtex/commit/ff60e68770daa512820eedb75704cef6d8479144))
+* **discovery:** expose the project root to hooks ([093d37d](https://github.com/krissen/blink-cmp-bibtex/commit/093d37dd0e34a83f7b1b52497d8628535756d17a))
+* **discovery:** find GAP package bibliographies outside the buffer ([3103ca6](https://github.com/krissen/blink-cmp-bibtex/commit/3103ca6906febc77b777f72f1166ff5226d2ffdd))
+* **health:** list the bibliographies resolved for the current buffer ([9751d5d](https://github.com/krissen/blink-cmp-bibtex/commit/9751d5d66df3c6d666e894ff078a8d100e8c9804)), closes [#30](https://github.com/krissen/blink-cmp-bibtex/issues/30)
+* **scan:** expose bibliography sources with their origins ([14e417d](https://github.com/krissen/blink-cmp-bibtex/commit/14e417d537cb57e428c996bba589940b8bf7f601))
+
+
+### Bug Fixes
+
+* **scan:** anchor relative global_files entries the way the scanner does ([8b1adf8](https://github.com/krissen/blink-cmp-bibtex/commit/8b1adf80ab090caa2cb2ee121ca15e29e0de5e83))
+* **scan:** identify bibliographies by their real path ([0ada519](https://github.com/krissen/blink-cmp-bibtex/commit/0ada519ef8de8acb5e8def3abe492a20cca05383))
+* **source:** share the global-file check with the scanner ([6264816](https://github.com/krissen/blink-cmp-bibtex/commit/6264816ec6fc78f330bec7417ac3a53ddd5110f0))
+
+
 ## [0.11.0](https://github.com/krissen/blink-cmp-bibtex/compare/v0.10.0...v0.11.0) (2026-08-14)
 
 
