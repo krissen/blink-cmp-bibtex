@@ -381,9 +381,10 @@ the report itself.
 - A `bibliographies` section listing every path `scan.resolve_bib_sources`
   resolves for that buffer, annotated with its origins: global files first,
   then local ones, then the paths that are not there. How the last are worded
-  follows their origins — an option's path and a directory are warned about, a
-  path the buffer declared is warned about with the position of the
-  declaration, and one nobody declared (a GAP package's conventional name, a
+  follows their origins — an option's path is warned about by the option it was
+  configured in and a directory is warned about as one, a path the buffer
+  declared is warned about with the position of the declaration, and one nobody
+  declared (a GAP package's conventional name, a
   `local_bib.target` created on the first copy) is reported as not present yet
 - A warning when the buffer's filetype is not in `filetypes`, since the source
   is not offered there

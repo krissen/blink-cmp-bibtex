@@ -172,12 +172,14 @@ local function describe_absence(source, opts, buffer_dir, bufname, shown)
   end
 
   if found.option then
+    -- Named the way the buffer origins are: the sentence says where the path
+    -- was written, which is where it has to be corrected.
     return {
       level = 'warn',
       message = string.format(
-        'missing: %s (%s) — declared but the file does not exist',
+        'missing: %s — configured in %s but the file does not exist',
         shown,
-        describe_origins(source, buffer_dir, bufname)
+        describe_origin(found.option, buffer_dir, bufname)
       ),
       advice = { 'fix the path or remove it from the option' },
     }
@@ -189,9 +191,9 @@ local function describe_absence(source, opts, buffer_dir, bufname, shown)
       message = position
           and string.format('missing: %s — declared in %s but the file does not exist', shown, position)
         or string.format(
-          'missing: %s (%s) — declared but the file does not exist',
+          'missing: %s — declared by %s but the file does not exist',
           shown,
-          describe_origins(source, buffer_dir, bufname)
+          describe_origin(found.declared, buffer_dir, bufname)
         ),
       advice = { 'create the file, or correct the declaration' },
     }
