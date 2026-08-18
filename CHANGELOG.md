@@ -8,32 +8,16 @@
 * **discovery:** collect hook name and position alongside discovered names ([ff60e68](https://github.com/krissen/blink-cmp-bibtex/commit/ff60e68770daa512820eedb75704cef6d8479144))
 * **discovery:** expose the project root to hooks ([093d37d](https://github.com/krissen/blink-cmp-bibtex/commit/093d37dd0e34a83f7b1b52497d8628535756d17a))
 * **discovery:** find GAP package bibliographies outside the buffer ([3103ca6](https://github.com/krissen/blink-cmp-bibtex/commit/3103ca6906febc77b777f72f1166ff5226d2ffdd))
-* **discovery:** name the manual a GAP package bibliography was declared in ([6165d31](https://github.com/krissen/blink-cmp-bibtex/commit/6165d3147e910cd451279372d256598596512c5c)), closes [#30](https://github.com/krissen/blink-cmp-bibtex/issues/30)
 * **health:** list the bibliographies resolved for the current buffer ([9751d5d](https://github.com/krissen/blink-cmp-bibtex/commit/9751d5d66df3c6d666e894ff078a8d100e8c9804)), closes [#30](https://github.com/krissen/blink-cmp-bibtex/issues/30)
 * **scan:** expose bibliography sources with their origins ([14e417d](https://github.com/krissen/blink-cmp-bibtex/commit/14e417d537cb57e428c996bba589940b8bf7f601))
 
 
 ### Bug Fixes
 
-* **discovery:** defer to gapdoc only when the buffer declares a database ([97ac50c](https://github.com/krissen/blink-cmp-bibtex/commit/97ac50c49d7cccd06f5f5ed71f1a4f1f495f6a4d))
-* **discovery:** describe a malformed record by how it was returned ([67b2545](https://github.com/krissen/blink-cmp-bibtex/commit/67b25456691779490913522df7d58db4bc3400cd))
-* **discovery:** keep the shipped hooks returning file names ([7b2fcb0](https://github.com/krissen/blink-cmp-bibtex/commit/7b2fcb09aa1c74c22f481b8d316cf5913ad5b619))
-* **discovery:** rank the manual candidates before capping them ([0a9880a](https://github.com/krissen/blink-cmp-bibtex/commit/0a9880a20974da19286290f90c2ca23b624eb012))
-* **discovery:** validate the position a hook record carries ([5312a95](https://github.com/krissen/blink-cmp-bibtex/commit/5312a953d86ec3ec8a72fc95ca576a8ee694cfe8))
-* **health:** look a resolved bibliography up in the global set ([a0b30a7](https://github.com/krissen/blink-cmp-bibtex/commit/a0b30a7321d61998e6bc4e0fdd40d69e2a8bc731))
-* **health:** name the option a missing bibliography was configured in ([41d8685](https://github.com/krissen/blink-cmp-bibtex/commit/41d8685cac3f8afe2cb9c75ca0930450265135ea))
-* **health:** report on the buffer the health check was run from ([0e7ff7a](https://github.com/krissen/blink-cmp-bibtex/commit/0e7ff7a154be127eed80def458dd81ba227f38b3))
-* **health:** resolve the path options once per report ([f5e4ecb](https://github.com/krissen/blink-cmp-bibtex/commit/f5e4ecb173193ac5aaf2549d35bc5f9cbc3ac5f8))
-* **health:** word a missing bibliography by where it came from ([0b6078d](https://github.com/krissen/blink-cmp-bibtex/commit/0b6078db9b8addd13edf02e390899d665b4f35c1))
 * **scan:** anchor relative global_files entries the way the scanner does ([8b1adf8](https://github.com/krissen/blink-cmp-bibtex/commit/8b1adf80ab090caa2cb2ee121ca15e29e0de5e83))
 * **scan:** identify bibliographies by their real path ([0ada519](https://github.com/krissen/blink-cmp-bibtex/commit/0ada519ef8de8acb5e8def3abe492a20cca05383))
 * **source:** share the global-file check with the scanner ([6264816](https://github.com/krissen/blink-cmp-bibtex/commit/6264816ec6fc78f330bec7417ac3a53ddd5110f0))
 
-
-### Performance Improvements
-
-* **discovery:** keep the package cache across buffers ([58767b1](https://github.com/krissen/blink-cmp-bibtex/commit/58767b126493352f13efe19c22ca62fbefe7370c))
-* **discovery:** validate the package cache on a coarser trigger ([c1370c1](https://github.com/krissen/blink-cmp-bibtex/commit/c1370c18c42960963b079fc45cf0678b927aa2e4))
 
 ## [0.11.0](https://github.com/krissen/blink-cmp-bibtex/compare/v0.10.0...v0.11.0) (2026-08-14)
 
