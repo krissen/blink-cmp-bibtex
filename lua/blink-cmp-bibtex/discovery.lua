@@ -1097,9 +1097,36 @@ function M.chain(filetype, opts)
   return specs
 end
 
+--- Describe why a reported record is unusable, if it is
+--- The position a record carries is read straight into the health report, so a
+--- line that is not a line, or a file that is not a path, is caught here rather
+--- than where it is rendered.
+--- @param record table The record a hook reported
+--- @return string|nil A reason, or nil when the record is well formed
+local function malformed_record_reason(record)
+  if type(record.name) ~= 'string' then
+    return string.format('returned a list holding a record naming %s instead of a file name', type(record.name))
+  end
+  if record.line ~= nil and (type(record.line) ~= 'number' or record.line % 1 ~= 0) then
+    return string.format(
+      "returned a record for '%s' whose line is %s instead of an integer",
+      record.name,
+      type(record.line) == 'number' and tostring(record.line) or type(record.line)
+    )
+  end
+  if record.file ~= nil and type(record.file) ~= 'string' then
+    return string.format(
+      "returned a record for '%s' whose declaring file is %s instead of a path",
+      record.name,
+      type(record.file)
+    )
+  end
+  return nil
+end
+
 --- Describe why a hook result is unusable, if it is
 --- A reported bibliography is either a bare file name or a record naming it,
---- so a table entry is well formed exactly when its name is a string.
+--- so a table entry is well formed exactly when it is a well formed record.
 --- @param result any The value a hook returned
 --- @return string|nil A reason, or nil when the result is well formed
 local function malformed_result_reason(result)
@@ -1109,13 +1136,14 @@ local function malformed_result_reason(result)
   if type(result) ~= 'table' then
     return string.format('returned %s instead of a list of file names', type(result))
   end
-  if type(result.name) == 'string' then
-    return nil
+  if result.name ~= nil then
+    return malformed_record_reason(result)
   end
   for _, entry in ipairs(result) do
     if type(entry) == 'table' then
-      if type(entry.name) ~= 'string' then
-        return string.format('returned a list holding a record naming %s instead of a file name', type(entry.name))
+      local reason = malformed_record_reason(entry)
+      if reason then
+        return reason
       end
     elseif type(entry) ~= 'string' then
       return string.format('returned a list holding %s instead of a file name', type(entry))

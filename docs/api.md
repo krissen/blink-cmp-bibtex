@@ -558,7 +558,9 @@ its own; the shipped buffer-reading hooks return names, and are read here in an
 internal record-reporting form instead, so their positions are known without
 changing what they return to their own callers. Each hook is called inside
 `pcall`; one that raises, or returns something other than a name or a list of
-names and records, is reported once and skipped for that filetype.
+names and records, is reported once and skipped for that filetype. A record is
+checked as it is read: `name` must be a string, `line` an integer when present,
+and `file` a path when present, since the report renders all three.
 Names are returned unresolved — `resolve_bib_paths` resolves and deduplicates
 them.
 

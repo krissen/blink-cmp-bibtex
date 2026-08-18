@@ -500,6 +500,56 @@ describe('discovery.collect_detailed', function()
     end)
   end)
 
+  it('skips a hook whose record carries a line that is not one', function()
+    local opts = {
+      discovery = {
+        ['*'] = {
+          bogus = function()
+            return { { name = 'refs.bib', line = 'l. 3' } }
+          end,
+        },
+      },
+    }
+    with_notify_capture(function(messages)
+      assert.are.same({}, discovery.collect_detailed(ctx(opts)))
+      assert.are.equal(1, #messages)
+      assert.is_truthy(messages[1]:find('whose line is string instead of an integer', 1, true))
+    end)
+  end)
+
+  it('skips a hook whose record carries a declaring file that is not a path', function()
+    local opts = {
+      discovery = {
+        ['*'] = {
+          bogus = function()
+            return { name = 'refs.bib', file = {} }
+          end,
+        },
+      },
+    }
+    with_notify_capture(function(messages)
+      assert.are.same({}, discovery.collect_detailed(ctx(opts)))
+      assert.are.equal(1, #messages)
+      assert.is_truthy(messages[1]:find('whose declaring file is table instead of a path', 1, true))
+    end)
+  end)
+
+  it('skips a hook whose record carries a fractional line', function()
+    local opts = {
+      discovery = {
+        ['*'] = {
+          bogus = function()
+            return { { name = 'refs.bib', line = 3.5 } }
+          end,
+        },
+      },
+    }
+    with_notify_capture(function(messages)
+      assert.are.same({}, discovery.collect_detailed(ctx(opts)))
+      assert.is_truthy(messages[1]:find('whose line is 3.5 instead of an integer', 1, true))
+    end)
+  end)
+
   it('reports the same names as collect, in the same order', function()
     local opts = {
       discovery = {
