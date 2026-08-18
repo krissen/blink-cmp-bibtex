@@ -3,6 +3,7 @@
 local assert = require('luassert')
 local config = require('blink-cmp-bibtex.config')
 local health = require('blink-cmp-bibtex.health')
+local helpers = require('tests.helpers')
 
 --- Run health.check() with the reporters replaced by recorders.
 --- @return table { start: string[], ok: string[], warn: string[], info: string[] }
@@ -40,8 +41,37 @@ local function find(messages, fragment)
 end
 
 describe('health.check', function()
+  local previous_buf
+  local scratch_buffers
+
+  --- Make a scratch buffer current, remembering it for cleanup.
+  --- @param opts table Passed to helpers.make_buf
+  --- @return number bufnr
+  local function use_buffer(opts)
+    local bufnr = helpers.make_buf(opts)
+    scratch_buffers[#scratch_buffers + 1] = bufnr
+    vim.api.nvim_set_current_buf(bufnr)
+    return bufnr
+  end
+
+  before_each(function()
+    previous_buf = vim.api.nvim_get_current_buf()
+    scratch_buffers = {}
+    -- The report describes the current buffer, so every test starts from a
+    -- buffer of a filetype the source is offered in.
+    use_buffer({ lines = {}, filetype = 'tex' })
+  end)
+
   after_each(function()
     config.setup(nil)
+    if vim.api.nvim_buf_is_valid(previous_buf) then
+      vim.api.nvim_set_current_buf(previous_buf)
+    end
+    for _, bufnr in ipairs(scratch_buffers) do
+      if vim.api.nvim_buf_is_valid(bufnr) then
+        vim.api.nvim_buf_delete(bufnr, { force = true })
+      end
+    end
   end)
 
   it('reports a clean default configuration', function()
@@ -171,5 +201,123 @@ describe('health.check', function()
   it('warns about matchers for a filetype outside the filetypes list', function()
     config.setup({ matchers = { cobol = { latex = true } } })
     assert.is_truthy(find(run_check().warn, "matchers for 'cobol'"))
+  end)
+end)
+
+describe('health.check bibliographies', function()
+  local previous_buf
+  local scratch_buffers
+
+  --- Make a scratch buffer current, remembering it for cleanup.
+  --- @param opts table Passed to helpers.make_buf
+  --- @return number bufnr
+  local function use_buffer(opts)
+    local bufnr = helpers.make_buf(opts)
+    scratch_buffers[#scratch_buffers + 1] = bufnr
+    vim.api.nvim_set_current_buf(bufnr)
+    return bufnr
+  end
+
+  before_each(function()
+    previous_buf = vim.api.nvim_get_current_buf()
+    scratch_buffers = {}
+  end)
+
+  after_each(function()
+    config.setup(nil)
+    if vim.api.nvim_buf_is_valid(previous_buf) then
+      vim.api.nvim_set_current_buf(previous_buf)
+    end
+    for _, bufnr in ipairs(scratch_buffers) do
+      if vim.api.nvim_buf_is_valid(bufnr) then
+        vim.api.nvim_buf_delete(bufnr, { force = true })
+      end
+    end
+  end)
+
+  it('lists a bibliography discovered from the buffer with its hook and line', function()
+    helpers.with_tmpdir(function(dir)
+      helpers.write_file(vim.fs.joinpath(dir, 'refs.bib'), '@article{a,\n  title = {A}\n}\n')
+      use_buffer({
+        lines = { '\\addbibresource{refs.bib}' },
+        name = vim.fs.joinpath(dir, 'main.tex'),
+        filetype = 'tex',
+      })
+      config.setup(nil)
+      local calls = run_check()
+      assert.is_truthy(find(calls.start, 'blink-cmp-bibtex: bibliographies'))
+      assert.is_truthy(find(calls.info, 'current buffer: '))
+      assert.is_truthy(find(calls.ok, 'refs.bib (buffer discovery: latex, main.tex:1)'))
+      assert.is_truthy(find(calls.info, 'provider-level opts'))
+    end)
+  end)
+
+  it('lists a global bibliography before the local ones', function()
+    helpers.with_tmpdir(function(dir)
+      helpers.write_file(vim.fs.joinpath(dir, 'refs.bib'), '')
+      helpers.write_file(vim.fs.joinpath(dir, 'global.bib'), '')
+      use_buffer({
+        lines = { '\\addbibresource{refs.bib}' },
+        name = vim.fs.joinpath(dir, 'main.tex'),
+        filetype = 'tex',
+      })
+      config.setup({ global_files = { vim.fs.joinpath(dir, 'global.bib') } })
+      local calls = run_check()
+      assert.is_truthy(find(calls.ok, 'global: '))
+      assert.is_truthy(find(calls.ok, 'global.bib (global_files)'))
+      local global_index, local_index
+      for index, message in ipairs(calls.ok) do
+        global_index = global_index or (message:find('global: ', 1, true) and index)
+        local_index = local_index or (message:find('local: ', 1, true) and index)
+      end
+      assert.is_true(global_index < local_index)
+    end)
+  end)
+
+  it('warns about a configured file that does not exist', function()
+    helpers.with_tmpdir(function(dir)
+      use_buffer({ lines = {}, filetype = 'tex' })
+      config.setup({ files = { vim.fs.joinpath(dir, 'nope.bib') } })
+      local message = assert(find(run_check().warn, 'missing: '))
+      assert.is_truthy(message:find('nope.bib (files)', 1, true))
+      assert.is_truthy(message:find('does not exist', 1, true))
+    end)
+  end)
+
+  it('warns about a configured path that is a directory', function()
+    helpers.with_tmpdir(function(dir)
+      use_buffer({ lines = {}, filetype = 'tex' })
+      config.setup({ files = { dir } })
+      assert.is_truthy(find(run_check().warn, 'is a directory'))
+    end)
+  end)
+
+  it('warns when the buffer filetype is not one the source is offered in', function()
+    use_buffer({ lines = {}, filetype = 'python' })
+    config.setup(nil)
+    local message = assert(find(run_check().warn, "filetype 'python' is not in filetypes"))
+    assert.is_truthy(message:find('the list below is what it would use', 1, true))
+  end)
+
+  it('reports that nothing resolves for a buffer without bibliographies', function()
+    use_buffer({ lines = {}, filetype = 'tex' })
+    config.setup(nil)
+    assert.is_truthy(find(run_check().info, 'no bibliographies resolve for this buffer'))
+  end)
+
+  it('reports on the alternate buffer when the report itself is current', function()
+    helpers.with_tmpdir(function(dir)
+      helpers.write_file(vim.fs.joinpath(dir, 'refs.bib'), '')
+      use_buffer({
+        lines = { '\\addbibresource{refs.bib}' },
+        name = vim.fs.joinpath(dir, 'main.tex'),
+        filetype = 'tex',
+      })
+      use_buffer({ lines = {}, filetype = 'checkhealth' })
+      config.setup(nil)
+      local calls = run_check()
+      assert.is_truthy(find(calls.info, 'main.tex'))
+      assert.is_truthy(find(calls.ok, 'refs.bib (buffer discovery: latex, main.tex:1)'))
+    end)
   end)
 end)
