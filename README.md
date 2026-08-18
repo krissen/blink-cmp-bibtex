@@ -435,9 +435,11 @@ Custom styles can be added by extending `require("blink-cmp-bibtex").setup()` wi
   respected.
 - Typst `#bibliography()` declarations are detected, including those in imported files via `#import` statements.
 - GAPDoc `<Bibliography Databases="manual, gapdoc"/>` declarations are scanned in
-  XML documents. Names are comma-separated and carry no `.bib` extension, which
-  is appended automatically; `.xml` (BibXMLext) databases are skipped, as are
-  declarations inside XML comments, CDATA sections and processing instructions.
+  XML documents. Names are comma-separated and usually carry no `.bib`
+  extension, which is then appended automatically; a name that already ends in
+  `.bib` is kept as written, matching GAPDoc's own lookup order. `.xml`
+  (BibXMLext) databases are skipped, as are declarations inside XML comments,
+  CDATA sections and processing instructions.
 - GAP packages are looked up outside the buffer: when a `gap`, `xml` or
   `autodoc` buffer declares no bibliography of its own, the package around it is
   located through its `PackageInfo.g`, and its `doc/` directory is read for the

@@ -49,9 +49,27 @@ describe('scan.find_bib_files_from_buffer built-in order', function()
     vim.api.nvim_buf_delete(bufnr, { force = true })
   end)
 
-  it('leaves a dotted GAPDoc name alone, which already carries its extension', function()
+  it('appends .bib to a dotted GAPDoc name that does not carry it', function()
     local bufnr = helpers.make_buf({ lines = { '<Bibliography Databases="refs.v2"/>' }, filetype = 'xml' })
     assert.are.same({ 'refs.v2.bib' }, scan.find_bib_files_from_buffer(bufnr))
+    vim.api.nvim_buf_delete(bufnr, { force = true })
+  end)
+
+  it('keeps a GAPDoc name that already ends in .bib', function()
+    local bufnr = helpers.make_buf({ lines = { '<Bibliography Databases="refs.bib"/>' }, filetype = 'xml' })
+    assert.are.same({ 'refs.bib' }, scan.find_bib_files_from_buffer(bufnr))
+    vim.api.nvim_buf_delete(bufnr, { force = true })
+  end)
+
+  it('keeps an upper-case GAPDoc .bib name as written', function()
+    local bufnr = helpers.make_buf({ lines = { '<Bibliography Databases="REFS.BIB"/>' }, filetype = 'xml' })
+    assert.are.same({ 'REFS.BIB' }, scan.find_bib_files_from_buffer(bufnr))
+    vim.api.nvim_buf_delete(bufnr, { force = true })
+  end)
+
+  it('appends .bib only where it is missing in a mixed GAPDoc list', function()
+    local bufnr = helpers.make_buf({ lines = { '<Bibliography Databases="cryst.bib, other"/>' }, filetype = 'xml' })
+    assert.are.same({ 'cryst.bib', 'other.bib' }, scan.find_bib_files_from_buffer(bufnr))
     vim.api.nvim_buf_delete(bufnr, { force = true })
   end)
 
@@ -347,10 +365,18 @@ describe('scan.find_bib_files_from_buffer with GAPDoc declarations', function()
     assert.are.same({ 'references.v2.bib' }, discover({ '<Bibliography Databases="references.v2"/>' }))
   end)
 
-  it('appends .bib even to a name that already spells it out', function()
-    -- Characterizes the rule rather than second-guessing it: GAPDoc itself
-    -- appends .bib to whatever is written, so 'refs.bib' names refs.bib.bib.
-    assert.are.same({ 'refs.bib.bib' }, discover({ '<Bibliography Databases="refs.bib"/>' }))
+  it('keeps a name that already spells out .bib', function()
+    -- GAPDoc's ParseBibFiles tries the name as written before it tries the name
+    -- with .bib appended, so 'refs.bib' names refs.bib and not refs.bib.bib.
+    assert.are.same({ 'refs.bib' }, discover({ '<Bibliography Databases="refs.bib"/>' }))
+  end)
+
+  it('keeps an upper-case .bib name as written', function()
+    assert.are.same({ 'REFS.BIB' }, discover({ '<Bibliography Databases="REFS.BIB"/>' }))
+  end)
+
+  it('appends .bib only where it is missing in a list', function()
+    assert.are.same({ 'cryst.bib', 'other.bib' }, discover({ '<Bibliography Databases="cryst.bib, other"/>' }))
   end)
 
   describe('inactive regions', function()
