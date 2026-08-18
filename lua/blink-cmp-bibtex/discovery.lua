@@ -407,8 +407,9 @@ end
 --- The caller has already established that the document can hold one; this is
 --- the part that is worth the joins and the pattern work.
 --- @param lines string[] The document lines
---- @return string[] File names as written in the Databases attribute with
----   '.bib' appended; entries may carry a directory part and may contain dots
+--- @return string[] File names as written in the Databases attribute, with
+---   '.bib' appended to those that do not already end in it; entries may carry
+---   a directory part and may contain dots
 local function extract_gapdoc_databases(lines)
   -- Joined so that a declaration split across lines is still found.
   local text = strip_inactive_regions(table.concat(lines, '\n'))
@@ -431,10 +432,12 @@ local function extract_gapdoc_databases(lines)
     databases = databases and decode_xml_references(databases)
     for _, name in ipairs(databases and split_resources(databases) or {}) do
       -- BibXMLext databases carry their full .xml name and are skipped; every
-      -- other name is a BibTeX database, which the DTD defines as being
-      -- written without its .bib extension, so it is always appended.
+      -- other name is a BibTeX database. GAPDoc's ParseBibFiles tries the name
+      -- as written first and only then the name with '.bib' appended, so a
+      -- name that already ends in '.bib' is kept as written and only an
+      -- extensionless one has the extension appended.
       if not name:lower():match('%.xml$') then
-        resources[#resources + 1] = name .. '.bib'
+        resources[#resources + 1] = name:lower():match('%.bib$') and name or name .. '.bib'
       end
     end
     cursor = start_pos + #BIBLIOGRAPHY_TAG
@@ -457,8 +460,9 @@ local function has_bibliography_marker(lines)
 end
 
 --- @param lines string[] Buffer lines to search
---- @return string[] File names as written in the Databases attribute with '.bib'
----   appended; entries may carry a directory part and may contain dots
+--- @return string[] File names as written in the Databases attribute, with
+---   '.bib' appended to those that do not already end in it; entries may carry
+---   a directory part and may contain dots
 local function find_gapdoc_bibliography(lines)
   if not has_bibliography_marker(lines) then
     return {}
