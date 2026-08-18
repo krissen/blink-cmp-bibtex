@@ -39,10 +39,10 @@ Eleven modules under `lua/blink-cmp-bibtex/`:
 4. **cache.lua** - Mtime-based caching of parsed entries
 5. **matchers.lua** - Citation matchers (`latex`, `pandoc`, `typst`, `gapdoc`), the shipped per-filetype dispatch (`M.defaults`, which config.lua copies), normalization of user-configured matchers, priority ordering and dispatch
 6. **local_bib.lua** - Local bibliography management (copy entries from global to project-local files)
-7. **health.lua** - `:checkhealth blink-cmp-bibtex`, reports the resolved config and both the matcher and discovery chains
-8. **discovery.lua** - Buffer bibliography discovery (`latex`, `yaml`, `typst`, `gapdoc` hooks), the shipped dispatch (`M.defaults`, which config.lua copies), normalization of user-configured hooks and chain execution
+7. **health.lua** - `:checkhealth blink-cmp-bibtex`, reports the resolved config, both the matcher and discovery chains, and the bibliographies the current buffer resolves with their origins
+8. **discovery.lua** - Buffer bibliography discovery (`latex`, `yaml`, `typst`, `gapdoc` hooks, plus `gap_package`, which reads the GAP package around the buffer), the shipped dispatch (`M.defaults`, which config.lua copies), normalization of user-configured hooks and chain execution
 9. **registry.lua** - Shared bookkeeping for both extension points: warn-once, error rendering and per-filetype failure tracking
-10. **path.lua** - Path helpers (`joinpath`, `normalize`, `is_absolute`) shared by scan.lua and discovery.lua
+10. **path.lua** - Path helpers (`joinpath`, `normalize`, `is_absolute`, `find_root`) shared by scan.lua and discovery.lua
 11. **init.lua** - blink.cmp source implementation (`Source:enabled`, `Source:get_trigger_characters`, `Source:get_completions`, `Source:resolve`, `Source:execute`)
 
 **Data flow**: Buffer → discovery.lua (hooks report declared files) → scan.lua (resolve and deduplicate paths) → cache.lua (mtime check) → parser.lua (parse if needed) → matchers.lua (citation prefix at cursor) → init.lua (format & filter) → blink.cmp

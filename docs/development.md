@@ -6,7 +6,7 @@ This guide provides technical details for developers working on blink-cmp-bibtex
 
 ### Module Organization
 
-The codebase is organized into eight modules:
+The codebase is organized into eleven modules:
 
 1. **config.lua**: Configuration management
    - Stores default settings
@@ -37,12 +37,25 @@ The codebase is organized into eight modules:
    - Resolves the project-local target file
    - Copies entries from global files into it
 
-7. **health.lua**: Health check
+7. **discovery.lua**: Buffer bibliography discovery
+   - Ships the `latex`, `yaml`, `typst` and `gapdoc` hooks, which read the buffer
+   - Ships `gap_package`, which reads the GAP package around the buffer instead
+   - Normalizes configured hooks into specs and orders them by priority
+
+8. **registry.lua**: Shared extension bookkeeping
+   - Warns once per matcher or hook that cannot be used
+   - Renders errors and tracks which extension failed for which filetype
+
+9. **path.lua**: Path helpers
+   - Joins, normalizes and classifies paths for scan.lua and discovery.lua
+   - Finds the project root from the configured root markers
+
+10. **health.lua**: Health check
    - Backs `:checkhealth blink-cmp-bibtex`
    - Reports the resolved configuration and the matcher chain per filetype
    - Lists the bibliographies the current buffer resolves, with their origins
 
-8. **init.lua**: blink.cmp source
+11. **init.lua**: blink.cmp source
    - Implements blink.cmp source interface
    - Delegates citation detection to matchers.lua
    - Generates completion items with previews
