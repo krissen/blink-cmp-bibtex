@@ -116,6 +116,9 @@ Before submitting changes:
 -- Inspect resolved bib paths
 :lua vim.print(require('blink-cmp-bibtex.scan').resolve_bib_paths(0, require('blink-cmp-bibtex.config').get()))
 
+-- Inspect the same paths with the option or declaration each came from
+:lua vim.print(require('blink-cmp-bibtex.scan').resolve_bib_sources(0, require('blink-cmp-bibtex.config').get()))
+
 -- Inspect parsed entries from a file
 :lua vim.print(require('blink-cmp-bibtex.parser').parse_file('references.bib'))
 

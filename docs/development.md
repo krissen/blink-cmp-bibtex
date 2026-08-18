@@ -40,6 +40,7 @@ The codebase is organized into eight modules:
 7. **health.lua**: Health check
    - Backs `:checkhealth blink-cmp-bibtex`
    - Reports the resolved configuration and the matcher chain per filetype
+   - Lists the bibliographies the current buffer resolves, with their origins
 
 8. **init.lua**: blink.cmp source
    - Implements blink.cmp source interface
@@ -270,6 +271,8 @@ bug reports. Then check:
 - [ ] Completion appears in a `.typ` buffer (`@`, `#cite(<`)
 - [ ] Cache invalidation: edit a `.bib` file and complete again
 - [ ] `:checkhealth blink-cmp-bibtex` reports the expected matcher chains
+- [ ] `:checkhealth blink-cmp-bibtex` lists the expected bibliographies, with
+      the option or declaration each came from
 - [ ] No Lua errors in `:messages`
 
 ## Performance Considerations
@@ -428,6 +431,11 @@ Three things to keep in mind:
    buffer directory and project root and deduplicates the result. Set
    `extension = false` in the spec if your hook returns finished file names
    rather than the extensionless form.
+4. **Say where you found it, if you can.** A hook may report
+   `{ name = ..., line = ..., file = ... }` records instead of bare names;
+   `line` is the line in the buffer, and `file` the declaring file when the
+   declaration is not in the buffer itself. `:checkhealth blink-cmp-bibtex`
+   shows both, which is what makes a surprising bibliography traceable.
 
 Users register hooks the same way through the `discovery` option, so anything
 you can do here they can do without patching the plugin. Update the README's
@@ -453,6 +461,12 @@ end
 
 ```lua
 :lua vim.print(require('blink-cmp-bibtex.scan').resolve_bib_paths(0, require('blink-cmp-bibtex.config').get()))
+```
+
+With the origin of each file, as `:checkhealth blink-cmp-bibtex` reports it:
+
+```lua
+:lua vim.print(require('blink-cmp-bibtex.scan').resolve_bib_sources(0, require('blink-cmp-bibtex.config').get()))
 ```
 
 ### Check parsed entries

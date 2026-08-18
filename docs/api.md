@@ -371,9 +371,19 @@ Health check registered for `:checkhealth blink-cmp-bibtex`.
 
 Report the resolved configuration and flag matcher setups that can never fire.
 
+The report describes the buffer the check was run from. `:checkhealth` renders
+in a buffer of its own, so the alternate buffer is used when the current one is
+the report itself.
+
 **Reports:**
 - `filetypes`, `preview_style`, `max_entries` and the number of configured
-  `files` and `global_files`
+  `files`, `global_files`, `search_paths` and `root_markers`
+- A `bibliographies` section listing every path `scan.resolve_bib_sources`
+  resolves for that buffer, annotated with its origins: global files first,
+  then local ones, then the paths that are missing or are directories, which
+  are warned about
+- A warning when the buffer's filetype is not in `filetypes`, since the source
+  is not offered there
 - The matcher chain for `'*'` and for each configured filetype, with priorities
 - A warning when a filetype has matchers configured but is missing from
   `filetypes`; matchers shipped with the plugin that are dormant for this reason
@@ -528,13 +538,22 @@ accepts the same shorthands, where absent means an empty chain.
 **Returns:**
 - `BibtexDiscoverySpec[]`
 
-### `discovery.collect(ctx)`
+### `discovery.collect_detailed(ctx)`
 
-Run the chain and concatenate what the hooks report, in chain order. Each hook
-is called inside `pcall`; one that raises, or returns something other than a
-string or a list of strings, is reported once and skipped for that filetype.
+Run the chain and concatenate what the hooks report, in chain order, keeping
+the hook that reported each name and the position it reported. Each hook is
+called inside `pcall`; one that raises, or returns something other than a name
+or a list of names and records, is reported once and skipped for that filetype.
 Names are returned unresolved — `resolve_bib_paths` resolves and deduplicates
 them.
+
+**Returns:**
+- `BibtexDiscoveryEntry[]`
+
+### `discovery.collect(ctx)`
+
+The names `collect_detailed` reports, in the same order. Callers that only
+resolve paths need nothing else.
 
 **Returns:**
 - `string[]`
@@ -551,7 +570,19 @@ them.
 --- @field root string|nil     -- the project root, from root_markers
 --- @field opts table
 
---- @alias BibtexDiscoveryFn fun(ctx: BibtexDiscoveryContext): string[]|string|nil
+--- @class BibtexDiscoveryResult  -- what a hook may report instead of a name
+--- @field name string
+--- @field line integer|nil  -- the line the declaration was found on, 1-based
+--- @field file string|nil   -- the declaring file, when it is not the buffer
+
+--- @class BibtexDiscoveryEntry   -- what collect_detailed returns
+--- @field name string            -- with the hook's extension rule applied
+--- @field hook string            -- the hook that reported it
+--- @field line integer|nil
+--- @field file string|nil
+
+--- @alias BibtexDiscoveryReport string|BibtexDiscoveryResult
+--- @alias BibtexDiscoveryFn fun(ctx: BibtexDiscoveryContext): BibtexDiscoveryReport[]|BibtexDiscoveryReport|nil
 
 --- @class BibtexDiscoverySpec
 --- @field name string
@@ -591,6 +622,15 @@ found. An empty or unnamed buffer starts from the working directory.
 
 BibTeX file discovery and path resolution.
 
+### `scan.find_bib_files_from_buffer_detailed(bufnr, opts)`
+
+Find BibTeX files referenced in a buffer, keeping the hook that reported each
+name and the position it reported. Same guards and same order as
+`find_bib_files_from_buffer`, which returns the names of these entries.
+
+**Returns:**
+- `BibtexDiscoveryEntry[]`
+
 ### `scan.find_bib_files_from_buffer(bufnr, opts)`
 
 Find BibTeX files referenced in a buffer by running the discovery hooks
@@ -614,9 +654,42 @@ local scan = require('blink-cmp-bibtex.scan')
 local files = scan.find_bib_files_from_buffer(0)  -- Current buffer
 ```
 
+### `scan.resolve_bib_sources(bufnr, opts)`
+
+Resolve every bibliography a buffer asks for, with where each came from. Same
+order and deduplication as `resolve_bib_paths` — buffer discovery, `files`,
+`global_files`, the expanded `search_paths`, then `local_bib.target` — except
+that nothing is dropped: a path reported twice keeps an origin per report, and
+a path with nothing behind it is returned with `exists = false` rather than
+skipped. Each path is stat'ed once.
+
+**Parameters:**
+- `bufnr` (number): Buffer number
+- `opts` (table|nil): Configuration options
+
+**Returns:**
+- `BibtexBibSource[]`: The bibliographies, in resolution order
+
+```lua
+--- @class BibtexBibSource
+--- @field path string     -- normalized absolute path
+--- @field exists boolean
+--- @field is_dir boolean
+--- @field origins BibtexBibOrigin[]  -- everything that reported this path
+
+--- @class BibtexBibOrigin
+--- @field kind 'buffer'|'files'|'global_files'|'search_paths'|'local_bib'
+--- @field detail string   -- the raw option value, glob pattern or declared name
+--- @field hook string|nil -- the discovery hook, for a buffer origin
+--- @field file string|nil -- the declaring file, when it is not the buffer
+--- @field line integer|nil
+```
+
 ### `scan.resolve_bib_paths(bufnr, opts)`
 
-Resolve all BibTeX file paths for a buffer. Combines buffer-discovered files, manual files, and search paths.
+Resolve all BibTeX file paths for a buffer. Combines buffer-discovered files,
+manual files, and search paths; the sources `resolve_bib_sources` found that
+exist and are not directories.
 
 **Parameters:**
 - `bufnr` (number): Buffer number
@@ -624,6 +697,24 @@ Resolve all BibTeX file paths for a buffer. Combines buffer-discovered files, ma
 
 **Returns:**
 - `string[]`: List of resolved absolute file paths
+
+### `scan.global_set(opts, bufnr)`
+
+Build the set of normalized global bibliography paths. `global_files` takes the
+same forms as any other path option — a list, a bare string, or a function —
+and is resolved and normalized the way the scanner resolves it. Callers that
+classify several paths build the set once and reuse it.
+
+**Returns:**
+- `table<string, boolean>`
+
+### `scan.is_global_path(path, set)`
+
+Whether a path is one of the configured global bibliographies, against a set
+built by `global_set`.
+
+**Returns:**
+- `boolean`
 
 ## Module: blink-cmp-bibtex.local_bib
 

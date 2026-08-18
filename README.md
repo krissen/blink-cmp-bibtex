@@ -448,6 +448,9 @@ Custom styles can be added by extending `require("blink-cmp-bibtex").setup()` wi
 - Every one of these is a discovery hook, and the set is configurable: see
   [Custom bib discovery](#custom-bib-discovery) to add a syntax, reorder the
   hooks, or disable one per filetype.
+- A hook may report `{ name = ..., line = ..., file = ... }` records instead of
+  bare file names, which is what lets `:checkhealth blink-cmp-bibtex` show
+  where a bibliography was declared.
 - `opts.search_paths` accepts either file paths or glob patterns relative to the
   detected project root (based on `opts.root_markers`). These are treated as
   **local** sources.
@@ -637,6 +640,33 @@ matchers run. A filetype that has matchers but is missing from `filetypes` is
 warned about, since those matchers can never fire — except for the ones shipped
 dormant with the plugin (`gap`, `xml`, `autodoc`), which are reported as
 information.
+
+The `bibliographies` section answers which files the completion source will
+actually read in the buffer you ran the check from, and how each of them was
+found. Global files (those listed in `global_files`) come first, then the local
+ones, then anything that was declared but cannot be read. Every path is
+annotated with its origin: the option that configured it, the glob pattern it
+was expanded from, or the discovery hook, file and line that declared it. A
+file declared twice keeps both annotations, joined with `; also`.
+
+```
+blink-cmp-bibtex: bibliographies ~
+- current buffer: ~/thesis/main.tex (filetype 'tex')
+- OK global: ~/library/master.bib (global_files)
+- OK local: ~/thesis/bib/refs.bib (buffer discovery: latex, main.tex:3; also search_paths: bib/*.bib)
+- OK local: ~/thesis/chapters/intro.bib (buffer discovery: typst, chapters/intro.typ:3)
+- OK local: ~/thesis/local.bib (local_bib.target)
+- WARNING missing: ~/thesis/nope.bib (files) — declared but the file does not exist
+  - ADVICE: fix the path or remove it from the option
+- provider-level opts (sources.providers.bibtex.opts) are not visible to this report
+```
+
+A path that resolves to a directory is warned about the same way. If the buffer
+has a filetype that is not in `filetypes`, the section says so — the source is
+not offered there, and the list below the warning is what it would use if it
+were. The report reads the options from `setup()`; anything passed as
+`sources.providers.bibtex.opts` in the blink.cmp configuration is merged in by
+blink.cmp itself and is not visible to it.
 
 ## Documentation
 
