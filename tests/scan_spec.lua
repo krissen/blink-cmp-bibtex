@@ -593,3 +593,152 @@ describe('scan discovery hooks', function()
     )
   end)
 end)
+
+describe('scan.resolve_bib_sources', function()
+  local fixtures = helpers.fixture('')
+
+  --- Find the source for a path, failing the test when it is absent.
+  --- @param sources table[] The sources returned by resolve_bib_sources
+  --- @param path string The normalized absolute path
+  --- @return table
+  local function source_for(sources, path)
+    for _, source in ipairs(sources) do
+      if source.path == path then
+        return source
+      end
+    end
+    error('no source for ' .. path)
+  end
+
+  it('records the hook and line of a LaTeX declaration', function()
+    local sources = scan.resolve_bib_sources(open_fixture('project/main.tex', 'tex'), {})
+    local source = source_for(sources, helpers.fixture('project/bib/refs.bib'))
+    assert.is_true(source.exists)
+    assert.is_false(source.is_dir)
+    assert.are.same({ { kind = 'buffer', detail = 'bib/refs.bib', hook = 'latex', line = 3 } }, source.origins)
+  end)
+
+  it('records the declaring file of a Typst bibliography reached through an import', function()
+    local sources = scan.resolve_bib_sources(open_fixture('project/doc.typ', 'typst'), {})
+    local source = source_for(sources, helpers.fixture('project/shared.bib'))
+    local origin = source.origins[1]
+    assert.are.equal('buffer', origin.kind)
+    assert.are.equal('typst', origin.hook)
+    assert.are.equal(8, origin.line)
+    assert.are.equal(helpers.fixture('project/template.typ'), vim.fs.normalize(origin.file))
+  end)
+
+  it('records the hook but no position for a GAPDoc declaration', function()
+    local sources = scan.resolve_bib_sources(open_fixture('project/doc.xml', 'xml'), {})
+    local origin = source_for(sources, helpers.fixture('project/shared.bib')).origins[1]
+    assert.are.same({ kind = 'buffer', detail = 'shared.bib', hook = 'gapdoc' }, origin)
+  end)
+
+  describe('with a scratch buffer', function()
+    local bufnr
+
+    before_each(function()
+      bufnr = vim.api.nvim_create_buf(false, true)
+    end)
+
+    after_each(function()
+      vim.api.nvim_buf_delete(bufnr, { force = true })
+    end)
+
+    it('records the option a path was configured in', function()
+      local sources = scan.resolve_bib_sources(bufnr, {
+        files = { fixtures .. '/refs.bib' },
+        global_files = { fixtures .. '/accents.bib' },
+      })
+      assert.are.same({
+        { kind = 'files', detail = fixtures .. '/refs.bib' },
+      }, source_for(sources, helpers.fixture('refs.bib')).origins)
+      assert.are.same({
+        { kind = 'global_files', detail = fixtures .. '/accents.bib' },
+      }, source_for(sources, helpers.fixture('accents.bib')).origins)
+    end)
+
+    it('records the glob pattern a search path was expanded from', function()
+      local sources = scan.resolve_bib_sources(bufnr, {
+        search_paths = { 'tests/fixtures/*.bib' },
+        root_markers = { '.git' },
+      })
+      assert.are.same({
+        { kind = 'search_paths', detail = 'tests/fixtures/*.bib' },
+      }, source_for(sources, helpers.fixture('refs.bib')).origins)
+    end)
+
+    it('records the local bibliography target', function()
+      local sources = scan.resolve_bib_sources(bufnr, {
+        root_markers = { '.git' },
+        local_bib = { target = 'tests/fixtures/refs.bib' },
+      })
+      assert.are.same({
+        { kind = 'local_bib', detail = 'tests/fixtures/refs.bib' },
+      }, source_for(sources, helpers.fixture('refs.bib')).origins)
+    end)
+
+    it('keeps a path that does not exist', function()
+      local sources = scan.resolve_bib_sources(bufnr, { files = { fixtures .. '/nope.bib' } })
+      local source = source_for(sources, helpers.fixture('nope.bib'))
+      assert.is_false(source.exists)
+      assert.is_false(source.is_dir)
+    end)
+
+    it('keeps a directory, marked as one', function()
+      local sources = scan.resolve_bib_sources(bufnr, { files = { fixtures .. '/project' } })
+      local source = source_for(sources, helpers.fixture('project'))
+      assert.is_true(source.exists)
+      assert.is_true(source.is_dir)
+    end)
+
+    it('resolves the same paths resolve_bib_paths returns', function()
+      local opts = {
+        files = { fixtures .. '/refs.bib', fixtures .. '/nope.bib', fixtures .. '/project' },
+        global_files = { fixtures .. '/accents.bib' },
+      }
+      local expected = {}
+      for _, source in ipairs(scan.resolve_bib_sources(bufnr, opts)) do
+        if source.exists and not source.is_dir then
+          expected[#expected + 1] = source.path
+        end
+      end
+      assert.are.same(expected, scan.resolve_bib_paths(bufnr, opts))
+      assert.are.same({ helpers.fixture('refs.bib'), helpers.fixture('accents.bib') }, expected)
+    end)
+  end)
+
+  it('accumulates an origin per report of the same path', function()
+    local sources = scan.resolve_bib_sources(open_fixture('project/main.tex', 'tex'), {
+      files = { fixtures .. '/project/bib/refs.bib' },
+    })
+    local source = source_for(sources, helpers.fixture('project/bib/refs.bib'))
+    assert.are.same({
+      { kind = 'buffer', detail = 'bib/refs.bib', hook = 'latex', line = 3 },
+      { kind = 'files', detail = fixtures .. '/project/bib/refs.bib' },
+    }, source.origins)
+  end)
+end)
+
+describe('scan.global_set', function()
+  it('normalizes the configured global files into a set', function()
+    local set = scan.global_set({ global_files = helpers.fixture('refs.bib') })
+    assert.is_true(scan.is_global_path(helpers.fixture('refs.bib'), set))
+    assert.is_false(scan.is_global_path(helpers.fixture('accents.bib'), set))
+  end)
+
+  it('resolves a function-valued global_files option', function()
+    local set = scan.global_set({
+      global_files = function()
+        return { helpers.fixture('refs.bib') }
+      end,
+    })
+    assert.is_true(scan.is_global_path(helpers.fixture('refs.bib'), set))
+  end)
+
+  it('is empty when nothing is configured', function()
+    assert.are.same({}, scan.global_set({}))
+    assert.are.same({}, scan.global_set(nil))
+    assert.is_false(scan.is_global_path(helpers.fixture('refs.bib'), scan.global_set(nil)))
+  end)
+end)
