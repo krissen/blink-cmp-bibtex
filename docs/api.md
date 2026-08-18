@@ -471,6 +471,12 @@ The buffer-reading hooks shipped with the plugin, reading `\addbibresource{}` an
 Markdown YAML front matter, Typst `#bibliography()` (following `#import`), and
 GAPDoc `<Bibliography Databases="…"/>` respectively.
 
+These return plain file names, and will keep doing so: they are public, and a
+user hook that wraps one passes its result straight through. The health report
+still shows the line each declaration was found on — `collect_detailed`
+recognizes a shipped hook and reads it in its record-reporting form — but a
+wrapper around one is called as written and reports no position.
+
 **Parameters:**
 - `ctx` (BibtexDiscoveryContext): The buffer being scanned
 
@@ -546,9 +552,13 @@ accepts the same shorthands, where absent means an empty chain.
 ### `discovery.collect_detailed(ctx)`
 
 Run the chain and concatenate what the hooks report, in chain order, keeping
-the hook that reported each name and the position it reported. Each hook is
-called inside `pcall`; one that raises, or returns something other than a name
-or a list of names and records, is reported once and skipped for that filetype.
+the hook that reported each name and the position it reported. A hook may
+report a name or a `{ name = …, line = …, file = … }` record, in a list or on
+its own; the shipped buffer-reading hooks return names, and are read here in an
+internal record-reporting form instead, so their positions are known without
+changing what they return to their own callers. Each hook is called inside
+`pcall`; one that raises, or returns something other than a name or a list of
+names and records, is reported once and skipped for that filetype.
 Names are returned unresolved — `resolve_bib_paths` resolves and deduplicates
 them.
 

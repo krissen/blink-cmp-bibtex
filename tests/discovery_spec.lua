@@ -399,6 +399,20 @@ describe('discovery.collect', function()
   end)
 end)
 
+describe('discovery built-ins as public functions', function()
+  -- Shipped in 0.11.0 as returning file names, and wrapped by users, so the
+  -- return type is part of the contract.
+  it('return plain file names', function()
+    local context = ctx(
+      {},
+      { '---', 'bibliography: refs.bib', '---', '\\addbibresource{more.bib}', '#bibliography("t.bib")' }
+    )
+    assert.are.same({ 'more.bib' }, discovery.latex(context))
+    assert.are.same({ 'refs.bib' }, discovery.yaml(context))
+    assert.are.same({ '/tmp/t.bib' }, discovery.typst(context))
+  end)
+end)
+
 describe('discovery.collect_detailed', function()
   before_each(function()
     discovery.__test.reset()
@@ -513,6 +527,30 @@ describe('discovery.collect_detailed', function()
         return entry.name
       end, detailed)
     )
+  end)
+
+  it('gives a hook that wraps a built-in the names the built-in returns', function()
+    -- The built-in hooks are public and documented as returning file names;
+    -- wrapping one must keep working, at the cost of the positions.
+    local opts = {
+      discovery = {
+        ['*'] = {
+          wrapper = function(context)
+            local found = discovery.latex(context)
+            assert.are.same({ 'refs.bib' }, found)
+            return found
+          end,
+        },
+      },
+    }
+    local detailed = discovery.collect_detailed(ctx(opts, { '\\addbibresource{refs.bib}' }))
+    assert.are.same({ { name = 'refs.bib', hook = 'wrapper' } }, detailed)
+  end)
+
+  it('reports positions for a built-in configured under another name', function()
+    local opts = { discovery = { ['*'] = { mine = discovery.latex } } }
+    local detailed = discovery.collect_detailed(ctx(opts, { '', '\\addbibresource{refs.bib}' }))
+    assert.are.same({ { name = 'refs.bib', hook = 'mine', line = 2 } }, detailed)
   end)
 
   it('reports the line a LaTeX declaration was found on', function()

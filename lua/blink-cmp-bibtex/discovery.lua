@@ -790,10 +790,21 @@ local function ensure_bib_extension(path)
   return path .. '.bib'
 end
 
---- Find the bibliographies a LaTeX buffer declares
+--- The names of what a record-reporting hook reported
+--- @param results BibtexDiscoveryResult[] The records to read
+--- @return string[] The names, in the order they were reported
+local function names_of(results)
+  local names = {}
+  for _, result in ipairs(results) do
+    names[#names + 1] = result.name
+  end
+  return names
+end
+
+--- Find the bibliographies a LaTeX buffer declares, with their lines
 --- @param ctx BibtexDiscoveryContext
 --- @return BibtexDiscoveryResult[]
-function M.latex(ctx)
+local function latex_detailed(ctx)
   local resources = {}
   for idx, line in ipairs(ctx.lines) do
     for _, resource in ipairs(extract_command_paths(line)) do
@@ -803,18 +814,39 @@ function M.latex(ctx)
   return resources
 end
 
---- Find the bibliographies declared in Markdown YAML front matter
+--- Find the bibliographies declared in Markdown YAML front matter, with lines
 --- @param ctx BibtexDiscoveryContext
 --- @return BibtexDiscoveryResult[]
-function M.yaml(ctx)
+local function yaml_detailed(ctx)
   return find_yaml_bibliography(ctx.lines)
+end
+
+--- Find the bibliographies a Typst buffer declares, with lines and files
+--- @param ctx BibtexDiscoveryContext
+--- @return BibtexDiscoveryResult[]
+local function typst_detailed(ctx)
+  return find_typst_bibliography(ctx.lines, ctx.dir)
+end
+
+--- Find the bibliographies a LaTeX buffer declares
+--- @param ctx BibtexDiscoveryContext
+--- @return string[]
+function M.latex(ctx)
+  return names_of(latex_detailed(ctx))
+end
+
+--- Find the bibliographies declared in Markdown YAML front matter
+--- @param ctx BibtexDiscoveryContext
+--- @return string[]
+function M.yaml(ctx)
+  return names_of(yaml_detailed(ctx))
 end
 
 --- Find the bibliographies a Typst buffer declares, following its imports
 --- @param ctx BibtexDiscoveryContext
---- @return BibtexDiscoveryResult[]
+--- @return string[]
 function M.typst(ctx)
-  return find_typst_bibliography(ctx.lines, ctx.dir)
+  return names_of(typst_detailed(ctx))
 end
 
 --- Find the bibliographies a GAPDoc document declares
@@ -843,6 +875,19 @@ M.builtin = {
   typst = M.typst,
   gapdoc = M.gapdoc,
   gap_package = M.gap_package,
+}
+
+--- The record-reporting form of a shipped hook, keyed by the hook itself
+--- The shipped hooks are public and documented as returning file names, and
+--- users wrap them, so they keep doing that. collect_detailed looks the hook up
+--- here by identity, which gives a spec pointing straight at a built-in — under
+--- any name, configured in any of the accepted forms — the positions it knows,
+--- while a wrapper around one is called as written and simply reports none.
+--- @type table<function, BibtexDiscoveryFn>
+local detailed_form = {
+  [M.latex] = latex_detailed,
+  [M.yaml] = yaml_detailed,
+  [M.typst] = typst_detailed,
 }
 
 --- The discovery shipped with the plugin, and the source of the config default
@@ -1103,7 +1148,9 @@ function M.collect_detailed(ctx)
 
   for _, spec in ipairs(M.chain(ctx.filetype, ctx.opts)) do
     if not registry.has_failed(spec.find, ctx.filetype) then
-      local ok, result = pcall(spec.find, ctx)
+      -- Failure is still tracked against the configured hook, so that a hook
+      -- disabled here is the one the other entry points skip as well.
+      local ok, result = pcall(detailed_form[spec.find] or spec.find, ctx)
       local problem
       if not ok then
         problem = string.format('raised an error: %s', registry.describe_error(result))
