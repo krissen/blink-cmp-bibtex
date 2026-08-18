@@ -29,7 +29,9 @@ local defaults = {
   },
   -- Bibliography discovery hooks per filetype. Entries under a filetype key
   -- override same-named entries under '*'. Unlike the matchers, every shipped
-  -- hook sits under '*', because buffer discovery is filetype agnostic.
+  -- hook that reads the buffer sits under '*', because buffer discovery is
+  -- filetype agnostic; the hooks that probe the file system instead are
+  -- narrowed to the filetypes where they pay off.
   discovery = vim.deepcopy(discovery.defaults),
   -- Citation matchers per filetype. Entries under a filetype key override
   -- same-named entries under '*'. The shipped dispatch and the accepted entry

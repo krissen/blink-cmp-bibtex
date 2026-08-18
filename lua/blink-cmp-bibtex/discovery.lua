@@ -385,23 +385,13 @@ local function read_databases_attribute(element)
   return element:match('Databases%s*=%s*"([^"]*)"') or element:match("Databases%s*=%s*'([^']*)'")
 end
 
---- @param lines string[] Buffer lines to search
---- @return string[] File names as written in the Databases attribute with '.bib'
----   appended; entries may carry a directory part and may contain dots
-local function find_gapdoc_bibliography(lines)
-  -- Every buffer is scanned regardless of filetype, so the cost of joining the
-  -- lines is only paid once a declaration can actually be present.
-  local marked = false
-  for _, line in ipairs(lines) do
-    if line:find(BIBLIOGRAPHY_TAG, 1, true) then
-      marked = true
-      break
-    end
-  end
-  if not marked then
-    return {}
-  end
-
+--- Read every <Bibliography> declaration in an XML document
+--- The caller has already established that the document can hold one; this is
+--- the part that is worth the joins and the pattern work.
+--- @param lines string[] The document lines
+--- @return string[] File names as written in the Databases attribute with
+---   '.bib' appended; entries may carry a directory part and may contain dots
+local function extract_gapdoc_databases(lines)
   -- Joined so that a declaration split across lines is still found.
   local text = strip_inactive_regions(table.concat(lines, '\n'))
 
@@ -432,6 +422,294 @@ local function find_gapdoc_bibliography(lines)
     cursor = start_pos + #BIBLIOGRAPHY_TAG
   end
   return resources
+end
+
+--- Whether a document can hold a bibliography declaration at all
+--- Every buffer is scanned regardless of filetype, so the cost of joining the
+--- lines is only paid once a declaration can actually be present.
+--- @param lines string[] The document lines
+--- @return boolean
+local function has_bibliography_marker(lines)
+  for _, line in ipairs(lines) do
+    if line:find(BIBLIOGRAPHY_TAG, 1, true) then
+      return true
+    end
+  end
+  return false
+end
+
+--- @param lines string[] Buffer lines to search
+--- @return string[] File names as written in the Databases attribute with '.bib'
+---   appended; entries may carry a directory part and may contain dots
+local function find_gapdoc_bibliography(lines)
+  if not has_bibliography_marker(lines) then
+    return {}
+  end
+  return extract_gapdoc_databases(lines)
+end
+
+--- Size caps for the files the GAP package hook reads, in bytes
+--- A package's GAP files and its manual XML are small; anything larger is a
+--- generated artifact that would cost more to read than it can be worth.
+--- Overridable through M.__test so the caps can be exercised cheaply.
+--- @type table<string, number>
+local gap_size_caps = {
+  gap = 64 * 1024,
+  xml = 1024 * 1024,
+}
+
+--- How many XML files a documentation directory is read from
+--- @type number
+local GAP_MAX_XML_FILES = 50
+
+--- The main XML file names AutoDoc and GAPDoc packages use, in preference order
+--- @type string[]
+local GAP_MAIN_XML = { '_main.xml', 'main.xml', 'manual.xml' }
+
+--- What has been found for a package root, keyed by that root
+--- @type table<string, table>
+local gap_package_cache = {}
+
+--- Stat a path without ever raising
+--- @param path string|nil The path to stat
+--- @return table|nil The stat table, or nil when the path cannot be stat'ed
+local function safe_stat(path)
+  if not path or path == '' then
+    return nil
+  end
+  local uv = vim.uv or vim.loop
+  local ok, stat = pcall(uv.fs_stat, path)
+  if not ok then
+    return nil
+  end
+  return stat
+end
+
+--- Take a change stamp of a path
+--- Absence is a stamp of its own, so that a makedoc.g appearing later, or a
+--- documentation directory being created, invalidates what was cached.
+--- @param path string The path to stamp
+--- @return table|false The stamp, or false when the path does not exist
+local function stamp_path(path)
+  local stat = safe_stat(path)
+  if not stat then
+    return false
+  end
+  return {
+    sec = stat.mtime and stat.mtime.sec or 0,
+    nsec = stat.mtime and stat.mtime.nsec or 0,
+    size = stat.size or 0,
+  }
+end
+
+--- Whether two stamps describe the same state
+--- @param a table|false|nil
+--- @param b table|false|nil
+--- @return boolean
+local function same_stamp(a, b)
+  if not a or not b then
+    return not a and not b
+  end
+  return a.sec == b.sec and a.nsec == b.nsec and a.size == b.size
+end
+
+--- Read a file that is small enough to be worth reading
+--- @param path string The file to read
+--- @param cap number The largest size accepted, in bytes
+--- @return string[]|nil The lines, or nil when the file is missing or too large
+local function read_capped_file(path, cap)
+  local stat = safe_stat(path)
+  if not stat or stat.type == 'directory' or (stat.size or 0) > cap then
+    return nil
+  end
+  local ok, lines = pcall(read_file_lines, path)
+  if not ok then
+    return nil
+  end
+  return lines
+end
+
+--- Read a GAP record field written as a string literal
+--- Comments are stripped first, since a '#' starts one for the rest of the line.
+--- @param lines string[] The file lines
+--- @param field string The field name
+--- @return string|nil The first value found
+local function read_gap_field(lines, field)
+  local pattern = '%f[%w_]' .. field .. '%s*:=%s*"([^"]+)"'
+  for _, line in ipairs(lines) do
+    local code = line:gsub('#.*$', '')
+    local value = code:match(pattern)
+    if value then
+      return value
+    end
+  end
+  return nil
+end
+
+--- List the XML files of a documentation directory, in preference order
+--- The main manual comes first under the names AutoDoc and GAPDoc generate,
+--- then the file named after the package, then everything else alphabetically.
+--- @param doc_dir string The documentation directory
+--- @param pkg_name string|nil The package name from PackageInfo.g
+--- @return string[] File names, without their directory part
+local function list_gap_xml_files(doc_dir, pkg_name)
+  local names = {}
+  local ok = pcall(function()
+    for name, entry_type in vim.fs.dir(doc_dir) do
+      if #names >= GAP_MAX_XML_FILES then
+        break
+      end
+      if entry_type ~= 'directory' and name:lower():match('%.xml$') then
+        names[#names + 1] = name
+      end
+    end
+  end)
+  if not ok then
+    return {}
+  end
+
+  local preferred = {}
+  for index, name in ipairs(GAP_MAIN_XML) do
+    preferred[name] = index
+  end
+  if pkg_name then
+    preferred[pkg_name .. '.xml'] = #GAP_MAIN_XML + 1
+  end
+  local last = #GAP_MAIN_XML + 2
+
+  table.sort(names, function(a, b)
+    local rank_a = preferred[a] or last
+    local rank_b = preferred[b] or last
+    if rank_a ~= rank_b then
+      return rank_a < rank_b
+    end
+    return a < b
+  end)
+  return names
+end
+
+--- Find the bibliographies of the GAP package a buffer belongs to
+--- The declaration is rarely in the file being edited: GAPDoc keeps it in the
+--- package's main XML, which AutoDoc generates, and which may not exist at all
+--- in a fresh checkout. Both the manual and AutoDoc's naming convention are
+--- therefore read from the package itself rather than from the buffer.
+--- @param ctx BibtexDiscoveryContext
+--- @param pkg_root string The package root, the directory holding PackageInfo.g
+--- @param info_path string The path to PackageInfo.g
+--- @return string[] Absolute bibliography paths
+--- @return table<string, table|false> The stamps the result depends on
+local function collect_gap_package_bibliography(ctx, pkg_root, info_path)
+  local stamps = {}
+
+  --- Stamp a path the result depends on
+  --- @param path string
+  local function depends_on(path)
+    stamps[path] = stamp_path(path)
+  end
+
+  depends_on(info_path)
+  local info_lines = read_capped_file(info_path, gap_size_caps.gap)
+  local pkg_name = info_lines and read_gap_field(info_lines, 'PackageName') or nil
+
+  local makedoc_path = path_util.joinpath(pkg_root, 'makedoc.g') --[[@as string]]
+  depends_on(makedoc_path)
+  local makedoc_lines = read_capped_file(makedoc_path, gap_size_caps.gap)
+  local doc_rel = makedoc_lines and read_gap_field(makedoc_lines, 'dir') or nil
+  local bib_name = makedoc_lines and read_gap_field(makedoc_lines, 'bib') or nil
+
+  doc_rel = doc_rel and doc_rel ~= '' and doc_rel or 'doc'
+  local doc_dir = path_util.is_absolute(doc_rel) and doc_rel or path_util.joinpath(pkg_root, doc_rel) --[[@as string]]
+
+  local results = {}
+  local seen = {}
+
+  --- Record one absolute path, keeping the first occurrence
+  --- @param path string|nil
+  local function remember(path)
+    if path and path ~= '' and not seen[path] then
+      seen[path] = true
+      results[#results + 1] = path
+    end
+  end
+
+  -- The manual's own declaration, which names the databases in use.
+  depends_on(doc_dir)
+  local bufname = ctx.bufname and ctx.bufname ~= '' and path_util.normalize(ctx.bufname) or nil
+  for _, name in ipairs(list_gap_xml_files(doc_dir, pkg_name)) do
+    local xml_path = path_util.joinpath(doc_dir, name) --[[@as string]]
+    depends_on(xml_path)
+    -- The buffer itself was already offered to the gapdoc hook, and what is on
+    -- disk for it may be older than what is being edited.
+    if not bufname or path_util.normalize(xml_path) ~= bufname then
+      local lines = read_capped_file(xml_path, gap_size_caps.xml)
+      if lines and has_bibliography_marker(lines) then
+        local databases = extract_gapdoc_databases(lines)
+        if #databases > 0 then
+          for _, database in ipairs(databases) do
+            remember(path_util.joinpath(vim.fs.dirname(xml_path), database))
+          end
+          break
+        end
+      end
+    end
+  end
+
+  -- AutoDoc's convention, which holds before the manual has ever been built.
+  -- A manual that declares its databases has said which ones are in use, so
+  -- the convention is only consulted when it declared none.
+  if #results == 0 then
+    local convention = bib_name and bib_name:gsub('%.bib$', '') or pkg_name
+    if bib_name and bib_name:lower():match('%.xml$') then
+      -- A BibXMLext database, which this plugin does not read.
+      convention = pkg_name
+    end
+    if convention and convention ~= '' then
+      remember(path_util.joinpath(doc_dir, convention .. '.bib'))
+    end
+  end
+
+  return results, stamps
+end
+
+--- Whether a cache entry still describes the file system
+--- @param entry table The cache entry
+--- @return boolean
+local function gap_cache_is_current(entry)
+  for path, stamp in pairs(entry.stamps) do
+    if not same_stamp(stamp, stamp_path(path)) then
+      return false
+    end
+  end
+  return true
+end
+
+--- @param ctx BibtexDiscoveryContext
+--- @return string[] Absolute bibliography paths
+local function find_gap_package_bibliography(ctx)
+  if not ctx.dir or ctx.dir == '' then
+    return {}
+  end
+  -- A buffer that declares its own bibliography is the gapdoc hook's business.
+  if has_bibliography_marker(ctx.lines or {}) then
+    return {}
+  end
+
+  local ok, found = pcall(vim.fs.find, { 'PackageInfo.g' }, { upward = true, path = ctx.dir, limit = 1 })
+  local info_path = ok and found and found[1] or nil
+  if not info_path then
+    return {}
+  end
+  local pkg_root = vim.fs.dirname(info_path)
+
+  local bufname = ctx.bufname or ''
+  local cached = gap_package_cache[pkg_root]
+  if cached and cached.bufname == bufname and gap_cache_is_current(cached) then
+    return vim.list_extend({}, cached.result)
+  end
+
+  local result, stamps = collect_gap_package_bibliography(ctx, pkg_root, info_path)
+  gap_package_cache[pkg_root] = { bufname = bufname, stamps = stamps, result = result }
+  return vim.list_extend({}, result)
 end
 
 --- Ensure a path has a bibliography extension (.bib, .yml, or .yaml)
@@ -489,6 +767,15 @@ function M.gapdoc(ctx)
   return find_gapdoc_bibliography(ctx.lines)
 end
 
+--- Find the bibliographies of the GAP package the buffer belongs to
+--- Unlike the other hooks this one reads the package around the buffer rather
+--- than the buffer itself, and returns absolute paths.
+--- @param ctx BibtexDiscoveryContext
+--- @return string[]
+function M.gap_package(ctx)
+  return find_gap_package_bibliography(ctx)
+end
+
 --- Hooks shipped with the plugin, addressable by name from the configuration
 --- @type table<string, BibtexDiscoveryFn>
 M.builtin = {
@@ -496,15 +783,19 @@ M.builtin = {
   yaml = M.yaml,
   typst = M.typst,
   gapdoc = M.gapdoc,
+  gap_package = M.gap_package,
 }
 
 --- The discovery shipped with the plugin, and the source of the config default
---- Every hook sits under '*' because buffer discovery is filetype agnostic: an
---- \addbibresource in a Markdown buffer is found today, and narrowing the hooks
---- per filetype would silently stop finding it. This is the opposite of
---- matchers.defaults, where the filetype decides which syntax applies.
---- The priorities reproduce the order the extractors ran in before they became
---- hooks.
+--- Every hook that reads the buffer sits under '*' because buffer discovery is
+--- filetype agnostic: an \addbibresource in a Markdown buffer is found today,
+--- and narrowing those hooks per filetype would silently stop finding it. A
+--- hook that probes the file system instead is narrowed to the filetypes where
+--- it can pay off, so that the other buffers never pay for it. This is still
+--- looser than matchers.defaults, where the filetype decides which syntax
+--- applies.
+--- The priorities of the '*' hooks reproduce the order the extractors ran in
+--- before they became hooks.
 --- @type table<string, table<string, table>>
 M.defaults = {
   ['*'] = {
@@ -515,6 +806,12 @@ M.defaults = {
     -- definition and the generic rule would misread a dotted name.
     gapdoc = { priority = 40, extension = false },
   },
+  -- The GAP package hook runs after gapdoc, so that a declaration in the
+  -- buffer wins over the one the package's manual makes. It returns absolute
+  -- paths and appends '.bib' itself.
+  gap = { gap_package = { priority = 45, extension = false } },
+  xml = { gap_package = { priority = 45, extension = false } },
+  autodoc = { gap_package = { priority = 45, extension = false } },
 }
 
 --- The spec fields shipped for a built-in hook in a filetype context
@@ -764,8 +1061,14 @@ end
 
 --- Internal helpers exposed for testing. Not part of the public API.
 M.__test = {
-  --- Forget the per-session warning and failed-hook state.
-  reset = registry.reset,
+  --- Forget the per-session warning and failed-hook state, and what the GAP
+  --- package hook has cached.
+  reset = function()
+    gap_package_cache = {}
+    registry.reset()
+  end,
+  --- The size caps of the GAP package hook, in bytes, writable for testing.
+  gap_size_caps = gap_size_caps,
 }
 
 return M

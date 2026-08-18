@@ -127,6 +127,20 @@ describe('health.check', function()
     assert.is_truthy(message:find('typst (priority 30), gapdoc (priority 40)', 1, true))
   end)
 
+  it('reports the shipped GAP package hook as dormant rather than broken', function()
+    config.setup(nil)
+    local calls = run_check()
+    for _, filetype in ipairs({ 'gap', 'xml', 'autodoc' }) do
+      -- The matcher section reports the same filetypes, so the line is picked
+      -- by the hook it names rather than by the filetype alone.
+      local message =
+        assert(find(calls.info, filetype .. ': latex (priority 10)'), 'no discovery line for ' .. filetype)
+      assert.is_truthy(message:find('gapdoc (priority 40), gap_package (priority 45)', 1, true))
+      assert.is_truthy(message:find('dormant', 1, true))
+      assert.is_nil(find(calls.warn, filetype))
+    end
+  end)
+
   it('warns when buffer discovery is turned off', function()
     config.setup({ discovery = false })
     assert.is_truthy(find(run_check().warn, 'buffer discovery is disabled'))
