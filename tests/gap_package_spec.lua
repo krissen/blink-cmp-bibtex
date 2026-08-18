@@ -60,6 +60,34 @@ local function count_reads(fn)
   return calls
 end
 
+--- Run a function with vim.fs.dir returning a fixed listing of files.
+--- @param entries string[] The names the directory reports, in order
+--- @param fn function
+--- @return any The value returned by fn
+local function with_dir_listing(entries, fn)
+  local original = vim.fs.dir
+  -- The full signature matters: the language server merges every assignment to
+  -- vim.fs.dir across the workspace, so a stub taking no parameters would
+  -- redefine the function project-wide and flag every real call.
+  --- @diagnostic disable-next-line: duplicate-set-field
+  vim.fs.dir = function(_path, _opts) -- luacheck: ignore
+    local index = 0
+    return function()
+      index = index + 1
+      if entries[index] then
+        return entries[index], 'file'
+      end
+    end
+  end
+  local ok, result = pcall(fn)
+  --- @diagnostic disable-next-line: duplicate-set-field
+  vim.fs.dir = original
+  if not ok then
+    error(result, 0)
+  end
+  return result
+end
+
 local package_info = 'SetPackageInfo( rec(\nPackageName := "LocalNR",\nVersion := "1.0",\n) );\n'
 
 describe('discovery.gap_package', function()
@@ -188,6 +216,35 @@ describe('discovery.gap_package', function()
         { vim.fs.joinpath(root, 'doc/manual.bib') },
         names(discovery.gap_package(ctx(vim.fs.joinpath(root, 'lib/foo.gd'))))
       )
+    end)
+  end)
+
+  it('reads the main manual even when the chapters outnumber the cap', function()
+    helpers.with_tmpdir(function(dir)
+      local root = make_package(dir, {
+        ['PackageInfo.g'] = package_info,
+        ['lib/foo.gd'] = '',
+        ['doc/_main.xml'] = '<Bibliography Databases="manual"/>\n',
+      })
+      local listing = {}
+      for index = 1, 6 do
+        local name = string.format('chapter%d.xml', index)
+        listing[#listing + 1] = name
+        helpers.write_file(vim.fs.joinpath(root, 'doc/' .. name), '<Chapter/>\n')
+      end
+      -- The order a directory is read in is the file system's business, so it
+      -- is fixed here: the manual comes last, and a cap applied to the walk
+      -- rather than to the ranking would drop it.
+      listing[#listing + 1] = '_main.xml'
+      local limits = discovery.__test.gap_limits
+      local original = limits.max_xml_files
+      limits.max_xml_files = 2
+      local ok, result = pcall(with_dir_listing, listing, function()
+        return discovery.gap_package(ctx(vim.fs.joinpath(root, 'lib/foo.gd')))
+      end)
+      limits.max_xml_files = original
+      assert.is_true(ok, tostring(result))
+      assert.are.same({ vim.fs.joinpath(root, 'doc/manual.bib') }, names(result))
     end)
   end)
 

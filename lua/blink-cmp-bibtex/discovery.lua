@@ -476,9 +476,12 @@ local gap_size_caps = {
   xml = 1024 * 1024,
 }
 
---- How many XML files a documentation directory is read from
---- @type number
-local GAP_MAX_XML_FILES = 50
+--- The limits of the GAP package hook, writable through M.__test for testing
+--- @type table<string, number>
+local gap_limits = {
+  --- How many XML files a documentation directory is read from
+  max_xml_files = 50,
+}
 
 --- The main XML file names AutoDoc and GAPDoc packages use, in preference order
 --- @type string[]
@@ -572,11 +575,11 @@ end
 --- @return string[] File names, without their directory part
 local function list_gap_xml_files(doc_dir, pkg_name)
   local names = {}
+  -- The whole directory is listed before anything is ranked: reading a
+  -- directory entry is cheap, and capping the walk instead would let the
+  -- manual itself be the file dropped in a directory of generated chapters.
   local ok = pcall(function()
     for name, entry_type in vim.fs.dir(doc_dir) do
-      if #names >= GAP_MAX_XML_FILES then
-        break
-      end
       if entry_type ~= 'directory' and name:lower():match('%.xml$') then
         names[#names + 1] = name
       end
@@ -603,6 +606,11 @@ local function list_gap_xml_files(doc_dir, pkg_name)
     end
     return a < b
   end)
+
+  -- Only now, with the manual at the front, is the list cut to what is read.
+  for index = #names, gap_limits.max_xml_files + 1, -1 do
+    names[index] = nil
+  end
   return names
 end
 
@@ -1126,6 +1134,8 @@ M.__test = {
   end,
   --- The size caps of the GAP package hook, in bytes, writable for testing.
   gap_size_caps = gap_size_caps,
+  --- The limits of the GAP package hook, writable for testing.
+  gap_limits = gap_limits,
 }
 
 return M
