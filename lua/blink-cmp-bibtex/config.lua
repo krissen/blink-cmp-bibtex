@@ -84,8 +84,8 @@ local function is_list(value)
   if vim.islist then
     return vim.islist(value)
   end
-  -- Neovim 0.9 has neither vim.islist nor a predecessor that later versions
-  -- still accept, so the check is spelled out rather than named.
+  -- Neovim 0.9 names this vim.tbl_islist, which later versions deprecate, so
+  -- the check is spelled out rather than reached for under either name.
   local count = 0
   for _ in pairs(value) do
     count = count + 1
