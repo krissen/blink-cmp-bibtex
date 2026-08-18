@@ -77,7 +77,7 @@ describe('cache.collect', function()
       -- Bump mtime explicitly: writing within the same second would otherwise
       -- leave the cached stat unchanged on filesystems with 1s granularity.
       helpers.write_file(path, '@article{two,\n  title = {Two}\n}\n')
-      local stat = vim.uv.fs_stat(path)
+      local stat = assert(vim.uv.fs_stat(path))
       vim.uv.fs_utime(path, stat.atime.sec + 10, stat.mtime.sec + 10)
 
       local calls = count_parses(function()

@@ -60,26 +60,6 @@ local function table_is_empty(tbl)
   return next(tbl) == nil
 end
 
---- Check if a file path is in the global_files list
---- @param path string The file path to check
---- @param global_files table|nil List of global file patterns
---- @return boolean True if the path matches a global file pattern
-local function is_global_file(path, global_files)
-  if not global_files or #global_files == 0 then
-    return false
-  end
-  -- Normalize input path for consistent comparison
-  local normalized_path = vim.fs.normalize(path)
-  for _, gf in ipairs(global_files) do
-    local expanded = vim.fn.expand(gf)
-    local normalized = vim.fs.normalize(expanded)
-    if normalized_path == normalized then
-      return true
-    end
-  end
-  return false
-end
-
 --- Normalize whitespace for content comparison
 --- @param s string|nil
 --- @return string
@@ -97,34 +77,43 @@ end
 --- @field is_local boolean
 --- @field is_global boolean
 
+--- Remember how each bibliography file was classified, for one round
+--- Classifying a path resolves it to what it points at, which costs a system
+--- call, and the sort below asks about the same handful of files once per
+--- comparison.
+--- @param global_set table<string, boolean> The set scan.global_set built
+--- @return fun(path: string): boolean
+local function global_classifier(global_set)
+  local known = {}
+  return function(path)
+    local answer = known[path]
+    if answer == nil then
+      answer = scan.is_global_path(path, global_set)
+      known[path] = answer
+    end
+    return answer
+  end
+end
+
 --- Compute source status for all entries
 --- @param entries table[] Raw entries from cache.collect
---- @param global_files table|nil List of global file patterns
+--- @param is_global fun(path: string): boolean Classifier from global_classifier
 --- @return table<string, SourceInfo> Map of key -> source info
 --- @return boolean has_mixed True if entries from both local and global
-local function compute_source_status(entries, global_files)
-  -- Build set of normalized global file paths
-  local global_set = {}
-  for _, gf in ipairs(global_files or {}) do
-    local expanded = vim.fn.expand(gf)
-    local normalized = vim.fs.normalize(expanded)
-    global_set[normalized] = true
-  end
-
+local function compute_source_status(entries, is_global)
   -- Group entries by key, tracking source and content
   local by_key = {} -- key -> { local_raw, global_raw, is_local, is_global }
 
   for _, entry in ipairs(entries) do
     local key = entry.key
-    local path = vim.fs.normalize(entry.source_path)
-    local is_global = global_set[path] or false
+    local from_global = is_global(entry.source_path)
     local raw = normalize_whitespace(entry.raw)
 
     if not by_key[key] then
       by_key[key] = { is_local = false, is_global = false }
     end
 
-    if is_global then
+    if from_global then
       by_key[key].is_global = true
       by_key[key].global_raw = by_key[key].global_raw or raw
     else
@@ -587,11 +576,16 @@ function Source:get_completions(context, callback)
   if wants_sanitized_prefix(detection, spec) then
     prefix = sanitize_prefix(detection.prefix, separators_for(detection, spec))
   end
-  local paths = scan.resolve_bib_paths(bufnr, self.opts)
+  -- Resolved once for the round: the options may be functions, and resolving
+  -- them again to classify what they produced would call them twice per
+  -- keystroke and could answer differently the second time.
+  local sources = scan.resolve_bib_sources(bufnr, self.opts)
+  local paths = scan.paths_from_sources(sources)
   if table_is_empty(paths) then
     callback(empty_response())
     return function() end
   end
+  local is_global_path = global_classifier(scan.global_set_from_sources(sources))
   local cancelled = false
   vim.schedule(function()
     if cancelled then
@@ -600,15 +594,15 @@ function Source:get_completions(context, callback)
     local entries = cache.collect(paths, self.opts.max_entries)
 
     -- Compute source status from all entries (before filtering and dedup)
-    local source_status, has_mixed = compute_source_status(entries, self.opts.global_files)
+    local source_status, has_mixed = compute_source_status(entries, is_global_path)
     local show_indicator = self.opts.source_indicator and has_mixed
 
     local filtered = filter_entries(entries, prefix)
 
     -- Sort entries: local first, then global (for deduplication to prefer local)
     table.sort(filtered, function(a, b)
-      local a_global = is_global_file(a.source_path, self.opts.global_files)
-      local b_global = is_global_file(b.source_path, self.opts.global_files)
+      local a_global = is_global_path(a.source_path)
+      local b_global = is_global_path(b.source_path)
       if a_global ~= b_global then
         return not a_global -- local (false) before global (true)
       end
@@ -628,7 +622,7 @@ function Source:get_completions(context, callback)
         seen_keys[entry.key] = true
 
         local ctx = build_entry_context(entry)
-        local is_global = is_global_file(entry.source_path, self.opts.global_files)
+        local is_global = is_global_path(entry.source_path)
         local detail_text = style.detail(ctx)
 
         -- Get indicator for labelDetails.description (shown on right side)
@@ -747,7 +741,8 @@ function Source.copy_to_local_bib(key)
   end
 
   -- Get current bib paths for validation
-  local paths = scan.resolve_bib_paths(bufnr, opts)
+  local sources = scan.resolve_bib_sources(bufnr, opts)
+  local paths = scan.paths_from_sources(sources)
 
   -- Build set of current paths for validation
   local current_paths = {}
@@ -769,9 +764,10 @@ function Source.copy_to_local_bib(key)
   if not entry_data or not entry_data.raw then
     -- Entry not in lookup or stale - reload from current bib files
     local entries = cache.collect(paths, opts.max_entries)
+    local is_global_path = global_classifier(scan.global_set_from_sources(sources))
     for _, entry in ipairs(entries) do
       if entry.key == key and entry.raw then
-        local is_global = is_global_file(entry.source_path, opts.global_files)
+        local is_global = is_global_path(entry.source_path)
         entry_data = {
           raw = entry.raw,
           source_path = entry.source_path,
@@ -804,31 +800,26 @@ end
 function Source.debug_source_indicators()
   local opts = config.get()
   local bufnr = vim.api.nvim_get_current_buf()
-  local paths = scan.resolve_bib_paths(bufnr, opts)
+  local sources = scan.resolve_bib_sources(bufnr, opts)
+  local paths = scan.paths_from_sources(sources)
   local entries = cache.collect(paths, opts.max_entries)
 
-  -- Build global_set the same way as compute_source_status
-  local global_set = {}
-  for _, gf in ipairs(opts.global_files or {}) do
-    local expanded = vim.fn.expand(gf)
-    local normalized = vim.fs.normalize(expanded)
-    global_set[normalized] = true
-  end
+  -- Read off the same resolution, rather than resolved a second time
+  local global_set = scan.global_set_from_sources(sources)
+  local is_global_path = global_classifier(global_set)
 
   -- Classify each entry
   local classification = {}
   for _, entry in ipairs(entries) do
-    local path = vim.fs.normalize(entry.source_path)
-    local is_global = global_set[path] or false
     classification[entry.key] = {
       source_path = entry.source_path,
-      normalized_path = path,
-      is_global = is_global,
+      normalized_path = vim.fs.normalize(entry.source_path),
+      is_global = is_global_path(entry.source_path),
     }
   end
 
   -- Compute source status
-  local source_status, has_mixed = compute_source_status(entries, opts.global_files)
+  local source_status, has_mixed = compute_source_status(entries, is_global_path)
 
   return {
     global_files_config = opts.global_files,

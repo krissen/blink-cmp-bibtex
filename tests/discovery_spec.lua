@@ -3,6 +3,7 @@
 local assert = require('luassert')
 local discovery = require('blink-cmp-bibtex.discovery')
 local config = require('blink-cmp-bibtex.config')
+local helpers = require('tests.helpers')
 
 --- Collect the names of a chain, in order.
 --- @param chain table[]
@@ -395,5 +396,283 @@ describe('discovery.collect', function()
       assert.are.same({}, discovery.collect(ctx(opts, {}, 'markdown')))
       assert.are.same({ 'refs.bib' }, discovery.collect(ctx(opts, {}, 'tex')))
     end)
+  end)
+end)
+
+describe('discovery built-ins as public functions', function()
+  -- Shipped in 0.11.0 as returning file names, and wrapped by users, so the
+  -- return type is part of the contract.
+  it('return plain file names', function()
+    local context = ctx(
+      {},
+      { '---', 'bibliography: refs.bib', '---', '\\addbibresource{more.bib}', '#bibliography("t.bib")' }
+    )
+    assert.are.same({ 'more.bib' }, discovery.latex(context))
+    assert.are.same({ 'refs.bib' }, discovery.yaml(context))
+    assert.are.same({ '/tmp/t.bib' }, discovery.typst(context))
+  end)
+end)
+
+describe('discovery.collect_detailed', function()
+  before_each(function()
+    discovery.__test.reset()
+  end)
+
+  it('names the hook that reported a bare file name', function()
+    local opts = {
+      discovery = {
+        ['*'] = {
+          mine = function()
+            return { 'refs' }
+          end,
+        },
+      },
+    }
+    assert.are.same({ { name = 'refs.bib', hook = 'mine' } }, discovery.collect_detailed(ctx(opts)))
+  end)
+
+  it('keeps the line and file a record-form result carries', function()
+    local opts = {
+      discovery = {
+        ['*'] = {
+          mine = function()
+            return { { name = 'refs.bib', line = 7, file = '/tmp/other.md' } }
+          end,
+        },
+      },
+    }
+    assert.are.same(
+      { { name = 'refs.bib', hook = 'mine', line = 7, file = '/tmp/other.md' } },
+      discovery.collect_detailed(ctx(opts))
+    )
+  end)
+
+  it('applies the extension rule to the name of a record-form result', function()
+    local opts = {
+      discovery = {
+        ['*'] = {
+          mine = function()
+            return { { name = 'refs', line = 2 } }
+          end,
+        },
+      },
+    }
+    assert.are.same({ { name = 'refs.bib', hook = 'mine', line = 2 } }, discovery.collect_detailed(ctx(opts)))
+  end)
+
+  it('accepts a single record instead of a list', function()
+    local opts = {
+      discovery = {
+        ['*'] = {
+          mine = function()
+            return { name = 'refs.bib', line = 1 }
+          end,
+        },
+      },
+    }
+    assert.are.same({ { name = 'refs.bib', hook = 'mine', line = 1 } }, discovery.collect_detailed(ctx(opts)))
+  end)
+
+  it('skips a hook returning a record without a name, warning once', function()
+    local opts = {
+      discovery = {
+        ['*'] = {
+          bogus = {
+            priority = 1,
+            find = function()
+              return { {} }
+            end,
+          },
+          good = {
+            priority = 2,
+            find = function()
+              return 'refs.bib'
+            end,
+          },
+        },
+      },
+    }
+    with_notify_capture(function(messages)
+      assert.are.same({ { name = 'refs.bib', hook = 'good' } }, discovery.collect_detailed(ctx(opts)))
+      assert.are.same({ { name = 'refs.bib', hook = 'good' } }, discovery.collect_detailed(ctx(opts)))
+      assert.are.equal(1, #messages)
+      assert.is_truthy(messages[1]:find('instead of a file name', 1, true))
+    end)
+  end)
+
+  it('skips a hook whose record carries a line that is not one', function()
+    local opts = {
+      discovery = {
+        ['*'] = {
+          bogus = function()
+            return { { name = 'refs.bib', line = 'l. 3' } }
+          end,
+        },
+      },
+    }
+    with_notify_capture(function(messages)
+      assert.are.same({}, discovery.collect_detailed(ctx(opts)))
+      assert.are.equal(1, #messages)
+      assert.is_truthy(messages[1]:find("a list holding a record for 'refs.bib' whose line is string", 1, true))
+    end)
+  end)
+
+  it('skips a hook whose record carries a declaring file that is not a path', function()
+    local opts = {
+      discovery = {
+        ['*'] = {
+          bogus = function()
+            return { name = 'refs.bib', file = {} }
+          end,
+        },
+      },
+    }
+    with_notify_capture(function(messages)
+      assert.are.same({}, discovery.collect_detailed(ctx(opts)))
+      assert.are.equal(1, #messages)
+      -- Returned on its own rather than in a list, and said so.
+      assert.is_truthy(messages[1]:find("a record for 'refs.bib' whose declaring file is table", 1, true))
+      assert.is_nil(messages[1]:find('a list holding', 1, true))
+    end)
+  end)
+
+  it('says a record was returned on its own when it was', function()
+    local opts = {
+      discovery = {
+        ['*'] = {
+          bogus = function()
+            return { name = 42 }
+          end,
+        },
+      },
+    }
+    with_notify_capture(function(messages)
+      assert.are.same({}, discovery.collect_detailed(ctx(opts)))
+      assert.is_truthy(messages[1]:find('returned a record naming number instead of a file name', 1, true))
+    end)
+  end)
+
+  it('says a record was one entry of a list when it was', function()
+    local opts = {
+      discovery = {
+        ['*'] = {
+          bogus = function()
+            return { { name = 42 } }
+          end,
+        },
+      },
+    }
+    with_notify_capture(function(messages)
+      assert.are.same({}, discovery.collect_detailed(ctx(opts)))
+      assert.is_truthy(
+        messages[1]:find('returned a list holding a record naming number instead of a file name', 1, true)
+      )
+    end)
+  end)
+
+  it('skips a hook whose record carries a fractional line', function()
+    local opts = {
+      discovery = {
+        ['*'] = {
+          bogus = function()
+            return { { name = 'refs.bib', line = 3.5 } }
+          end,
+        },
+      },
+    }
+    with_notify_capture(function(messages)
+      assert.are.same({}, discovery.collect_detailed(ctx(opts)))
+      assert.is_truthy(messages[1]:find('whose line is 3.5 instead of an integer', 1, true))
+    end)
+  end)
+
+  it('reports the same names as collect, in the same order', function()
+    local opts = {
+      discovery = {
+        ['*'] = {
+          second = {
+            priority = 2,
+            find = function()
+              return { { name = 'b.bib', line = 3 } }
+            end,
+          },
+          first = {
+            priority = 1,
+            find = function()
+              return { 'a.bib' }
+            end,
+          },
+        },
+      },
+    }
+    assert.are.same({ 'a.bib', 'b.bib' }, discovery.collect(ctx(opts)))
+    local detailed = discovery.collect_detailed(ctx(opts))
+    assert.are.same(
+      { 'a.bib', 'b.bib' },
+      vim.tbl_map(function(entry)
+        return entry.name
+      end, detailed)
+    )
+  end)
+
+  it('gives a hook that wraps a built-in the names the built-in returns', function()
+    -- The built-in hooks are public and documented as returning file names;
+    -- wrapping one must keep working, at the cost of the positions.
+    local opts = {
+      discovery = {
+        ['*'] = {
+          wrapper = function(context)
+            local found = discovery.latex(context)
+            assert.are.same({ 'refs.bib' }, found)
+            return found
+          end,
+        },
+      },
+    }
+    local detailed = discovery.collect_detailed(ctx(opts, { '\\addbibresource{refs.bib}' }))
+    assert.are.same({ { name = 'refs.bib', hook = 'wrapper' } }, detailed)
+  end)
+
+  it('reports positions for a built-in configured under another name', function()
+    local opts = { discovery = { ['*'] = { mine = discovery.latex } } }
+    local detailed = discovery.collect_detailed(ctx(opts, { '', '\\addbibresource{refs.bib}' }))
+    assert.are.same({ { name = 'refs.bib', hook = 'mine', line = 2 } }, detailed)
+  end)
+
+  it('reports the line a LaTeX declaration was found on', function()
+    local opts = { discovery = { ['*'] = { latex = true } } }
+    local detailed = discovery.collect_detailed(ctx(opts, { '\\documentclass{article}', '\\addbibresource{refs.bib}' }))
+    assert.are.same({ { name = 'refs.bib', hook = 'latex', line = 2 } }, detailed)
+  end)
+
+  it('reports the line a YAML bibliography key was found on', function()
+    local opts = { discovery = { ['*'] = { yaml = true } } }
+    local lines = { '---', 'title: doc', 'bibliography:', '  - refs.bib', '---' }
+    assert.are.same({ { name = 'refs.bib', hook = 'yaml', line = 4 } }, discovery.collect_detailed(ctx(opts, lines)))
+  end)
+
+  it('reports the imported file and line a Typst bibliography was declared in', function()
+    helpers.with_tmpdir(function(dir)
+      local template = vim.fs.joinpath(dir, 'template.typ')
+      helpers.write_file(template, '// header\n#bibliography("refs.bib")\n')
+      local opts = { discovery = { ['*'] = { typst = true } } }
+      local context = ctx(opts, { '#import "template.typ": *' }, 'typst')
+      context.dir = dir
+      context.bufname = vim.fs.joinpath(dir, 'main.typ')
+      assert.are.same({
+        {
+          name = vim.fs.joinpath(dir, 'refs.bib'),
+          hook = 'typst',
+          line = 2,
+          file = vim.fs.normalize(template),
+        },
+      }, discovery.collect_detailed(context))
+    end)
+  end)
+
+  it('leaves the declaring file unset for a Typst bibliography in the buffer itself', function()
+    local opts = { discovery = { ['*'] = { typst = true } } }
+    local context = ctx(opts, { '#bibliography("refs.bib")' }, 'typst')
+    assert.are.same({ { name = '/tmp/refs.bib', hook = 'typst', line = 1 } }, discovery.collect_detailed(context))
   end)
 end)

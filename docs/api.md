@@ -371,9 +371,23 @@ Health check registered for `:checkhealth blink-cmp-bibtex`.
 
 Report the resolved configuration and flag matcher setups that can never fire.
 
+The report describes the buffer the check was run from. `:checkhealth` renders
+in a buffer of its own, so the alternate buffer is used when the current one is
+the report itself.
+
 **Reports:**
 - `filetypes`, `preview_style`, `max_entries` and the number of configured
-  `files` and `global_files`
+  `files`, `global_files`, `search_paths` and `root_markers`
+- A `bibliographies` section listing every path `scan.resolve_bib_sources`
+  resolves for that buffer, annotated with its origins: global files first,
+  then local ones, then the paths that are not there. How the last are worded
+  follows their origins — an option's path is warned about by the option it was
+  configured in and a directory is warned about as one, a path the buffer
+  declared is warned about with the position of the declaration, and one nobody
+  declared (a GAP package's conventional name, a
+  `local_bib.target` created on the first copy) is reported as not present yet
+- A warning when the buffer's filetype is not in `filetypes`, since the source
+  is not offered there
 - The matcher chain for `'*'` and for each configured filetype, with priorities
 - A warning when a filetype has matchers configured but is missing from
   `filetypes`; matchers shipped with the plugin that are dormant for this reason
@@ -457,9 +471,15 @@ through the `discovery` option, whose default is `discovery.defaults`.
 
 ### `discovery.latex(ctx)` / `discovery.yaml(ctx)` / `discovery.typst(ctx)` / `discovery.gapdoc(ctx)`
 
-The hooks shipped with the plugin, reading `\addbibresource{}` and friends,
+The buffer-reading hooks shipped with the plugin, reading `\addbibresource{}` and friends,
 Markdown YAML front matter, Typst `#bibliography()` (following `#import`), and
 GAPDoc `<Bibliography Databases="…"/>` respectively.
+
+These return plain file names, and will keep doing so: they are public, and a
+user hook that wraps one passes its result straight through. The health report
+still shows the line each declaration was found on — `collect_detailed`
+recognizes a shipped hook and reads it in its record-reporting form — but a
+wrapper around one is called as written and reports no position.
 
 **Parameters:**
 - `ctx` (BibtexDiscoveryContext): The buffer being scanned
@@ -467,15 +487,49 @@ GAPDoc `<Bibliography Databases="…"/>` respectively.
 **Returns:**
 - `string[]`: File names, unresolved
 
+### `discovery.gap_package(ctx)`
+
+Find the bibliographies of the GAP package the buffer belongs to, reading the
+package rather than the buffer. Returns nothing when the buffer declares a
+`<Bibliography>` of its own (the `gapdoc` hook covers that case), when the
+buffer has no file, or when no `PackageInfo.g` is found upward from it.
+Otherwise the package's documentation directory — `doc`, or the `dir` named in
+`makedoc.g` — is read for the main manual (`_main.xml`, `main.xml`,
+`manual.xml`, `<PackageName>.xml`, then the remaining XML files), and its
+`<Bibliography Databases="…"/>` declaration is used. When no manual declares
+one, AutoDoc's convention is used instead: the `bib` named in `makedoc.g`, or
+`<PackageName>.bib` from `PackageInfo.g`, inside the documentation directory.
+
+Results are absolute paths, carrying `.bib` already, and are cached per package
+root against the modification times and sizes of every file and directory read.
+Since the hook runs on every completion request, those stamps are checked at
+most every two seconds; an edit to the package is therefore picked up within
+that interval rather than on the next keystroke. Files above the size caps
+(64 KiB for GAP files, 1 MiB for XML) are skipped, and a file skipped that way
+is not part of the cached entry.
+
+Each result is a record naming the manual that declared it, which
+`:checkhealth blink-cmp-bibtex` shows; a path derived from AutoDoc's convention
+was never declared anywhere and names no file. No line is reported: the
+declaration is read from the document as one joined text.
+
+**Parameters:**
+- `ctx` (BibtexDiscoveryContext): The buffer being scanned
+
+**Returns:**
+- `BibtexDiscoveryResult[]`: Absolute bibliography paths, which need not exist
+
 ### `discovery.builtin`
 
-Table mapping the built-in names `latex`, `yaml`, `typst` and `gapdoc` to their
-functions.
+Table mapping the built-in names `latex`, `yaml`, `typst`, `gapdoc` and
+`gap_package` to their functions.
 
 ### `discovery.defaults`
 
 The dispatch shipped with the plugin, and the value `config` copies into
-`discovery`. Every hook sits under `'*'`: discovery is filetype agnostic, unlike
+`discovery`. Every hook that reads the buffer sits under `'*'`, because that
+kind of discovery is filetype agnostic; `gap_package`, which probes the file
+system, is shipped under `gap`, `xml` and `autodoc` only. Both are looser than
 `matchers.defaults`, where the filetype decides which citation syntax applies.
 
 ### `discovery.normalize(name, value, filetype)`
@@ -503,13 +557,28 @@ accepts the same shorthands, where absent means an empty chain.
 **Returns:**
 - `BibtexDiscoverySpec[]`
 
-### `discovery.collect(ctx)`
+### `discovery.collect_detailed(ctx)`
 
-Run the chain and concatenate what the hooks report, in chain order. Each hook
-is called inside `pcall`; one that raises, or returns something other than a
-string or a list of strings, is reported once and skipped for that filetype.
+Run the chain and concatenate what the hooks report, in chain order, keeping
+the hook that reported each name and the position it reported. A hook may
+report a name or a `{ name = …, line = …, file = … }` record, in a list or on
+its own; the shipped buffer-reading hooks return names, and are read here in an
+internal record-reporting form instead, so their positions are known without
+changing what they return to their own callers. Each hook is called inside
+`pcall`; one that raises, or returns something other than a name or a list of
+names and records, is reported once and skipped for that filetype. A record is
+checked as it is read: `name` must be a string, `line` an integer when present,
+and `file` a path when present, since the report renders all three.
 Names are returned unresolved — `resolve_bib_paths` resolves and deduplicates
 them.
+
+**Returns:**
+- `BibtexDiscoveryEntry[]`
+
+### `discovery.collect(ctx)`
+
+The names `collect_detailed` reports, in the same order. Callers that only
+resolve paths need nothing else.
 
 **Returns:**
 - `string[]`
@@ -523,9 +592,22 @@ them.
 --- @field lines string[]      -- shared between hooks; read-only
 --- @field bufname string|nil
 --- @field dir string|nil      -- the buffer's directory
+--- @field root string|nil     -- the project root, from root_markers
 --- @field opts table
 
---- @alias BibtexDiscoveryFn fun(ctx: BibtexDiscoveryContext): string[]|string|nil
+--- @class BibtexDiscoveryResult  -- what a hook may report instead of a name
+--- @field name string
+--- @field line integer|nil  -- the line the declaration was found on, 1-based
+--- @field file string|nil   -- the declaring file, when it is not the buffer
+
+--- @class BibtexDiscoveryEntry   -- what collect_detailed returns
+--- @field name string            -- with the hook's extension rule applied
+--- @field hook string            -- the hook that reported it
+--- @field line integer|nil
+--- @field file string|nil
+
+--- @alias BibtexDiscoveryReport string|BibtexDiscoveryResult
+--- @alias BibtexDiscoveryFn fun(ctx: BibtexDiscoveryContext): BibtexDiscoveryReport[]|BibtexDiscoveryReport|nil
 
 --- @class BibtexDiscoverySpec
 --- @field name string
@@ -538,9 +620,41 @@ A hook takes only the context, with no leading subject argument. This differs
 from a matcher, which takes the text it inspects as its first parameter: the
 lines a hook reads are already part of its context.
 
+## Module: blink-cmp-bibtex.path
+
+Path helpers shared by the scanner and the discovery hooks, so that a hook can
+resolve what it finds without depending on `scan`, which depends on this module.
+
+### `path.joinpath(base, relative)` / `path.normalize(path)` / `path.is_absolute(path)`
+
+Join two components, expand and normalize a path (`~` included), and tell an
+absolute path from a relative one.
+
+### `path.find_root(bufname, markers)`
+
+Find the project root of a buffer: the directory of the nearest marker found
+upward from the buffer's own directory, or that directory when no marker is
+found. An empty or unnamed buffer starts from the working directory.
+
+**Parameters:**
+- `bufname` (string): Buffer file name
+- `markers` (table): Root marker files or directories, as `root_markers`
+
+**Returns:**
+- `string`: The root directory
+
 ## Module: blink-cmp-bibtex.scan
 
 BibTeX file discovery and path resolution.
+
+### `scan.find_bib_files_from_buffer_detailed(bufnr, opts)`
+
+Find BibTeX files referenced in a buffer, keeping the hook that reported each
+name and the position it reported. Same guards and same order as
+`find_bib_files_from_buffer`, which returns the names of these entries.
+
+**Returns:**
+- `BibtexDiscoveryEntry[]`
 
 ### `scan.find_bib_files_from_buffer(bufnr, opts)`
 
@@ -565,9 +679,48 @@ local scan = require('blink-cmp-bibtex.scan')
 local files = scan.find_bib_files_from_buffer(0)  -- Current buffer
 ```
 
+### `scan.resolve_bib_sources(bufnr, opts)`
+
+Resolve every bibliography a buffer asks for, with where each came from. Same
+order and deduplication as `resolve_bib_paths` — buffer discovery, `files`,
+`global_files`, the expanded `search_paths`, then `local_bib.target` — except
+that nothing is dropped: a path reported twice keeps an origin per report, and
+a path with nothing behind it is returned with `exists = false` rather than
+skipped. Each path is stat'ed once.
+
+Paths are identified by what they point at, so a file reached through a
+symbolic link — a linked project directory, or `/var` against `/private/var` on
+macOS — is one source carrying every origin that named it, rather than one per
+spelling. `path` is that resolved path; a path with nothing behind it cannot be
+resolved and keeps the spelling it was declared with.
+
+**Parameters:**
+- `bufnr` (number): Buffer number
+- `opts` (table|nil): Configuration options
+
+**Returns:**
+- `BibtexBibSource[]`: The bibliographies, in resolution order
+
+```lua
+--- @class BibtexBibSource
+--- @field path string     -- normalized absolute path
+--- @field exists boolean
+--- @field is_dir boolean
+--- @field origins BibtexBibOrigin[]  -- everything that reported this path
+
+--- @class BibtexBibOrigin
+--- @field kind 'buffer'|'files'|'global_files'|'search_paths'|'local_bib'
+--- @field detail string   -- the raw option value, glob pattern or declared name
+--- @field hook string|nil -- the discovery hook, for a buffer origin
+--- @field file string|nil -- the declaring file, when it is not the buffer
+--- @field line integer|nil
+```
+
 ### `scan.resolve_bib_paths(bufnr, opts)`
 
-Resolve all BibTeX file paths for a buffer. Combines buffer-discovered files, manual files, and search paths.
+Resolve all BibTeX file paths for a buffer. Combines buffer-discovered files,
+manual files, and search paths; the sources `resolve_bib_sources` found that
+exist and are not directories.
 
 **Parameters:**
 - `bufnr` (number): Buffer number
@@ -575,6 +728,41 @@ Resolve all BibTeX file paths for a buffer. Combines buffer-discovered files, ma
 
 **Returns:**
 - `string[]`: List of resolved absolute file paths
+
+### `scan.global_set(opts, bufnr)`
+
+Build the set of global bibliographies for a buffer, by resolving its sources
+and reading their origins. A global file is exactly a path that resolution
+reached through `global_files`, anchored and keyed the way resolution anchored
+and keyed it, so a relative entry lands on the project root rather than on the
+working directory, and a file listed under one spelling is recognized when the
+buffer reaches it under another.
+
+`scan.resolve_options(opts, bufnr)` resolves `files`, `global_files` and
+`search_paths` once, into `{ files = …, global_files = …, search_paths = … }`,
+and `resolve_bib_sources` accepts that table as its third argument. A caller
+that also counts or inspects the options passes it in, so that a function-valued
+option runs once rather than once per reading.
+
+A caller that has already resolved the sources should read them with
+`scan.global_set_from_sources(sources)` instead: resolving twice calls a
+function-valued option twice, and it could answer differently the second time.
+`scan.paths_from_sources(sources)` gives the same list `resolve_bib_paths`
+returns.
+
+**Returns:**
+- `table<string, boolean>`
+
+### `scan.is_global_path(path, set)`
+
+Whether a path is one of the configured global bibliographies, against a set
+built by `global_set`. A path that is already a key is answered from the set;
+any other is resolved first, which costs a system call, so a caller classifying
+the same path repeatedly should remember the answer. A caller holding the
+sources the set was built from can read `set[source.path]` directly.
+
+**Returns:**
+- `boolean`
 
 ## Module: blink-cmp-bibtex.local_bib
 

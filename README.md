@@ -273,14 +273,20 @@ discovery = {
     typst = { priority = 30 },   -- #bibliography(), following #import
     gapdoc = { priority = 40, extension = false }, -- <Bibliography Databases="">
   },
+  -- Reads the GAP package around the buffer rather than the buffer itself.
+  gap = { gap_package = { priority = 45, extension = false } },
+  xml = { gap_package = { priority = 45, extension = false } },
+  autodoc = { gap_package = { priority = 45, extension = false } },
 }
 ```
 
-Note the contrast with `matchers`: **every** discovery hook sits under `'*'`,
-because a declaration is worth finding wherever it appears — an
+Note the contrast with `matchers`: every hook that reads the **buffer** sits
+under `'*'`, because a declaration is worth finding wherever it appears — an
 `\addbibresource` in a Markdown buffer is found today, and moving the LaTeX
-hook under `tex` would silently stop finding it. Only narrow a hook to a
-filetype when the syntax genuinely cannot occur elsewhere.
+hook under `tex` would silently stop finding it. Only narrow such a hook to a
+filetype when the syntax genuinely cannot occur elsewhere. A hook that probes
+the **file system** instead is narrowed to the filetypes where it can pay off,
+so that no other buffer pays for it; `gap_package` is one.
 
 A hook receives a context and returns the file names it found, as a list, a
 single string, or nil:
@@ -432,10 +438,19 @@ Custom styles can be added by extending `require("blink-cmp-bibtex").setup()` wi
   XML documents. Names are comma-separated and carry no `.bib` extension, which
   is appended automatically; `.xml` (BibXMLext) databases are skipped, as are
   declarations inside XML comments, CDATA sections and processing instructions.
+- GAP packages are looked up outside the buffer: when a `gap`, `xml` or
+  `autodoc` buffer declares no bibliography of its own, the package around it is
+  located through its `PackageInfo.g`, and its `doc/` directory is read for the
+  main manual's `<Bibliography>` declaration. When no manual has been built yet,
+  AutoDoc's convention is used instead: `doc/<PackageName>.bib`, or the `bib`
+  named in `makedoc.g` (whose `dir` option moves the documentation directory).
 - Both BibTeX (`.bib`) and Hayagriva (`.yml`, `.yaml`) bibliography files are supported and automatically detected based on file extension.
 - Every one of these is a discovery hook, and the set is configurable: see
   [Custom bib discovery](#custom-bib-discovery) to add a syntax, reorder the
   hooks, or disable one per filetype.
+- A hook may report `{ name = ..., line = ..., file = ... }` records instead of
+  bare file names, which is what lets `:checkhealth blink-cmp-bibtex` show
+  where a bibliography was declared.
 - `opts.search_paths` accepts either file paths or glob patterns relative to the
   detected project root (based on `opts.root_markers`). These are treated as
   **local** sources.
@@ -578,6 +593,26 @@ their full `.xml` name) are skipped, since this plugin reads BibTeX and
 Hayagriva. If your bibliography lives elsewhere, list it under `files` or
 `search_paths` as usual.
 
+In a GAP package the declaration is rarely in the file being edited: it sits in
+the main XML under `doc/`, which AutoDoc generates and which a fresh checkout may
+not have at all. The `gap_package` hook therefore reads the package around the
+buffer — found through its `PackageInfo.g` — and uses either the manual's
+declaration or AutoDoc's convention, `doc/<PackageName>.bib` (or the `bib` named
+in `makedoc.g`). Nothing needs configuring beyond opting the filetype in.
+`:checkhealth blink-cmp-bibtex` names the manual a bibliography was declared in,
+which is worth a look when a package resolves one you did not expect.
+
+The same result can be had without any hook by pointing the scanner at the
+documentation directory:
+
+```lua
+require("blink-cmp-bibtex").setup({
+  filetypes = { "tex", "markdown", "gap", "xml", "autodoc" },
+  root_markers = { "PackageInfo.g", ".git" },
+  search_paths = { "doc/*.bib" },
+})
+```
+
 ### Completion details
 
 blink.cmp renders two panes for each matched item:
@@ -607,6 +642,39 @@ matchers run. A filetype that has matchers but is missing from `filetypes` is
 warned about, since those matchers can never fire — except for the ones shipped
 dormant with the plugin (`gap`, `xml`, `autodoc`), which are reported as
 information.
+
+The `bibliographies` section answers which files the completion source will
+actually read in the buffer you ran the check from, and how each of them was
+found. Global files (those listed in `global_files`) come first, then the local
+ones, then anything that was declared but cannot be read. Every path is
+annotated with its origin: the option that configured it, the glob pattern it
+was expanded from, or the discovery hook, file and line that declared it. A
+file declared twice keeps both annotations, joined with `; also`.
+
+```
+blink-cmp-bibtex: bibliographies ~
+- current buffer: ~/thesis/main.tex (filetype 'tex')
+- OK global: ~/library/master.bib (global_files)
+- OK local: ~/thesis/bib/refs.bib (buffer discovery: latex, main.tex:3; also search_paths: bib/*.bib)
+- OK local: ~/thesis/chapters/intro.bib (buffer discovery: typst, chapters/intro.typ:3)
+- OK local: ~/thesis/local.bib (local_bib.target)
+- WARNING missing: ~/thesis/nope.bib — configured in files but the file does not exist
+  - ADVICE: fix the path or remove it from the option
+- provider-level opts (sources.providers.bibtex.opts) are not visible to this report
+```
+
+How a path that is not there is reported depends on who asked for it: one
+listed in an option names the option it was written in, as above, one the
+buffer declared says where the declaration is (`missing: … — declared in
+main.tex:3 but the file does not exist`), and one that nobody wrote down — a GAP package's conventional
+name, or a `local_bib.target` that is created on the first copy — is reported
+as `not present yet`, which is not a problem. A path that resolves to a
+directory is warned about the same way. If the buffer
+has a filetype that is not in `filetypes`, the section says so — the source is
+not offered there, and the list below the warning is what it would use if it
+were. The report reads the options from `setup()`; anything passed as
+`sources.providers.bibtex.opts` in the blink.cmp configuration is merged in by
+blink.cmp itself and is not visible to it.
 
 ## Documentation
 

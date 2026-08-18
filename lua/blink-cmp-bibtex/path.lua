@@ -46,6 +46,28 @@ function M.normalize(path)
   return path
 end
 
+--- Find the project root directory based on markers
+--- @param bufname string Buffer file name
+--- @param markers table List of root marker files/directories
+--- @return string The root directory path
+function M.find_root(bufname, markers)
+  local uv = vim.uv or vim.loop
+  -- Ensure bufname is not just a directory marker like '.' or empty
+  local dir
+  if not bufname or bufname == '' or bufname == '.' then
+    dir = uv.cwd() or ''
+  else
+    dir = vim.fs.dirname(bufname)
+  end
+  if markers and #markers > 0 then
+    local found = vim.fs.find(markers, { upward = true, path = dir })[1]
+    if found then
+      return vim.fs.dirname(found)
+    end
+  end
+  return dir
+end
+
 --- Check if a path is absolute
 --- @param path string The path to check
 --- @return boolean True if the path is absolute

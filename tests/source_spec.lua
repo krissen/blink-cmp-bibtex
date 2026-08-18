@@ -165,6 +165,32 @@ describe('Source source indicators', function()
     local response = complete(source, helpers.ctx('\\cite{smith2020', nil, bufnr))
     assert.are.same({ description = '[G]' }, response.items[1].labelDetails)
   end)
+
+  it('calls a function-valued global_files once per completion request', function()
+    local calls = 0
+    local source = Source.new({
+      files = { helpers.fixture('project/bib/refs.bib') },
+      global_files = function()
+        calls = calls + 1
+        return { helpers.fixture('refs.bib') }
+      end,
+    })
+    complete(source, helpers.ctx('\\cite{smith2020', nil, bufnr))
+    -- Resolving the option a second time to classify what it produced would
+    -- run the user's function twice per keystroke.
+    assert.are.equal(1, calls)
+  end)
+
+  it('classifies the files a function-valued global_files reports', function()
+    local source = Source.new({
+      files = { helpers.fixture('project/bib/refs.bib') },
+      global_files = function()
+        return { helpers.fixture('refs.bib') }
+      end,
+    })
+    local response = complete(source, helpers.ctx('\\cite{smith2020', nil, bufnr))
+    assert.are.same({ description = '[G]' }, response.items[1].labelDetails)
+  end)
 end)
 
 describe('Source GAPDoc support', function()

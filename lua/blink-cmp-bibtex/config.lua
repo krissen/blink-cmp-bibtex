@@ -29,7 +29,9 @@ local defaults = {
   },
   -- Bibliography discovery hooks per filetype. Entries under a filetype key
   -- override same-named entries under '*'. Unlike the matchers, every shipped
-  -- hook sits under '*', because buffer discovery is filetype agnostic.
+  -- hook that reads the buffer sits under '*', because buffer discovery is
+  -- filetype agnostic; the hooks that probe the file system instead are
+  -- narrowed to the filetypes where they pay off.
   discovery = vim.deepcopy(discovery.defaults),
   -- Citation matchers per filetype. Entries under a filetype key override
   -- same-named entries under '*'. The shipped dispatch and the accepted entry
@@ -79,8 +81,16 @@ local function is_list(value)
     -- non-empty list still replaces that list.
     return false
   end
-  local islist = vim.islist or vim.tbl_islist
-  return islist(value)
+  if vim.islist then
+    return vim.islist(value)
+  end
+  -- Neovim 0.9 names this vim.tbl_islist, which later versions deprecate, so
+  -- the check is spelled out rather than reached for under either name.
+  local count = 0
+  for _ in pairs(value) do
+    count = count + 1
+  end
+  return count == #value
 end
 
 --- Deep merge two tables with override taking precedence

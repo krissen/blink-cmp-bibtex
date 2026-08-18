@@ -215,6 +215,36 @@ describe('scan.resolve_bib_paths', function()
   end)
 end)
 
+describe('scan.resolve_options', function()
+  it('resolves every path option to a list', function()
+    local resolved = scan.resolve_options({
+      files = 'a.bib',
+      global_files = function()
+        return { 'b.bib' }
+      end,
+    })
+    assert.are.same({ 'a.bib' }, resolved.files)
+    assert.are.same({ 'b.bib' }, resolved.global_files)
+    assert.are.same({}, resolved.search_paths)
+  end)
+
+  it('is used instead of the options when handed to resolve_bib_sources', function()
+    local bufnr = vim.api.nvim_create_buf(false, true)
+    local calls = 0
+    local opts = {
+      files = function()
+        calls = calls + 1
+        return { helpers.fixture('refs.bib') }
+      end,
+    }
+    local resolved = scan.resolve_options(opts, bufnr)
+    local sources = scan.resolve_bib_sources(bufnr, opts, resolved)
+    assert.are.equal(1, calls)
+    assert.are.same({ helpers.fixture('refs.bib') }, scan.paths_from_sources(sources))
+    vim.api.nvim_buf_delete(bufnr, { force = true })
+  end)
+end)
+
 describe('scan.resolve_option_list', function()
   it('wraps a bare string into a list', function()
     assert.are.same({ 'refs.bib' }, scan.resolve_option_list('refs.bib'))
@@ -538,13 +568,53 @@ describe('scan discovery hooks', function()
     assert.is_true(#seen.lines > 0)
   end)
 
+  it('gives the hook the project root found through the root markers', function()
+    helpers.with_tmpdir(function(dir)
+      local root = vim.fs.normalize(dir)
+      vim.fn.mkdir(vim.fs.joinpath(root, '.git'), 'p')
+      helpers.write_file(vim.fs.joinpath(root, 'doc/main.tex'), '')
+      local bufnr = vim.fn.bufadd(vim.fs.joinpath(root, 'doc/main.tex'))
+      vim.fn.bufload(bufnr)
+      local seen
+      local opts = with_hook(function(context)
+        seen = context
+        return nil
+      end)
+      opts.root_markers = { '.git' }
+      scan.find_bib_files_from_buffer(bufnr, opts)
+      -- Neovim resolves the buffer name, so the root arrives with symlinks
+      -- resolved as well; on macOS the temporary directory is one.
+      assert.are.equal(vim.fs.normalize(vim.fn.resolve(root)), vim.fs.normalize(seen.root))
+    end)
+  end)
+
   it('drops only the disabled built-in for the filetype it is disabled in', function()
-    local opts = { discovery = vim.deepcopy(discovery.defaults) }
+    -- Cast because a configured hook may also be false, a name or a function,
+    -- which the shipped defaults, holding only spec tables, do not show.
+    local opts = {
+      discovery = vim.deepcopy(discovery.defaults) --[[@as table<string, table>]],
+    }
     opts.discovery.markdown = { yaml = false }
     local bufnr = open_fixture('project/mixed.md', 'markdown')
     -- The LaTeX declaration survives; only the YAML one is dropped.
     assert.are.same({ 'bib/refs.bib' }, scan.find_bib_files_from_buffer(bufnr, opts))
     assert.are.same({ 'bib/refs.bib', 'shared.bib' }, scan.find_bib_files_from_buffer(bufnr, { discovery = nil }))
+  end)
+
+  it('resolves the bibliography of the GAP package a source file belongs to', function()
+    helpers.with_tmpdir(function(dir)
+      local root = vim.fs.joinpath(vim.fs.normalize(dir), 'pkg')
+      helpers.write_file(vim.fs.joinpath(root, 'PackageInfo.g'), 'PackageName := "LocalNR",\n')
+      helpers.write_file(vim.fs.joinpath(root, 'doc/_main.xml'), '<Bibliography Databases="manual"/>\n')
+      helpers.write_file(vim.fs.joinpath(root, 'doc/manual.bib'), '@book{key, title = {T}}\n')
+      helpers.write_file(vim.fs.joinpath(root, 'lib/foo.gd'), '#! @Chapter Local\n')
+      local bufnr = vim.fn.bufadd(vim.fs.joinpath(root, 'lib/foo.gd'))
+      vim.fn.bufload(bufnr)
+      vim.api.nvim_set_option_value('filetype', 'gap', { buf = bufnr })
+      local resolved = scan.resolve_bib_paths(bufnr, {})
+      assert.are.equal(1, #resolved)
+      assert.is_truthy(resolved[1]:find('/pkg/doc/manual.bib', 1, true))
+    end)
   end)
 
   it('discovers nothing from the buffer when discovery is configured as empty', function()
@@ -555,5 +625,221 @@ describe('scan discovery hooks', function()
       { helpers.fixture('refs.bib') },
       scan.resolve_bib_paths(bufnr, { discovery = {}, files = { helpers.fixture('refs.bib') } })
     )
+  end)
+end)
+
+describe('scan.resolve_bib_sources', function()
+  local fixtures = helpers.fixture('')
+
+  --- Find the source for a path, failing the test when it is absent.
+  --- @param sources table[] The sources returned by resolve_bib_sources
+  --- @param path string The normalized absolute path
+  --- @return table
+  local function source_for(sources, path)
+    for _, source in ipairs(sources) do
+      if source.path == path then
+        return source
+      end
+    end
+    error('no source for ' .. path)
+  end
+
+  it('records the hook and line of a LaTeX declaration', function()
+    local sources = scan.resolve_bib_sources(open_fixture('project/main.tex', 'tex'), {})
+    local source = source_for(sources, helpers.fixture('project/bib/refs.bib'))
+    assert.is_true(source.exists)
+    assert.is_false(source.is_dir)
+    assert.are.same({ { kind = 'buffer', detail = 'bib/refs.bib', hook = 'latex', line = 3 } }, source.origins)
+  end)
+
+  it('records the declaring file of a Typst bibliography reached through an import', function()
+    local sources = scan.resolve_bib_sources(open_fixture('project/doc.typ', 'typst'), {})
+    local source = source_for(sources, helpers.fixture('project/shared.bib'))
+    local origin = source.origins[1]
+    assert.are.equal('buffer', origin.kind)
+    assert.are.equal('typst', origin.hook)
+    assert.are.equal(8, origin.line)
+    assert.are.equal(helpers.fixture('project/template.typ'), vim.fs.normalize(origin.file))
+  end)
+
+  it('records the hook but no position for a GAPDoc declaration', function()
+    local sources = scan.resolve_bib_sources(open_fixture('project/doc.xml', 'xml'), {})
+    local origin = source_for(sources, helpers.fixture('project/shared.bib')).origins[1]
+    assert.are.same({ kind = 'buffer', detail = 'shared.bib', hook = 'gapdoc' }, origin)
+  end)
+
+  describe('with a scratch buffer', function()
+    local bufnr
+
+    before_each(function()
+      bufnr = vim.api.nvim_create_buf(false, true)
+    end)
+
+    after_each(function()
+      vim.api.nvim_buf_delete(bufnr, { force = true })
+    end)
+
+    it('records the option a path was configured in', function()
+      local sources = scan.resolve_bib_sources(bufnr, {
+        files = { fixtures .. '/refs.bib' },
+        global_files = { fixtures .. '/accents.bib' },
+      })
+      assert.are.same({
+        { kind = 'files', detail = fixtures .. '/refs.bib' },
+      }, source_for(sources, helpers.fixture('refs.bib')).origins)
+      assert.are.same({
+        { kind = 'global_files', detail = fixtures .. '/accents.bib' },
+      }, source_for(sources, helpers.fixture('accents.bib')).origins)
+    end)
+
+    it('records the glob pattern a search path was expanded from', function()
+      local sources = scan.resolve_bib_sources(bufnr, {
+        search_paths = { 'tests/fixtures/*.bib' },
+        root_markers = { '.git' },
+      })
+      assert.are.same({
+        { kind = 'search_paths', detail = 'tests/fixtures/*.bib' },
+      }, source_for(sources, helpers.fixture('refs.bib')).origins)
+    end)
+
+    it('records the local bibliography target', function()
+      local sources = scan.resolve_bib_sources(bufnr, {
+        root_markers = { '.git' },
+        local_bib = { target = 'tests/fixtures/refs.bib' },
+      })
+      assert.are.same({
+        { kind = 'local_bib', detail = 'tests/fixtures/refs.bib' },
+      }, source_for(sources, helpers.fixture('refs.bib')).origins)
+    end)
+
+    it('keeps a path that does not exist', function()
+      local sources = scan.resolve_bib_sources(bufnr, { files = { fixtures .. '/nope.bib' } })
+      local source = source_for(sources, helpers.fixture('nope.bib'))
+      assert.is_false(source.exists)
+      assert.is_false(source.is_dir)
+    end)
+
+    it('keeps a directory, marked as one', function()
+      local sources = scan.resolve_bib_sources(bufnr, { files = { fixtures .. '/project' } })
+      local source = source_for(sources, helpers.fixture('project'))
+      assert.is_true(source.exists)
+      assert.is_true(source.is_dir)
+    end)
+
+    it('resolves the same paths resolve_bib_paths returns', function()
+      local opts = {
+        files = { fixtures .. '/refs.bib', fixtures .. '/nope.bib', fixtures .. '/project' },
+        global_files = { fixtures .. '/accents.bib' },
+      }
+      local expected = {}
+      for _, source in ipairs(scan.resolve_bib_sources(bufnr, opts)) do
+        if source.exists and not source.is_dir then
+          expected[#expected + 1] = source.path
+        end
+      end
+      assert.are.same(expected, scan.resolve_bib_paths(bufnr, opts))
+      assert.are.same({ helpers.fixture('refs.bib'), helpers.fixture('accents.bib') }, expected)
+    end)
+  end)
+
+  it('identifies a bibliography by what it points at, not by how it was spelled', function()
+    helpers.with_tmpdir(function(dir)
+      local real = vim.fs.joinpath(dir, 'real')
+      helpers.write_file(vim.fs.joinpath(real, 'refs.bib'), '')
+      local link = vim.fs.joinpath(dir, 'link')
+      assert.is_true(vim.uv.fs_symlink(real, link) == true)
+      local bufnr = helpers.make_buf({
+        lines = { '\\addbibresource{refs.bib}' },
+        name = vim.fs.joinpath(real, 'main.tex'),
+        filetype = 'tex',
+      })
+      -- The buffer reaches the file through the real directory and the option
+      -- through the link, which are the same file.
+      local opts = { global_files = { vim.fs.joinpath(link, 'refs.bib') } }
+      local sources = scan.resolve_bib_sources(bufnr, opts)
+      assert.are.equal(1, #sources)
+      assert.are.same(
+        { 'buffer', 'global_files' },
+        vim.tbl_map(function(origin)
+          return origin.kind
+        end, sources[1].origins)
+      )
+      assert.is_true(scan.is_global_path(sources[1].path, scan.global_set(opts, bufnr)))
+      assert.are.same({ sources[1].path }, scan.resolve_bib_paths(bufnr, opts))
+      vim.api.nvim_buf_delete(bufnr, { force = true })
+    end)
+  end)
+
+  it('accumulates an origin per report of the same path', function()
+    local sources = scan.resolve_bib_sources(open_fixture('project/main.tex', 'tex'), {
+      files = { fixtures .. '/project/bib/refs.bib' },
+    })
+    local source = source_for(sources, helpers.fixture('project/bib/refs.bib'))
+    assert.are.same({
+      { kind = 'buffer', detail = 'bib/refs.bib', hook = 'latex', line = 3 },
+      { kind = 'files', detail = fixtures .. '/project/bib/refs.bib' },
+    }, source.origins)
+  end)
+end)
+
+describe('scan.global_set', function()
+  it('normalizes the configured global files into a set', function()
+    local set = scan.global_set({ global_files = helpers.fixture('refs.bib') })
+    assert.is_true(scan.is_global_path(helpers.fixture('refs.bib'), set))
+    assert.is_false(scan.is_global_path(helpers.fixture('accents.bib'), set))
+  end)
+
+  it('resolves a function-valued global_files option', function()
+    local set = scan.global_set({
+      global_files = function()
+        return { helpers.fixture('refs.bib') }
+      end,
+    })
+    assert.is_true(scan.is_global_path(helpers.fixture('refs.bib'), set))
+  end)
+
+  it('anchors a relative entry where the scanner anchors it', function()
+    helpers.with_tmpdir(function(dir)
+      local root = vim.fs.normalize(dir)
+      vim.fn.mkdir(vim.fs.joinpath(root, '.git'), 'p')
+      helpers.write_file(vim.fs.joinpath(root, 'refs.bib'), '')
+      local bufnr = helpers.make_buf({
+        lines = {},
+        name = vim.fs.joinpath(root, 'main.tex'),
+        filetype = 'tex',
+      })
+      -- Relative to the project root, which is not the working directory.
+      local opts = { global_files = { 'refs.bib' }, root_markers = { '.git' } }
+      local sources = scan.resolve_bib_sources(bufnr, opts)
+      assert.are.equal(1, #sources)
+      assert.is_true(scan.is_global_path(sources[1].path, scan.global_set_from_sources(sources)))
+      assert.is_true(scan.is_global_path(sources[1].path, scan.global_set(opts, bufnr)))
+      vim.api.nvim_buf_delete(bufnr, { force = true })
+    end)
+  end)
+
+  it('recognizes a global file reached through a symbolic link', function()
+    helpers.with_tmpdir(function(dir)
+      local real = vim.fs.joinpath(dir, 'real')
+      helpers.write_file(vim.fs.joinpath(real, 'refs.bib'), '')
+      local link = vim.fs.joinpath(dir, 'link')
+      assert.is_true(vim.uv.fs_symlink(real, link) == true)
+      local set = scan.global_set({ global_files = { vim.fs.joinpath(link, 'refs.bib') } })
+      assert.is_true(scan.is_global_path(vim.fs.joinpath(real, 'refs.bib'), set))
+    end)
+  end)
+
+  it('answers from the set alone when the path is already a key', function()
+    -- Every path classified during a round comes from the resolution the set
+    -- was built from, so the answer must not depend on the file still being
+    -- there to resolve.
+    local set = { ['/gone/refs.bib'] = true }
+    assert.is_true(scan.is_global_path('/gone/refs.bib', set))
+  end)
+
+  it('is empty when nothing is configured', function()
+    assert.are.same({}, scan.global_set({}))
+    assert.are.same({}, scan.global_set(nil))
+    assert.is_false(scan.is_global_path(helpers.fixture('refs.bib'), scan.global_set(nil)))
   end)
 end)
