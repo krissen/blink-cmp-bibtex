@@ -220,6 +220,43 @@ describe('discovery.gap_package', function()
     end)
   end)
 
+  it('still reads the package when the declaration is commented out', function()
+    helpers.with_tmpdir(function(dir)
+      local root = make_package(dir, {
+        ['PackageInfo.g'] = package_info,
+        ['doc/_main.xml'] = '<Bibliography Databases="manual"/>\n',
+      })
+      -- The gapdoc hook strips comments before reading, so it reports nothing
+      -- here; deferring to it on the bare marker would find nothing at all.
+      local context =
+        ctx(vim.fs.joinpath(root, 'doc/chapter.xml'), { '<!-- <Bibliography Databases="old"/> -->' }, 'xml')
+      assert.are.same({ vim.fs.joinpath(root, 'doc/manual.bib') }, names(discovery.gap_package(context)))
+    end)
+  end)
+
+  it('still reads the package when the declaration sits in a CDATA section', function()
+    helpers.with_tmpdir(function(dir)
+      local root = make_package(dir, {
+        ['PackageInfo.g'] = package_info,
+        ['doc/_main.xml'] = '<Bibliography Databases="manual"/>\n',
+      })
+      local context =
+        ctx(vim.fs.joinpath(root, 'doc/chapter.xml'), { '<![CDATA[ <Bibliography Databases="old"/> ]]>' }, 'xml')
+      assert.are.same({ vim.fs.joinpath(root, 'doc/manual.bib') }, names(discovery.gap_package(context)))
+    end)
+  end)
+
+  it('still reads the package when the declaration names no database', function()
+    helpers.with_tmpdir(function(dir)
+      local root = make_package(dir, {
+        ['PackageInfo.g'] = package_info,
+        ['doc/_main.xml'] = '<Bibliography Databases="manual"/>\n',
+      })
+      local context = ctx(vim.fs.joinpath(root, 'doc/chapter.xml'), { '<Bibliography Databases=""/>' }, 'xml')
+      assert.are.same({ vim.fs.joinpath(root, 'doc/manual.bib') }, names(discovery.gap_package(context)))
+    end)
+  end)
+
   it('finds nothing outside a GAP package', function()
     helpers.with_tmpdir(function(dir)
       local root = vim.fs.normalize(dir)

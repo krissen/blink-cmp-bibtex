@@ -711,8 +711,12 @@ local function find_gap_package_bibliography(ctx)
   if not ctx.dir or ctx.dir == '' then
     return {}
   end
-  -- A buffer that declares its own bibliography is the gapdoc hook's business.
-  if has_bibliography_marker(ctx.lines or {}) then
+  -- A buffer that declares a database of its own is the gapdoc hook's business.
+  -- The bare marker is not enough to defer on: a declaration inside a comment
+  -- or a CDATA section, or one whose Databases attribute is empty, gives the
+  -- gapdoc hook nothing either, and deferring to it would leave the buffer
+  -- without any bibliography at all.
+  if #find_gapdoc_bibliography(ctx.lines or {}) > 0 then
     return {}
   end
 
