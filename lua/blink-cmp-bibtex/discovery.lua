@@ -1102,21 +1102,27 @@ end
 --- line that is not a line, or a file that is not a path, is caught here rather
 --- than where it is rendered.
 --- @param record table The record a hook reported
+--- @param in_list boolean Whether the record was one entry of a list
 --- @return string|nil A reason, or nil when the record is well formed
-local function malformed_record_reason(record)
+local function malformed_record_reason(record, in_list)
+  -- Spelled from how the hook returned it, so that the message describes the
+  -- value the author is looking at.
+  local what = in_list and 'a list holding a record' or 'a record'
   if type(record.name) ~= 'string' then
-    return string.format('returned a list holding a record naming %s instead of a file name', type(record.name))
+    return string.format('returned %s naming %s instead of a file name', what, type(record.name))
   end
   if record.line ~= nil and (type(record.line) ~= 'number' or record.line % 1 ~= 0) then
     return string.format(
-      "returned a record for '%s' whose line is %s instead of an integer",
+      "returned %s for '%s' whose line is %s instead of an integer",
+      what,
       record.name,
       type(record.line) == 'number' and tostring(record.line) or type(record.line)
     )
   end
   if record.file ~= nil and type(record.file) ~= 'string' then
     return string.format(
-      "returned a record for '%s' whose declaring file is %s instead of a path",
+      "returned %s for '%s' whose declaring file is %s instead of a path",
+      what,
       record.name,
       type(record.file)
     )
@@ -1137,11 +1143,11 @@ local function malformed_result_reason(result)
     return string.format('returned %s instead of a list of file names', type(result))
   end
   if result.name ~= nil then
-    return malformed_record_reason(result)
+    return malformed_record_reason(result, false)
   end
   for _, entry in ipairs(result) do
     if type(entry) == 'table' then
-      local reason = malformed_record_reason(entry)
+      local reason = malformed_record_reason(entry, true)
       if reason then
         return reason
       end

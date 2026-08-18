@@ -513,7 +513,7 @@ describe('discovery.collect_detailed', function()
     with_notify_capture(function(messages)
       assert.are.same({}, discovery.collect_detailed(ctx(opts)))
       assert.are.equal(1, #messages)
-      assert.is_truthy(messages[1]:find('whose line is string instead of an integer', 1, true))
+      assert.is_truthy(messages[1]:find("a list holding a record for 'refs.bib' whose line is string", 1, true))
     end)
   end)
 
@@ -530,7 +530,43 @@ describe('discovery.collect_detailed', function()
     with_notify_capture(function(messages)
       assert.are.same({}, discovery.collect_detailed(ctx(opts)))
       assert.are.equal(1, #messages)
-      assert.is_truthy(messages[1]:find('whose declaring file is table instead of a path', 1, true))
+      -- Returned on its own rather than in a list, and said so.
+      assert.is_truthy(messages[1]:find("a record for 'refs.bib' whose declaring file is table", 1, true))
+      assert.is_nil(messages[1]:find('a list holding', 1, true))
+    end)
+  end)
+
+  it('says a record was returned on its own when it was', function()
+    local opts = {
+      discovery = {
+        ['*'] = {
+          bogus = function()
+            return { name = 42 }
+          end,
+        },
+      },
+    }
+    with_notify_capture(function(messages)
+      assert.are.same({}, discovery.collect_detailed(ctx(opts)))
+      assert.is_truthy(messages[1]:find('returned a record naming number instead of a file name', 1, true))
+    end)
+  end)
+
+  it('says a record was one entry of a list when it was', function()
+    local opts = {
+      discovery = {
+        ['*'] = {
+          bogus = function()
+            return { { name = 42 } }
+          end,
+        },
+      },
+    }
+    with_notify_capture(function(messages)
+      assert.are.same({}, discovery.collect_detailed(ctx(opts)))
+      assert.is_truthy(
+        messages[1]:find('returned a list holding a record naming number instead of a file name', 1, true)
+      )
     end)
   end)
 
