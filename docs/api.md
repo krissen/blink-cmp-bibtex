@@ -494,11 +494,16 @@ Results are absolute paths, carrying `.bib` already, and are cached per package
 root against the modification times and sizes of every file and directory read.
 Files above the size caps (64 KiB for GAP files, 1 MiB for XML) are skipped.
 
+Each result is a record naming the manual that declared it, which
+`:checkhealth blink-cmp-bibtex` shows; a path derived from AutoDoc's convention
+was never declared anywhere and names no file. No line is reported: the
+declaration is read from the document as one joined text.
+
 **Parameters:**
 - `ctx` (BibtexDiscoveryContext): The buffer being scanned
 
 **Returns:**
-- `string[]`: Absolute bibliography paths, which need not exist
+- `BibtexDiscoveryResult[]`: Absolute bibliography paths, which need not exist
 
 ### `discovery.builtin`
 

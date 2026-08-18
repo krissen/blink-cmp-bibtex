@@ -614,7 +614,8 @@ end
 --- @param ctx BibtexDiscoveryContext
 --- @param pkg_root string The package root, the directory holding PackageInfo.g
 --- @param info_path string The path to PackageInfo.g
---- @return string[] Absolute bibliography paths
+--- @return BibtexDiscoveryResult[] Absolute bibliography paths, with the manual
+---   that declared them when one did
 --- @return table<string, table|false> The stamps the result depends on
 local function collect_gap_package_bibliography(ctx, pkg_root, info_path)
   local stamps = {}
@@ -643,10 +644,11 @@ local function collect_gap_package_bibliography(ctx, pkg_root, info_path)
 
   --- Record one absolute path, keeping the first occurrence
   --- @param path string|nil
-  local function remember(path)
+  --- @param declared_in string|nil The manual that declared it, if one did
+  local function remember(path, declared_in)
     if path and path ~= '' and not seen[path] then
       seen[path] = true
-      results[#results + 1] = path
+      results[#results + 1] = { name = path, file = declared_in }
     end
   end
 
@@ -664,7 +666,9 @@ local function collect_gap_package_bibliography(ctx, pkg_root, info_path)
         local databases = extract_gapdoc_databases(lines)
         if #databases > 0 then
           for _, database in ipairs(databases) do
-            remember(path_util.joinpath(vim.fs.dirname(xml_path), database))
+            -- The line is not reported: the databases are read from the
+            -- document as one joined text, which no longer knows the lines.
+            remember(path_util.joinpath(vim.fs.dirname(xml_path), database), xml_path)
           end
           break
         end
@@ -702,7 +706,7 @@ local function gap_cache_is_current(entry)
 end
 
 --- @param ctx BibtexDiscoveryContext
---- @return string[] Absolute bibliography paths
+--- @return BibtexDiscoveryResult[] Absolute bibliography paths
 local function find_gap_package_bibliography(ctx)
   if not ctx.dir or ctx.dir == '' then
     return {}
@@ -787,9 +791,11 @@ end
 
 --- Find the bibliographies of the GAP package the buffer belongs to
 --- Unlike the other hooks this one reads the package around the buffer rather
---- than the buffer itself, and returns absolute paths.
+--- than the buffer itself, and returns absolute paths. A path a manual declared
+--- carries that manual as its declaring file; one derived from AutoDoc's naming
+--- convention was never declared anywhere and carries none.
 --- @param ctx BibtexDiscoveryContext
---- @return string[]
+--- @return BibtexDiscoveryResult[]
 function M.gap_package(ctx)
   return find_gap_package_bibliography(ctx)
 end

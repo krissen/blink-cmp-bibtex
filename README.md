@@ -599,6 +599,8 @@ not have at all. The `gap_package` hook therefore reads the package around the
 buffer — found through its `PackageInfo.g` — and uses either the manual's
 declaration or AutoDoc's convention, `doc/<PackageName>.bib` (or the `bib` named
 in `makedoc.g`). Nothing needs configuring beyond opting the filetype in.
+`:checkhealth blink-cmp-bibtex` names the manual a bibliography was declared in,
+which is worth a look when a package resolves one you did not expect.
 
 The same result can be had without any hook by pointing the scanner at the
 documentation directory:

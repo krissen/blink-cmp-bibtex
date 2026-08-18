@@ -75,15 +75,15 @@ end
 local function describe_origin(origin, buffer_dir, bufname)
   if origin.kind == 'buffer' then
     local description = 'buffer discovery: ' .. (origin.hook or 'unknown')
-    -- A hook that reads the document as one text reports no line, and there is
-    -- then nothing to point at.
-    if origin.line then
-      local declared_in = origin.file or bufname
-      if declared_in and declared_in ~= '' then
-        description = string.format('%s, %s:%d', description, describe_file(declared_in, buffer_dir), origin.line)
-      else
-        description = string.format('%s, line %d', description, origin.line)
-      end
+    -- A hook that reads its document as one text reports no line, and a hook
+    -- that reads the project around the buffer reports a file without one.
+    local declared_in = origin.file or (origin.line and bufname) or nil
+    if declared_in and declared_in ~= '' then
+      local shown = describe_file(declared_in, buffer_dir)
+      description = origin.line and string.format('%s, %s:%d', description, shown, origin.line)
+        or string.format('%s, %s', description, shown)
+    elseif origin.line then
+      description = string.format('%s, line %d', description, origin.line)
     end
     return description
   end

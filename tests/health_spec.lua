@@ -274,6 +274,24 @@ describe('health.check bibliographies', function()
     end)
   end)
 
+  it('names the declaring file of a bibliography found outside the buffer', function()
+    helpers.with_tmpdir(function(dir)
+      helpers.write_file(vim.fs.joinpath(dir, 'doc/refs.bib'), '')
+      use_buffer({ lines = {}, name = vim.fs.joinpath(dir, 'lib/foo.gd'), filetype = 'tex' })
+      config.setup({
+        discovery = {
+          ['*'] = {
+            elsewhere = function()
+              return { { name = vim.fs.joinpath(dir, 'doc/refs.bib'), file = vim.fs.joinpath(dir, 'doc/_main.xml') } }
+            end,
+          },
+        },
+      })
+      local message = assert(find(run_check().ok, 'buffer discovery: elsewhere'))
+      assert.is_truthy(message:find('doc/_main.xml', 1, true))
+    end)
+  end)
+
   it('warns about a configured file that does not exist', function()
     helpers.with_tmpdir(function(dir)
       use_buffer({ lines = {}, filetype = 'tex' })

@@ -34,6 +34,15 @@ local function make_package(dir, files)
   return root
 end
 
+--- Project the names of what the hook reported.
+--- @param results table[] The records discovery.gap_package returned
+--- @return string[]
+local function names(results)
+  return vim.tbl_map(function(entry)
+    return entry.name
+  end, results)
+end
+
 --- Count the files opened while running a function.
 --- @param fn function
 --- @return number The number of io.open calls
@@ -68,7 +77,33 @@ describe('discovery.gap_package', function()
       assert.are.same({
         vim.fs.joinpath(root, 'doc/manual.bib'),
         vim.fs.joinpath(root, 'doc/gapdoc.bib'),
+      }, names(discovery.gap_package(ctx(vim.fs.joinpath(root, 'lib/foo.gd')))))
+    end)
+  end)
+
+  it('reports the manual that declared a database, and nothing for the convention', function()
+    helpers.with_tmpdir(function(dir)
+      local root = make_package(dir, {
+        ['PackageInfo.g'] = package_info,
+        ['doc/_main.xml'] = '<Bibliography Databases="manual"/>\n',
+        ['lib/foo.gd'] = '',
+      })
+      assert.are.same({
+        { name = vim.fs.joinpath(root, 'doc/manual.bib'), file = vim.fs.joinpath(root, 'doc/_main.xml') },
       }, discovery.gap_package(ctx(vim.fs.joinpath(root, 'lib/foo.gd'))))
+    end)
+  end)
+
+  it('reports no declaring file for a database derived from the AutoDoc convention', function()
+    helpers.with_tmpdir(function(dir)
+      local root = make_package(dir, {
+        ['PackageInfo.g'] = package_info,
+        ['lib/foo.gd'] = '',
+      })
+      assert.are.same(
+        { { name = vim.fs.joinpath(root, 'doc/LocalNR.bib') } },
+        discovery.gap_package(ctx(vim.fs.joinpath(root, 'lib/foo.gd')))
+      )
     end)
   end)
 
@@ -80,7 +115,7 @@ describe('discovery.gap_package', function()
       })
       assert.are.same(
         { vim.fs.joinpath(root, 'doc/LocalNR.bib') },
-        discovery.gap_package(ctx(vim.fs.joinpath(root, 'lib/foo.gd')))
+        names(discovery.gap_package(ctx(vim.fs.joinpath(root, 'lib/foo.gd'))))
       )
     end)
   end)
@@ -94,7 +129,7 @@ describe('discovery.gap_package', function()
       })
       assert.are.same(
         { vim.fs.joinpath(root, 'doc/manual.bib') },
-        discovery.gap_package(ctx(vim.fs.joinpath(root, 'lib/foo.gd')))
+        names(discovery.gap_package(ctx(vim.fs.joinpath(root, 'lib/foo.gd'))))
       )
     end)
   end)
@@ -108,7 +143,7 @@ describe('discovery.gap_package', function()
       })
       assert.are.same(
         { vim.fs.joinpath(root, 'doc/LocalNR.bib') },
-        discovery.gap_package(ctx(vim.fs.joinpath(root, 'lib/foo.gd')))
+        names(discovery.gap_package(ctx(vim.fs.joinpath(root, 'lib/foo.gd'))))
       )
     end)
   end)
@@ -123,7 +158,7 @@ describe('discovery.gap_package', function()
       })
       assert.are.same(
         { vim.fs.joinpath(root, 'docs/manual.bib') },
-        discovery.gap_package(ctx(vim.fs.joinpath(root, 'lib/foo.gd')))
+        names(discovery.gap_package(ctx(vim.fs.joinpath(root, 'lib/foo.gd'))))
       )
     end)
   end)
@@ -136,7 +171,7 @@ describe('discovery.gap_package', function()
       })
       assert.are.same(
         { vim.fs.joinpath(root, 'doc/LocalNR.bib') },
-        discovery.gap_package(ctx(vim.fs.joinpath(root, 'lib/foo.gd')))
+        names(discovery.gap_package(ctx(vim.fs.joinpath(root, 'lib/foo.gd'))))
       )
     end)
   end)
@@ -151,7 +186,7 @@ describe('discovery.gap_package', function()
       })
       assert.are.same(
         { vim.fs.joinpath(root, 'doc/manual.bib') },
-        discovery.gap_package(ctx(vim.fs.joinpath(root, 'lib/foo.gd')))
+        names(discovery.gap_package(ctx(vim.fs.joinpath(root, 'lib/foo.gd'))))
       )
     end)
   end)
@@ -170,7 +205,7 @@ describe('discovery.gap_package', function()
       caps.xml = original
       assert.is_true(ok, tostring(result))
       -- The manual was never read, so only the convention remains.
-      assert.are.same({ vim.fs.joinpath(root, 'doc/LocalNR.bib') }, result)
+      assert.are.same({ vim.fs.joinpath(root, 'doc/LocalNR.bib') }, names(result))
     end)
   end)
 
@@ -181,7 +216,7 @@ describe('discovery.gap_package', function()
         ['doc/_main.xml'] = '<Bibliography Databases="manual"/>\n',
       })
       local context = ctx(vim.fs.joinpath(root, 'doc/_main.xml'), { '<Bibliography Databases="manual"/>' }, 'xml')
-      assert.are.same({}, discovery.gap_package(context))
+      assert.are.same({}, names(discovery.gap_package(context)))
     end)
   end)
 
@@ -189,12 +224,12 @@ describe('discovery.gap_package', function()
     helpers.with_tmpdir(function(dir)
       local root = vim.fs.normalize(dir)
       helpers.write_file(vim.fs.joinpath(root, 'lib/foo.gd'), '')
-      assert.are.same({}, discovery.gap_package(ctx(vim.fs.joinpath(root, 'lib/foo.gd'))))
+      assert.are.same({}, names(discovery.gap_package(ctx(vim.fs.joinpath(root, 'lib/foo.gd')))))
     end)
   end)
 
   it('finds nothing for a buffer without a file', function()
-    assert.are.same({}, discovery.gap_package(ctx(nil)))
+    assert.are.same({}, names(discovery.gap_package(ctx(nil))))
   end)
 
   it('reuses what it found until the package changes', function()
@@ -207,12 +242,12 @@ describe('discovery.gap_package', function()
       local context = ctx(vim.fs.joinpath(root, 'lib/foo.gd'))
       local expected = { vim.fs.joinpath(root, 'doc/manual.bib') }
       assert.is_true(count_reads(function()
-        assert.are.same(expected, discovery.gap_package(context))
+        assert.are.same(expected, names(discovery.gap_package(context)))
       end) > 0)
       assert.are.equal(
         0,
         count_reads(function()
-          assert.are.same(expected, discovery.gap_package(context))
+          assert.are.same(expected, names(discovery.gap_package(context)))
         end),
         'read the package again despite nothing having changed'
       )
@@ -221,7 +256,7 @@ describe('discovery.gap_package', function()
       assert.are.same({
         vim.fs.joinpath(root, 'doc/refs.bib'),
         vim.fs.joinpath(root, 'doc/extra.bib'),
-      }, discovery.gap_package(context))
+      }, names(discovery.gap_package(context)))
     end)
   end)
 
@@ -233,10 +268,10 @@ describe('discovery.gap_package', function()
         ['lib/foo.gd'] = '',
       })
       local context = ctx(vim.fs.joinpath(root, 'lib/foo.gd'))
-      assert.are.same({ vim.fs.joinpath(root, 'doc/LocalNR.bib') }, discovery.gap_package(context))
+      assert.are.same({ vim.fs.joinpath(root, 'doc/LocalNR.bib') }, names(discovery.gap_package(context)))
 
       helpers.write_file(vim.fs.joinpath(root, 'doc/_main.xml'), '<Bibliography Databases="manual"/>\n')
-      assert.are.same({ vim.fs.joinpath(root, 'doc/manual.bib') }, discovery.gap_package(context))
+      assert.are.same({ vim.fs.joinpath(root, 'doc/manual.bib') }, names(discovery.gap_package(context)))
     end)
   end)
 end)
