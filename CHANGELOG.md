@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.12.1](https://github.com/krissen/blink-cmp-bibtex/compare/v0.12.0...v0.12.1) (2026-08-18)
+
+
+### Bug Fixes
+
+* **discovery:** keep a GAPDoc database name that already ends in .bib ([823f279](https://github.com/krissen/blink-cmp-bibtex/commit/823f2796852bfd0d432521b6348c41ea9010b404))
+
 ## [0.12.0](https://github.com/krissen/blink-cmp-bibtex/compare/v0.11.0...v0.12.0) (2026-08-18)
 
 
