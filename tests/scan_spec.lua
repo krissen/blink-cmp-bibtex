@@ -559,7 +559,11 @@ describe('scan discovery hooks', function()
   end)
 
   it('drops only the disabled built-in for the filetype it is disabled in', function()
-    local opts = { discovery = vim.deepcopy(discovery.defaults) }
+    -- Cast because a configured hook may also be false, a name or a function,
+    -- which the shipped defaults, holding only spec tables, do not show.
+    local opts = {
+      discovery = vim.deepcopy(discovery.defaults) --[[@as table<string, table>]],
+    }
     opts.discovery.markdown = { yaml = false }
     local bufnr = open_fixture('project/mixed.md', 'markdown')
     -- The LaTeX declaration survives; only the YAML one is dropped.

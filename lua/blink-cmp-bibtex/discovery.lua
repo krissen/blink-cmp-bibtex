@@ -380,7 +380,7 @@ local function resolve_xml_reference(reference)
     if code < 1 or code > 0x10FFFF then
       return nil
     end
-    return vim.fn.nr2char(code, 1)
+    return vim.fn.nr2char(code, true)
   end
   -- Entity names are case sensitive in XML, so they are looked up as written.
   return xml_entities[reference]

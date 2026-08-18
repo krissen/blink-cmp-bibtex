@@ -81,8 +81,16 @@ local function is_list(value)
     -- non-empty list still replaces that list.
     return false
   end
-  local islist = vim.islist or vim.tbl_islist
-  return islist(value)
+  if vim.islist then
+    return vim.islist(value)
+  end
+  -- Neovim 0.9 has neither vim.islist nor a predecessor that later versions
+  -- still accept, so the check is spelled out rather than named.
+  local count = 0
+  for _ in pairs(value) do
+    count = count + 1
+  end
+  return count == #value
 end
 
 --- Deep merge two tables with override taking precedence
