@@ -138,6 +138,19 @@ describe('discovery.gap_package', function()
     end)
   end)
 
+  it('keeps a declared database name that already ends in .bib', function()
+    helpers.with_tmpdir(function(dir)
+      local root = make_package(dir, {
+        ['PackageInfo.g'] = package_info,
+        ['doc/_main.xml'] = '<Bibliography Databases="cryst.bib"/>\n',
+        ['lib/foo.gd'] = '',
+      })
+      assert.are.same({
+        vim.fs.joinpath(root, 'doc/cryst.bib'),
+      }, names(discovery.gap_package(ctx(vim.fs.joinpath(root, 'lib/foo.gd')))))
+    end)
+  end)
+
   it('reports the manual that declared a database, and nothing for the convention', function()
     helpers.with_tmpdir(function(dir)
       local root = make_package(dir, {
