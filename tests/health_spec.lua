@@ -415,6 +415,24 @@ describe('health.check bibliographies', function()
     end)
   end)
 
+  it('keeps a declared-path warning when a relative search_paths entry also matches', function()
+    helpers.with_tmpdir(function(dir)
+      use_buffer({
+        lines = { '\\addbibresource{refs.bib}' },
+        name = vim.fs.joinpath(dir, 'main.tex'),
+        filetype = 'tex',
+      })
+      -- The buffer declared the file, so the declaration is the origin that
+      -- counts: the relative entry only also matches it and must not mute the
+      -- warning.
+      config.setup({ search_paths = { 'refs.bib' }, root_markers = { 'main.tex' } })
+      local calls = run_check()
+      local message = assert(find(calls.warn, 'missing: '))
+      assert.is_truthy(message:find('declared in main.tex:1', 1, true))
+      assert.is_nil(find(calls.info, 'refs.bib'))
+    end)
+  end)
+
   it('reports a GAP package convention name as pending rather than missing', function()
     helpers.with_tmpdir(function(dir)
       local root = vim.fs.joinpath(vim.fs.normalize(dir), 'pkg')

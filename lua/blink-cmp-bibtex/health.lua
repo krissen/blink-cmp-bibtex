@@ -195,12 +195,6 @@ local function describe_absence(source, opts, buffer_dir, bufname, shown)
       advice = { 'fix the path or remove it from the option' },
     }
   end
-  if found.optional then
-    return {
-      level = 'info',
-      message = string.format('not present: %s (relative search_paths entry, used when the file exists)', shown),
-    }
-  end
   if found.declared then
     local position = describe_position(found.declared, buffer_dir, bufname)
     return {
@@ -213,6 +207,12 @@ local function describe_absence(source, opts, buffer_dir, bufname, shown)
           describe_origin(found.declared, buffer_dir, bufname)
         ),
       advice = { 'create the file, or correct the declaration' },
+    }
+  end
+  if found.optional then
+    return {
+      level = 'info',
+      message = string.format('not present: %s (relative search_paths entry, used when the file exists)', shown),
     }
   end
   local pending = found.pending
