@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.13.0](https://github.com/krissen/blink-cmp-bibtex/compare/v0.12.1...v0.13.0) (2026-08-31)
+
+
+### Features
+
+* **health:** report missing relative search_paths as info, not warn ([820778d](https://github.com/krissen/blink-cmp-bibtex/commit/820778d5f3d68094696b9f8738257b521597a6b1))
+
+
+### Bug Fixes
+
+* **health:** cover UNC entries and correct the classification comment ([e23c94f](https://github.com/krissen/blink-cmp-bibtex/commit/e23c94f1264396280f38b950fde4df9191cc7af3))
+* **health:** keep declared-path warnings over relative search_paths info ([f691e62](https://github.com/krissen/blink-cmp-bibtex/commit/f691e62fbbfebfe1d0af6c463d16488a29536741))
+* **health:** recognize windows absolute search_paths entries ([2d48f37](https://github.com/krissen/blink-cmp-bibtex/commit/2d48f372ca40d344df2fcffd6238aa44b487ef8f))
+* **health:** report a pending target before a matching relative search_path ([bf1dc48](https://github.com/krissen/blink-cmp-bibtex/commit/bf1dc48c33bbc57df6730d22805c2670ce77228d))
+* **health:** report missing relative search_paths as info, not warn ([a6e097a](https://github.com/krissen/blink-cmp-bibtex/commit/a6e097a379070bc16bd6c1a35f251903336cb4bd))
+* **path:** recognize UNC paths as absolute ([78182a6](https://github.com/krissen/blink-cmp-bibtex/commit/78182a63e6ca138f8fcd023cb290954e712880e1))
+
 ## [0.12.1](https://github.com/krissen/blink-cmp-bibtex/compare/v0.12.0...v0.12.1) (2026-08-18)
 
 
