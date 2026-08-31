@@ -415,6 +415,19 @@ describe('health.check bibliographies', function()
     end)
   end)
 
+  it('warns about a missing UNC search_paths entry', function()
+    helpers.with_tmpdir(function()
+      use_buffer({ lines = {}, filetype = 'tex' })
+      -- A network share is a specific path somebody wrote down, not a place
+      -- to look inside the project.
+      config.setup({ search_paths = { '\\\\server\\share\\refs.bib' } })
+      local calls = run_check()
+      local message = assert(find(calls.warn, 'missing: '))
+      assert.is_truthy(message:find('server', 1, true))
+      assert.is_nil(find(calls.info, 'server'))
+    end)
+  end)
+
   it('keeps a declared-path warning when a relative search_paths entry also matches', function()
     helpers.with_tmpdir(function(dir)
       use_buffer({

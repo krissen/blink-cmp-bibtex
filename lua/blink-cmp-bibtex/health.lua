@@ -157,10 +157,10 @@ local function absence_kind(origin, opts)
     end
     return 'declared'
   end
-  -- Classified the way the scanner resolves: drive-letter and slash paths are
-  -- absolute (path_util.is_absolute), so they read as written down, and a
-  -- ~-entry is not — but it names a home file somebody wrote down, so it
-  -- reads that way too; everything else is a candidate location.
+  -- Classified the way the scanner resolves: a slash, drive-letter or UNC
+  -- entry resolves on its own, and a ~-entry is anchored at the root — either
+  -- way somebody wrote the path down, so its absence is a misconfiguration;
+  -- everything else is a candidate location inside the project.
   if origin.kind == 'search_paths' and not path_util.is_absolute(origin.detail) and origin.detail:sub(1, 1) ~= '~' then
     return 'optional'
   end
