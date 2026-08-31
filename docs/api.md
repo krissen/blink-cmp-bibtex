@@ -388,7 +388,7 @@ the report itself.
   `local_bib.target` created on the first copy) is reported as not present
   yet, and a relative `search_paths` entry is reported as used when the file
   exists; an absolute, drive-letter, UNC or `~`-prefixed entry names a path
-  somebody wrote down and warns
+  somebody wrote down, so its absence warns
 - A warning when the buffer's filetype is not in `filetypes`, since the source
   is not offered there
 - The matcher chain for `'*'` and for each configured filetype, with priorities
