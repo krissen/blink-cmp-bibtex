@@ -5,7 +5,7 @@ local path_util = require('blink-cmp-bibtex.path')
 local helpers = require('tests.helpers')
 
 describe('path.is_absolute', function()
-  it('recognizes slash, drive-letter, UNC and tilde-less relative paths', function()
+  it('recognizes slash, drive-letter and UNC paths and rejects relative ones', function()
     assert.is_true(path_util.is_absolute('/home/user/refs.bib'))
     assert.is_true(path_util.is_absolute('C:\\refs.bib'))
     assert.is_true(path_util.is_absolute('C:/refs.bib'))
