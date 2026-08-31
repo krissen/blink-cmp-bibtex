@@ -5,6 +5,7 @@
 local config = require('blink-cmp-bibtex.config')
 local discovery = require('blink-cmp-bibtex.discovery')
 local matchers = require('blink-cmp-bibtex.matchers')
+local path_util = require('blink-cmp-bibtex.path')
 local scan = require('blink-cmp-bibtex.scan')
 
 local M = {}
@@ -156,7 +157,10 @@ local function absence_kind(origin, opts)
     end
     return 'declared'
   end
-  if origin.kind == 'search_paths' and not origin.detail:match('^[/~]') then
+  -- Classified the way the scanner resolves: drive-letter and slash paths are
+  -- absolute (path_util.is_absolute), and a ~-entry names a home file, so both
+  -- read as written down; everything else is a candidate location.
+  if origin.kind == 'search_paths' and not path_util.is_absolute(origin.detail) and origin.detail:sub(1, 1) ~= '~' then
     return 'optional'
   end
   if origin.kind == 'local_bib' and opts.local_bib and opts.local_bib.create_if_missing then

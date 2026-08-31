@@ -402,6 +402,19 @@ describe('health.check bibliographies', function()
     end)
   end)
 
+  it('warns about a missing windows absolute search_paths entry', function()
+    helpers.with_tmpdir(function()
+      use_buffer({ lines = {}, filetype = 'tex' })
+      -- A drive-letter path is absolute the way the scanner sees it, so it
+      -- stays a warning even where the drive does not exist.
+      config.setup({ search_paths = { 'C:\\refs.bib' } })
+      local calls = run_check()
+      local message = assert(find(calls.warn, 'missing: '))
+      assert.is_truthy(message:find('C:\\refs.bib', 1, true))
+      assert.is_nil(find(calls.info, 'C:\\refs.bib'))
+    end)
+  end)
+
   it('reports a GAP package convention name as pending rather than missing', function()
     helpers.with_tmpdir(function(dir)
       local root = vim.fs.joinpath(vim.fs.normalize(dir), 'pkg')
