@@ -662,6 +662,7 @@ blink-cmp-bibtex: bibliographies ~
 - OK local: ~/thesis/local.bib (local_bib.target)
 - WARNING missing: ~/thesis/nope.bib — configured in files but the file does not exist
   - ADVICE: fix the path or remove it from the option
+- INFO not present: ~/thesis/lokal.bib (relative search_paths entry, used when the file exists)
 - provider-level opts (sources.providers.bibtex.opts) are not visible to this report
 ```
 
@@ -670,7 +671,11 @@ listed in an option names the option it was written in, as above, one the
 buffer declared says where the declaration is (`missing: … — declared in
 main.tex:3 but the file does not exist`), and one that nobody wrote down — a GAP package's conventional
 name, or a `local_bib.target` that is created on the first copy — is reported
-as `not present yet`, which is not a problem. A path that resolves to a
+as `not present yet`, which is not a problem. A relative `search_paths` entry
+is a place to look inside a project rather than a file somebody wrote down, so
+a project without the file is reported as `not present`, also not a problem;
+an absolute entry names a specific file and is warned about when it is not
+there. A path that resolves to a
 directory is warned about the same way. If the buffer
 has a filetype that is not in `filetypes`, the section says so — the source is
 not offered there, and the list below the warning is what it would use if it

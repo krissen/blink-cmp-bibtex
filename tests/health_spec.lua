@@ -376,14 +376,90 @@ describe('health.check bibliographies', function()
     end)
   end)
 
-  it('names the search path pattern a missing file was expanded from', function()
+  it('reports a missing relative search_paths entry as used-when-present, not missing', function()
     helpers.with_tmpdir(function(dir)
       use_buffer({ lines = {}, name = vim.fs.joinpath(dir, 'main.tex'), filetype = 'tex' })
       -- A pattern without a wildcard expands to itself, so it reaches the
-      -- report as a path that is not there.
+      -- report as a path that is not there. A relative entry is a place to
+      -- look inside a project, so a project without the file is normal.
       config.setup({ search_paths = { 'nowhere.bib' }, root_markers = { 'main.tex' } })
+      local calls = run_check()
+      local message = assert(find(calls.info, 'not present: '))
+      assert.is_truthy(message:find('nowhere.bib (relative search_paths entry, used when the file exists)', 1, true))
+      assert.is_nil(find(calls.warn, 'nowhere.bib'))
+    end)
+  end)
+
+  it('warns about a missing absolute search_paths entry', function()
+    helpers.with_tmpdir(function(dir)
+      use_buffer({ lines = {}, filetype = 'tex' })
+      -- An absolute entry names a specific file somebody wrote down, so its
+      -- absence reads as a misconfiguration.
+      config.setup({ search_paths = { vim.fs.joinpath(dir, 'nope.bib') } })
       local message = assert(find(run_check().warn, 'missing: '))
-      assert.is_truthy(message:find('configured in search_paths: nowhere.bib', 1, true))
+      assert.is_truthy(message:find('configured in search_paths: ', 1, true))
+      assert.is_truthy(message:find('nope.bib', 1, true))
+    end)
+  end)
+
+  it('warns about a missing windows absolute search_paths entry', function()
+    helpers.with_tmpdir(function()
+      use_buffer({ lines = {}, filetype = 'tex' })
+      -- A drive-letter path is absolute the way the scanner sees it, so it
+      -- stays a warning even where the drive does not exist.
+      config.setup({ search_paths = { 'C:\\refs.bib' } })
+      local calls = run_check()
+      local message = assert(find(calls.warn, 'missing: '))
+      assert.is_truthy(message:find('C:\\refs.bib', 1, true))
+      assert.is_nil(find(calls.info, 'C:\\refs.bib'))
+    end)
+  end)
+
+  it('warns about a missing UNC search_paths entry', function()
+    helpers.with_tmpdir(function()
+      use_buffer({ lines = {}, filetype = 'tex' })
+      -- A network share is a specific path somebody wrote down, not a place
+      -- to look inside the project.
+      config.setup({ search_paths = { '\\\\server\\share\\refs.bib' } })
+      local calls = run_check()
+      local message = assert(find(calls.warn, 'missing: '))
+      assert.is_truthy(message:find('server', 1, true))
+      assert.is_nil(find(calls.info, 'server'))
+    end)
+  end)
+
+  it('keeps a declared-path warning when a relative search_paths entry also matches', function()
+    helpers.with_tmpdir(function(dir)
+      use_buffer({
+        lines = { '\\addbibresource{refs.bib}' },
+        name = vim.fs.joinpath(dir, 'main.tex'),
+        filetype = 'tex',
+      })
+      -- The buffer declared the file, so the declaration is the origin that
+      -- counts: the relative entry only also matches it and must not mute the
+      -- warning.
+      config.setup({ search_paths = { 'refs.bib' }, root_markers = { 'main.tex' } })
+      local calls = run_check()
+      local message = assert(find(calls.warn, 'missing: '))
+      assert.is_truthy(message:find('declared in main.tex:1', 1, true))
+      assert.is_nil(find(calls.info, 'refs.bib'))
+    end)
+  end)
+
+  it('reports a pending local_bib target a relative search_paths entry also matches as pending', function()
+    helpers.with_tmpdir(function(dir)
+      use_buffer({ lines = {}, name = vim.fs.joinpath(dir, 'main.tex'), filetype = 'tex' })
+      -- The target is expected to be created, which is the more specific
+      -- reading of the absence than a candidate location that also matches.
+      config.setup({
+        search_paths = { 'local.bib' },
+        root_markers = { 'main.tex' },
+        local_bib = { target = 'local.bib', create_if_missing = true },
+      })
+      local calls = run_check()
+      local message = assert(find(calls.info, 'not present yet: '))
+      assert.is_truthy(message:find('local.bib (local_bib.target, created on first copy)', 1, true))
+      assert.is_nil(find(calls.info, 'relative search_paths entry'))
     end)
   end)
 

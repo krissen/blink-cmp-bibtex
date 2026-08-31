@@ -5,6 +5,7 @@
 local config = require('blink-cmp-bibtex.config')
 local discovery = require('blink-cmp-bibtex.discovery')
 local matchers = require('blink-cmp-bibtex.matchers')
+local path_util = require('blink-cmp-bibtex.path')
 local scan = require('blink-cmp-bibtex.scan')
 
 local M = {}
@@ -140,10 +141,14 @@ end
 --- A GAP package's conventional bibliography name and a local_bib target that
 --- is created on the first copy are not mistakes: nobody wrote them down, and
 --- nothing is wrong until something tries to read them. A path the buffer
---- declared is corrected in the document, not in the configuration.
+--- declared is corrected in the document, not in the configuration. A relative
+--- search_paths entry is a place to look inside a project — like a directory on
+--- a runtime path — so a project without such a file is normal; an absolute
+--- one names a specific file somebody wrote down, so its absence reads as a
+--- misconfiguration.
 --- @param origin BibtexBibOrigin The origin to classify
 --- @param opts table Configuration options
---- @return 'option'|'declared'|'pending' What kind of absence this origin means
+--- @return 'option'|'declared'|'pending'|'optional' What kind of absence this origin means
 local function absence_kind(origin, opts)
   if origin.kind == 'buffer' then
     -- The convention names a file the package never declared anywhere.
@@ -151,6 +156,13 @@ local function absence_kind(origin, opts)
       return 'pending'
     end
     return 'declared'
+  end
+  -- Classified the way the scanner resolves: a slash, drive-letter or UNC
+  -- entry resolves on its own, and a ~-entry is anchored at the root — either
+  -- way somebody wrote the path down, so its absence is a misconfiguration;
+  -- everything else is a candidate location inside the project.
+  if origin.kind == 'search_paths' and not path_util.is_absolute(origin.detail) and origin.detail:sub(1, 1) ~= '~' then
+    return 'optional'
   end
   if origin.kind == 'local_bib' and opts.local_bib and opts.local_bib.create_if_missing then
     return 'pending'
@@ -199,11 +211,24 @@ local function describe_absence(source, opts, buffer_dir, bufname, shown)
     }
   end
   local pending = found.pending
-  local description = pending and pending.kind == 'local_bib' and 'local_bib.target, created on first copy'
-    or 'gap_package convention'
+  if pending then
+    local description = pending.kind == 'local_bib' and 'local_bib.target, created on first copy'
+      or 'gap_package convention'
+    return {
+      level = 'info',
+      message = string.format('not present yet: %s (%s)', shown, description),
+    }
+  end
+  if found.optional then
+    return {
+      level = 'info',
+      message = string.format('not present: %s (relative search_paths entry, used when the file exists)', shown),
+    }
+  end
+  -- Unreachable with the origins shipped: something always classifies.
   return {
     level = 'info',
-    message = string.format('not present yet: %s (%s)', shown, description),
+    message = string.format('not present: %s', shown),
   }
 end
 
