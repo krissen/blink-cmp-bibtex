@@ -383,9 +383,12 @@ the report itself.
   then local ones, then the paths that are not there. How the last are worded
   follows their origins — an option's path is warned about by the option it was
   configured in and a directory is warned about as one, a path the buffer
-  declared is warned about with the position of the declaration, and one nobody
+  declared is warned about with the position of the declaration, one nobody
   declared (a GAP package's conventional name, a
-  `local_bib.target` created on the first copy) is reported as not present yet
+  `local_bib.target` created on the first copy) is reported as not present yet,
+  and a relative `search_paths` entry is reported as used when the file exists
+  (an absolute entry, like `~`-relative one, names a file somebody wrote down
+  and warns)
 - A warning when the buffer's filetype is not in `filetypes`, since the source
   is not offered there
 - The matcher chain for `'*'` and for each configured filetype, with priorities
