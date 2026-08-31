@@ -69,10 +69,11 @@ function M.find_root(bufname, markers)
 end
 
 --- Check if a path is absolute
+--- Recognizes slash paths, Windows drive-letter paths and UNC network paths.
 --- @param path string The path to check
 --- @return boolean True if the path is absolute
 function M.is_absolute(path)
-  return path:match('^%a:[\\/]') or path:sub(1, 1) == '/'
+  return path:match('^%a:[\\/]') ~= nil or path:match('^[/\\][/\\]') ~= nil or path:sub(1, 1) == '/'
 end
 
 return M
