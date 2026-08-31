@@ -376,14 +376,29 @@ describe('health.check bibliographies', function()
     end)
   end)
 
-  it('names the search path pattern a missing file was expanded from', function()
+  it('reports a missing relative search_paths entry as used-when-present, not missing', function()
     helpers.with_tmpdir(function(dir)
       use_buffer({ lines = {}, name = vim.fs.joinpath(dir, 'main.tex'), filetype = 'tex' })
       -- A pattern without a wildcard expands to itself, so it reaches the
-      -- report as a path that is not there.
+      -- report as a path that is not there. A relative entry is a place to
+      -- look inside a project, so a project without the file is normal.
       config.setup({ search_paths = { 'nowhere.bib' }, root_markers = { 'main.tex' } })
+      local calls = run_check()
+      local message = assert(find(calls.info, 'not present: '))
+      assert.is_truthy(message:find('nowhere.bib (relative search_paths entry, used when the file exists)', 1, true))
+      assert.is_nil(find(calls.warn, 'nowhere.bib'))
+    end)
+  end)
+
+  it('warns about a missing absolute search_paths entry', function()
+    helpers.with_tmpdir(function(dir)
+      use_buffer({ lines = {}, filetype = 'tex' })
+      -- An absolute entry names a specific file somebody wrote down, so its
+      -- absence reads as a misconfiguration.
+      config.setup({ search_paths = { vim.fs.joinpath(dir, 'nope.bib') } })
       local message = assert(find(run_check().warn, 'missing: '))
-      assert.is_truthy(message:find('configured in search_paths: nowhere.bib', 1, true))
+      assert.is_truthy(message:find('configured in search_paths: ', 1, true))
+      assert.is_truthy(message:find('nope.bib', 1, true))
     end)
   end)
 

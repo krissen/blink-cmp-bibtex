@@ -140,10 +140,14 @@ end
 --- A GAP package's conventional bibliography name and a local_bib target that
 --- is created on the first copy are not mistakes: nobody wrote them down, and
 --- nothing is wrong until something tries to read them. A path the buffer
---- declared is corrected in the document, not in the configuration.
+--- declared is corrected in the document, not in the configuration. A relative
+--- search_paths entry is a place to look inside a project — like a directory on
+--- a runtime path — so a project without such a file is normal; an absolute
+--- one names a specific file somebody wrote down, so its absence reads as a
+--- misconfiguration.
 --- @param origin BibtexBibOrigin The origin to classify
 --- @param opts table Configuration options
---- @return 'option'|'declared'|'pending' What kind of absence this origin means
+--- @return 'option'|'declared'|'pending'|'optional' What kind of absence this origin means
 local function absence_kind(origin, opts)
   if origin.kind == 'buffer' then
     -- The convention names a file the package never declared anywhere.
@@ -151,6 +155,9 @@ local function absence_kind(origin, opts)
       return 'pending'
     end
     return 'declared'
+  end
+  if origin.kind == 'search_paths' and not origin.detail:match('^[/~]') then
+    return 'optional'
   end
   if origin.kind == 'local_bib' and opts.local_bib and opts.local_bib.create_if_missing then
     return 'pending'
@@ -182,6 +189,12 @@ local function describe_absence(source, opts, buffer_dir, bufname, shown)
         describe_origin(found.option, buffer_dir, bufname)
       ),
       advice = { 'fix the path or remove it from the option' },
+    }
+  end
+  if found.optional then
+    return {
+      level = 'info',
+      message = string.format('not present: %s (relative search_paths entry, used when the file exists)', shown),
     }
   end
   if found.declared then
