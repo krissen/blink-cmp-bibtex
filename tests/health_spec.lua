@@ -433,6 +433,23 @@ describe('health.check bibliographies', function()
     end)
   end)
 
+  it('reports a pending local_bib target a relative search_paths entry also matches as pending', function()
+    helpers.with_tmpdir(function(dir)
+      use_buffer({ lines = {}, name = vim.fs.joinpath(dir, 'main.tex'), filetype = 'tex' })
+      -- The target is expected to be created, which is the more specific
+      -- reading of the absence than a candidate location that also matches.
+      config.setup({
+        search_paths = { 'local.bib' },
+        root_markers = { 'main.tex' },
+        local_bib = { target = 'local.bib', create_if_missing = true },
+      })
+      local calls = run_check()
+      local message = assert(find(calls.info, 'not present yet: '))
+      assert.is_truthy(message:find('local.bib (local_bib.target, created on first copy)', 1, true))
+      assert.is_nil(find(calls.info, 'relative search_paths entry'))
+    end)
+  end)
+
   it('reports a GAP package convention name as pending rather than missing', function()
     helpers.with_tmpdir(function(dir)
       local root = vim.fs.joinpath(vim.fs.normalize(dir), 'pkg')

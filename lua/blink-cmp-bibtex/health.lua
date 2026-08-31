@@ -158,8 +158,9 @@ local function absence_kind(origin, opts)
     return 'declared'
   end
   -- Classified the way the scanner resolves: drive-letter and slash paths are
-  -- absolute (path_util.is_absolute), and a ~-entry names a home file, so both
-  -- read as written down; everything else is a candidate location.
+  -- absolute (path_util.is_absolute), so they read as written down, and a
+  -- ~-entry is not — but it names a home file somebody wrote down, so it
+  -- reads that way too; everything else is a candidate location.
   if origin.kind == 'search_paths' and not path_util.is_absolute(origin.detail) and origin.detail:sub(1, 1) ~= '~' then
     return 'optional'
   end
@@ -209,18 +210,25 @@ local function describe_absence(source, opts, buffer_dir, bufname, shown)
       advice = { 'create the file, or correct the declaration' },
     }
   end
+  local pending = found.pending
+  if pending then
+    local description = pending.kind == 'local_bib' and 'local_bib.target, created on first copy'
+      or 'gap_package convention'
+    return {
+      level = 'info',
+      message = string.format('not present yet: %s (%s)', shown, description),
+    }
+  end
   if found.optional then
     return {
       level = 'info',
       message = string.format('not present: %s (relative search_paths entry, used when the file exists)', shown),
     }
   end
-  local pending = found.pending
-  local description = pending and pending.kind == 'local_bib' and 'local_bib.target, created on first copy'
-    or 'gap_package convention'
+  -- Unreachable with the origins shipped: something always classifies.
   return {
     level = 'info',
-    message = string.format('not present yet: %s (%s)', shown, description),
+    message = string.format('not present: %s', shown),
   }
 end
 
