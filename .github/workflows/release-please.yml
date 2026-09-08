@@ -1,8 +1,9 @@
 name: Release Please
 
 on:
-  push:
-    branches: [master]
+  schedule:
+    - cron: '17 4 * * 1'
+  workflow_dispatch:
 
 permissions:
   contents: write
