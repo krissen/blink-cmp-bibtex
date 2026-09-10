@@ -93,9 +93,25 @@ jobs:
 
       # The gitleaks pre-commit hook above only scans the *staged* diff,
       # which is empty in CI (no `git add` happens here) and would
-      # otherwise silently report zero findings. Scan the full tree here
-      # instead.
-      - name: Scan whole tree for secrets
-        uses: gitleaks/gitleaks-action@v3
+      # otherwise silently report zero findings. `gitleaks/gitleaks-action`
+      # is NOT a whole-tree substitute for that: on a `pull_request` event
+      # it runs `gitleaks detect` over the base..head commit range (see
+      # this job's own earlier logs: `--log-opts=--no-merges --first-parent
+      # <base>..<head>`), not `gitleaks dir .` -- a secret already present
+      # outside that range goes undetected (Codex finding, PR #39). Install
+      # the same pinned gitleaks the pre-commit hook uses and run `dir .`
+      # directly instead, verified against the release's own checksums
+      # file before executing an unreviewed downloaded binary.
+      - name: Install gitleaks
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_VERSION: 8.30.1
+        run: |
+          set -euo pipefail
+          curl -sSfLO "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          curl -sSfLO "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_checksums.txt"
+          sha256sum --ignore-missing -c "gitleaks_${GITLEAKS_VERSION}_checksums.txt"
+          tar -xzf "gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" gitleaks
+          sudo install -m 0755 gitleaks /usr/local/bin/gitleaks
+
+      - name: Scan whole tree for secrets
+        run: gitleaks dir . --no-banner
