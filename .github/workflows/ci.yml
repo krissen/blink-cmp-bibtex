@@ -55,7 +55,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      # fetch-depth: 0 (full history): the gitleaks scan below needs to
+      # diff a commit range, which a shallow (depth-1) checkout can't
+      # resolve on a pull_request event (verified: "ambiguous argument"
+      # against the base..head range on a shallow clone).
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       # The luacheck hook below runs with `language: system` (see
       # .pre-commit-config.yaml for why prek's own `language: lua` hook is
