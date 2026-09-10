@@ -102,12 +102,19 @@ if ! command -v luacheck >/dev/null 2>&1; then
 fi
 echo "luacheck already installed ($(luacheck --version 2>&1 | head -n1))"
 
+# Treated the same as gitleaks/luacheck above (hard requirement, not a
+# note): `make check` calls `stylua --check` unconditionally (see
+# scripts/check for why it can't rely on the pre-commit hook's own pinned
+# copy alone), so a missing `stylua` here would otherwise pass `make
+# setup` silently and only surface later as a bare "command not found"
+# from `make check`.
 if ! command -v stylua >/dev/null 2>&1; then
-	echo "note: stylua not found on PATH -- 'make fmt'/'make fmt-check' need"
-	echo "it, though the pre-commit hook resolves its own pinned copy"
-	echo "regardless (stylua-github, .pre-commit-config.yaml). Install it:"
+	echo "missing: stylua. Install it, e.g.:"
 	echo "  brew install stylua"
+	echo "or download a release: https://github.com/JohnnyMorganz/StyLua/releases"
+	exit 1
 fi
+echo "stylua already installed ($(stylua --version 2>&1 | head -n1))"
 
 hooks_path=$(git config --get core.hooksPath 2>/dev/null || true)
 if [ -n "$hooks_path" ]; then
