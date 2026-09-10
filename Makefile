@@ -1,4 +1,4 @@
-.PHONY: test lint fmt fmt-check
+.PHONY: test lint fmt fmt-check check setup
 
 test:
 	./scripts/test
@@ -11,3 +11,9 @@ fmt:
 
 fmt-check:
 	stylua --check lua/ plugin/ tests/ repro.lua
+
+check:
+	./scripts/check
+
+setup:
+	./scripts/setup-dev

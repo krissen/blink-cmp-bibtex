@@ -1,0 +1,87 @@
+#!/bin/sh
+# make check — one local gate that mirrors CI.
+#
+# Quiet on success (a couple of tail lines); full output always lands in
+# .check.log (gitignored) so a failure can be grepped without ever
+# scrolling past a context window.
+#
+# Runs prek AND standalone luacheck/stylua --check passes on purpose:
+# `prek run --all-files` resolves its file list from git (tracked files),
+# so a newly written, still-untracked module is invisible to it. Worse,
+# the stylua-github hook autofixes and reports "Passed" once the fix is
+# applied -- a bare `prek run` can silently launder a formatting error
+# into a green run. `make lint`/`make fmt-check` below scan the whole
+# working tree by directory (not git's tracked-file list) in report-only
+# mode and catch both gaps. `gitleaks dir .` closes the same hole for the
+# gitleaks hook, whose entry always scans `--staged` and is a no-op here
+# (nothing is staged when this script runs).
+#
+# prek runs through `pipx run --spec`/`uv tool run --from` (same as CI,
+# same as scripts/setup-dev) rather than a `prek` on PATH -- see
+# setup-dev for why: it removes the "wrong prek version" class of bug
+# regardless of what else happens to be installed or where.
+set -eu
+cd "$(dirname "$0")/.."
+
+prek_version=$(grep -o 'prek==[0-9][0-9.]*' .github/workflows/ci.yml | head -n1 | cut -d= -f3)
+if [ -z "$prek_version" ]; then
+	echo "could not read the pinned prek version from .github/workflows/ci.yml"
+	exit 1
+fi
+
+if command -v pipx >/dev/null 2>&1; then
+	# --backend pip: pipx's own uv-detection can pick an incompatible
+	# uv already on PATH (from an unrelated toolchain) and refuse to run.
+	# Older pipx (reported: 1.4.3) predates the --backend flag entirely
+	# and errors out on it ("unrecognized arguments"), so only pass it
+	# when this pipx's own --help advertises it.
+	if pipx run --help 2>&1 | grep -q -- '--backend'; then
+		prek() { pipx run --backend pip --spec "prek==$prek_version" prek "$@"; }
+	else
+		prek() { pipx run --spec "prek==$prek_version" prek "$@"; }
+	fi
+elif command -v uv >/dev/null 2>&1; then
+	prek() { uv tool run --from "prek==$prek_version" prek "$@"; }
+else
+	echo "missing: pipx or uv -- run make setup"
+	exit 1
+fi
+
+if ! command -v gitleaks >/dev/null 2>&1; then
+	echo "missing: gitleaks -- run make setup"
+	exit 1
+fi
+
+if ! command -v luacheck >/dev/null 2>&1; then
+	echo "missing: luacheck -- run make setup"
+	exit 1
+fi
+
+log=.check.log
+: >"$log"
+
+fail() {
+	echo "FAILED: $1 (see $log)"
+	tail -n 40 "$log"
+	exit 1
+}
+
+step() { printf '\n== %s ==\n' "$1" >>"$log"; }
+
+step "prek --all-files"
+prek run --all-files --show-diff-on-failure >>"$log" 2>&1 || fail "prek"
+
+step "gitleaks dir . (full tree, not just staged)"
+gitleaks dir . --no-banner >>"$log" 2>&1 || fail "gitleaks (full tree)"
+
+step "luacheck (whole tree, not just tracked files)"
+luacheck lua/ plugin/ tests/ repro.lua >>"$log" 2>&1 || fail "luacheck"
+
+step "stylua --check (whole tree, not just tracked files)"
+stylua --check lua/ plugin/ tests/ repro.lua >>"$log" 2>&1 || fail "stylua --check"
+
+step "test"
+./scripts/test >>"$log" 2>&1 || fail "test"
+
+echo "OK: all quality gates passed"
+tail -n 2 "$log"

@@ -16,6 +16,7 @@ jobs:
   test:
     name: test (${{ matrix.nvim }})
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
@@ -49,12 +50,16 @@ jobs:
         run: nvim -l tests/minit.lua --minitest
         timeout-minutes: 10
 
-  lint:
-    name: luacheck
+  quality:
+    name: quality gates (prek)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
+      # The luacheck hook below runs with `language: system` (see
+      # .pre-commit-config.yaml for why prek's own `language: lua` hook is
+      # unusable here), so luacheck must exist on PATH before prek runs.
       - uses: leafo/gh-actions-lua@v13
         with:
           luaVersion: '5.1'
@@ -64,17 +69,27 @@ jobs:
       - name: Install luacheck
         run: luarocks install luacheck
 
-      - name: Run luacheck
-        run: luacheck lua/ plugin/ tests/ repro.lua
-
-  format:
-    name: stylua
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: JohnnyMorganz/stylua-action@v5
+      - name: Cache prek hook environments
+        uses: actions/cache@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          version: latest
-          args: --check lua/ plugin/ tests/ repro.lua
+          path: ${{ runner.temp }}/prek
+          # No Python/Node version in the key: nothing here is installed
+          # via setup-python/setup-node, so there is no pinned interpreter
+          # version to key against (design.md §4 / Copilot finding, traning).
+          # lua5.1 is a real qualifier: the luacheck hook above binds to
+          # whatever LuaRocks environment leafo/gh-actions-lua just set up.
+          key: prek-${{ runner.os }}-lua5.1-${{ hashFiles('.pre-commit-config.yaml') }}
+
+      - name: Quality gates (prek)
+        env:
+          PREK_HOME: ${{ runner.temp }}/prek
+        run: pipx run --spec prek==0.5.2 prek run --all-files --show-diff-on-failure
+
+      # The gitleaks pre-commit hook above only scans the *staged* diff,
+      # which is empty in CI (no `git add` happens here) and would
+      # otherwise silently report zero findings. Scan the full tree here
+      # instead.
+      - name: Scan whole tree for secrets
+        uses: gitleaks/gitleaks-action@v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
