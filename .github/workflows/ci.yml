@@ -16,6 +16,7 @@ jobs:
   test:
     name: test (${{ matrix.nvim }})
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
@@ -49,12 +50,22 @@ jobs:
         run: nvim -l tests/minit.lua --minitest
         timeout-minutes: 10
 
-  lint:
-    name: luacheck
+  quality:
+    name: quality gates (prek)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
+      # fetch-depth: 0 (full history): the gitleaks scan below needs to
+      # diff a commit range, which a shallow (depth-1) checkout can't
+      # resolve on a pull_request event (verified: "ambiguous argument"
+      # against the base..head range on a shallow clone).
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
+      # The luacheck hook below runs with `language: system` (see
+      # .pre-commit-config.yaml for why prek's own `language: lua` hook is
+      # unusable here), so luacheck must exist on PATH before prek runs.
       - uses: leafo/gh-actions-lua@v13
         with:
           luaVersion: '5.1'
@@ -64,17 +75,43 @@ jobs:
       - name: Install luacheck
         run: luarocks install luacheck
 
-      - name: Run luacheck
-        run: luacheck lua/ plugin/ tests/ repro.lua
-
-  format:
-    name: stylua
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: JohnnyMorganz/stylua-action@v5
+      - name: Cache prek hook environments
+        uses: actions/cache@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          version: latest
-          args: --check lua/ plugin/ tests/ repro.lua
+          path: ${{ runner.temp }}/prek
+          # No Python/Node version in the key: nothing here is installed
+          # via setup-python/setup-node, so there is no pinned interpreter
+          # version to key against (design.md §4 / Copilot finding, traning).
+          # lua5.1 is a real qualifier: the luacheck hook above binds to
+          # whatever LuaRocks environment leafo/gh-actions-lua just set up.
+          key: prek-${{ runner.os }}-lua5.1-${{ hashFiles('.pre-commit-config.yaml') }}
+
+      - name: Quality gates (prek)
+        env:
+          PREK_HOME: ${{ runner.temp }}/prek
+        run: pipx run --spec prek==0.5.2 prek run --all-files --show-diff-on-failure
+
+      # The gitleaks pre-commit hook above only scans the *staged* diff,
+      # which is empty in CI (no `git add` happens here) and would
+      # otherwise silently report zero findings. `gitleaks/gitleaks-action`
+      # is NOT a whole-tree substitute for that: on a `pull_request` event
+      # it runs `gitleaks detect` over the base..head commit range (see
+      # this job's own earlier logs: `--log-opts=--no-merges --first-parent
+      # <base>..<head>`), not `gitleaks dir .` -- a secret already present
+      # outside that range goes undetected (Codex finding, PR #39). Install
+      # the same pinned gitleaks the pre-commit hook uses and run `dir .`
+      # directly instead, verified against the release's own checksums
+      # file before executing an unreviewed downloaded binary.
+      - name: Install gitleaks
+        env:
+          GITLEAKS_VERSION: 8.30.1
+        run: |
+          set -euo pipefail
+          curl -sSfLO "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          curl -sSfLO "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_checksums.txt"
+          sha256sum --ignore-missing -c "gitleaks_${GITLEAKS_VERSION}_checksums.txt"
+          tar -xzf "gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" gitleaks
+          sudo install -m 0755 gitleaks /usr/local/bin/gitleaks
+
+      - name: Scan whole tree for secrets
+        run: gitleaks dir . --no-banner

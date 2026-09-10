@@ -1,0 +1,92 @@
+# Local hooks; contributors on an ordinary clone run `pipx install
+# prek==0.5.2 && prek install && prek install --hook-type pre-push` (see
+# CONTRIBUTING.md). `git config prek.enabled true` only does anything on a
+# machine that routes Git hooks through a global core.hooksPath dispatcher
+# (a maintainer convention, not the norm) -- it is not a substitute for
+# `prek install` on a plain clone.
+#
+# No top-level `exclude`: that would apply to every hook below, including
+# gitleaks and check-added-large-files, which must see the whole tree.
+
+repos:
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks
+        stages: [pre-commit]
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-yaml
+        stages: [pre-commit]
+      - id: check-json
+        stages: [pre-commit]
+      - id: check-added-large-files
+        # --enforce-all: the hook otherwise limits itself to files staged
+        # for addition. In the CI checkout prek runs against (nothing is
+        # staged there), that leaves the hook a silent no-op even though
+        # prek passes it every tracked file -- a contributor who bypasses
+        # local hooks could commit an oversized file and both workflows
+        # would pass regardless.
+        args: ['--maxkb=1000', '--enforce-all']
+        stages: [pre-commit]
+      - id: end-of-file-fixer
+        stages: [pre-commit]
+      - id: trailing-whitespace
+        stages: [pre-commit]
+
+  # `language: system` rather than the upstream repo's own `language: lua`
+  # hook: prek resolves that hook against a Lua 5.5 toolchain it builds
+  # itself, and luacheck's bundled `standards.lua` fails to load there
+  # (`attempt to assign to const variable 'field_name'`) -- verified
+  # locally against lunarmodules/luacheck's own .pre-commit-hooks.yaml.
+  # `language: system` instead reuses the luacheck the CI job already
+  # installs via luarocks (and that a contributor is already required to
+  # have, per CONTRIBUTING.md), the same trade-off sauna-card made for
+  # eslint against its own node_modules.
+  - repo: local
+    hooks:
+      - id: luacheck
+        name: luacheck
+        entry: luacheck
+        language: system
+        types: [lua]
+        stages: [pre-commit]
+
+  # stylua-github: downloads the pinned GitHub release binary rather than
+  # building from source (the repo's own `stylua` hook is `language: rust`
+  # and would compile StyLua on first run). Portable and fast either way,
+  # but this avoids requiring a Rust toolchain in prek's cache.
+  - repo: https://github.com/JohnnyMorganz/StyLua
+    rev: v2.5.2
+    hooks:
+      - id: stylua-github
+        stages: [pre-commit]
+
+  - repo: https://github.com/rhysd/actionlint
+    rev: v1.7.12
+    hooks:
+      - id: actionlint
+        stages: [pre-commit]
+
+  - repo: https://github.com/adrienverge/yamllint
+    rev: v1.38.0
+    hooks:
+      - id: yamllint
+        args: ['-d', 'relaxed']
+        stages: [pre-commit]
+
+  # The spec suite is fast once .tests/ is warm (well under a second
+  # locally) but its first run bootstraps lazy.nvim, blink.cmp and
+  # luassert through hererocks, which needs network access -- too slow
+  # and too network-dependent for pre-commit, so it runs at push time
+  # instead, same split as sauna-card's typecheck/vitest hooks.
+  - repo: local
+    hooks:
+      - id: test
+        name: test (nvim -l tests/minit.lua --minitest)
+        entry: ./scripts/test
+        language: system
+        pass_filenames: false
+        stages: [pre-push]

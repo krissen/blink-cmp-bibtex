@@ -24,6 +24,17 @@ make fmt-check   # stylua --check lua/ plugin/ tests/ repro.lua
 Both are enforced in CI (`.github/workflows/ci.yml`), together with the test
 suite on Neovim v0.10.4, stable and nightly.
 
+### The full local gate
+```sh
+make setup   # once per clone: wires .pre-commit-config.yaml into Git hooks
+make check   # prek --all-files + gitleaks + luacheck + stylua --check + test
+```
+`make check` is the same gate the `quality gates (prek)` CI job runs, plus the
+test suite; it writes full output to `.check.log` (gitignored) and only prints
+a couple of lines on success. See [CONTRIBUTING.md](CONTRIBUTING.md#local-quality-gate-pre-commitpre-push-hooks)
+for what `make setup` does on a maintainer machine that routes Git hooks
+through a global dispatcher instead of this clone's own `.git/hooks`.
+
 ### Manual verification
 ```sh
 nvim -u repro.lua   # clean Neovim with blink.cmp and this plugin only
@@ -81,18 +92,22 @@ No exceptions. Do not use Swedish or any other language.
 
 ## Commit Format
 
-This repository uses **Conventional Commits**, which overrides any global
-`(scope)` commit convention. The commit history is the input to release-please,
-which generates `CHANGELOG.md`, the version bump and the GitHub release.
+This repository uses **Conventional Commits** with a **mandatory scope**,
+which overrides any global `(scope) Subject` legacy convention (that older
+custom format, not Conventional Commits itself). The commit history is the
+input to release-please, which generates `CHANGELOG.md`, the version bump and
+the GitHub release.
 
 ```
-<type>[optional scope]: <description>
+<type>(<scope>): <description>
 ```
 
 Types: `feat` (minor bump), `fix`/`perf` (patch bump), `docs`, `test`,
-`refactor`, `ci`, `chore` (no release). English, imperative, lower case, no
-trailing period. One commit per logical change. Breaking changes use `feat!:` or
-a `BREAKING CHANGE:` footer; pre-1.0 these bump the minor version.
+`refactor`, `ci`, `chore` (no release). Scope is required, lowercase, short —
+a filename without its extension or a module/feature name (e.g. `parser`,
+`discovery`, `readme`). English, imperative, lower case, no trailing period.
+One commit per logical change. Breaking changes use `feat(scope)!:` or a
+`BREAKING CHANGE:` footer; pre-1.0 these bump the minor version.
 
 Never reference AI assistance anywhere — not in commits, code comments, docs,
 PR descriptions, issues or releases.
@@ -100,8 +115,7 @@ PR descriptions, issues or releases.
 ## Testing Checklist
 
 Before submitting changes:
-- Run `./scripts/test` — the full spec suite must be green
-- Run `make lint` and `make fmt-check`
+- Run `make check` (or at least `./scripts/test`, `make lint` and `make fmt-check`)
 - Add or update specs under `tests/` for the behavior you changed
 - For UI-facing changes, verify manually with `nvim -u repro.lua`:
   - `.tex` files with various citation commands
