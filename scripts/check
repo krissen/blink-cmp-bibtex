@@ -7,14 +7,17 @@
 #
 # Runs prek AND standalone luacheck/stylua --check passes on purpose:
 # `prek run --all-files` resolves its file list from git (tracked files),
-# so a newly written, still-untracked module is invisible to it. Worse,
-# the stylua-github hook autofixes and reports "Passed" once the fix is
-# applied -- a bare `prek run` can silently launder a formatting error
-# into a green run. `make lint`/`make fmt-check` below scan the whole
-# working tree by directory (not git's tracked-file list) in report-only
-# mode and catch both gaps. `gitleaks dir .` closes the same hole for the
-# gitleaks hook, whose entry always scans `--staged` and is a no-op here
-# (nothing is staged when this script runs).
+# so a newly written, still-untracked module is invisible to it -- this
+# script would report OK on an ungitadded file that `stylua --check`/
+# `luacheck` below would reject. (The stylua-github hook rewriting a
+# tracked file does NOT silently pass, for the record: prek, like
+# upstream pre-commit, diffs the working tree before/after each hook and
+# fails the run when a hook modifies a file -- verified locally against
+# this repo's own config -- so an unformatted *tracked* file is already
+# caught by the `prek run` step above on its own.) `gitleaks dir .`
+# closes the untracked-file hole for the gitleaks hook too, whose entry
+# always scans `--staged` and is a no-op here (nothing is staged when
+# this script runs).
 #
 # prek runs through `pipx run --spec`/`uv tool run --from` (same as CI,
 # same as scripts/setup-dev) rather than a `prek` on PATH -- see
